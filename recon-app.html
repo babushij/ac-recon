@@ -4138,12 +4138,18 @@ let unsubscribeFirestore = null;
 let firebaseReady = false;
 
 try {
-  firebase.initializeApp(firebaseConfig);
-  db = firebase.firestore();
-  firebaseReady = true;
-  console.log('Firebase connected ✅');
+  if(typeof firebase !== 'undefined'){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    firebaseReady = true;
+    console.log('Firebase connected ✅');
+  } else {
+    console.warn('Firebase SDK not loaded — offline mode');
+  }
 } catch(e) {
   console.warn('Firebase init failed — offline mode', e);
+  db = null;
+  firebaseReady = false;
 }
 
 // Save vehicles to Firestore (batched write)
@@ -4207,8 +4213,13 @@ function subscribeToFirestore() {
 // ═══════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════
-load();
-render(); // Works in all modern browsers
+try { load(); } catch(e) { console.error('load() error:', e); }
+try { render(); } catch(e) { 
+  console.error('render() error:', e);
+  // Fallback — show role screen directly
+  const rs = document.getElementById('role-screen');
+  if(rs) rs.style.display = 'flex';
+}
 </script>
 </body>
 </html>
