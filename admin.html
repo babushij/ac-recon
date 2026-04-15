@@ -4054,11 +4054,9 @@ function renderSettings(c){
 // BROWSER CHECK — require Chrome for best experience
 // ═══════════════════════════════════════════════
 function isChrome(){
-  const ua=navigator.userAgent;
-  // Chrome on iOS is actually still WebKit — detect real Chrome on Android/Desktop
-  const isRealChrome=/Chrome\//.test(ua)&&!/Chromium\//.test(ua)&&!/Edg\//.test(ua);
-  const isChromeIOS=/CriOS\//.test(ua); // Chrome on iPhone
-  return isRealChrome||isChromeIOS;
+  // Allow all modern browsers — Chrome, Edge, Brave, Firefox, Safari, Opera
+  // Only block truly ancient browsers that lack required APIs
+  return typeof fetch !== 'undefined' && typeof Promise !== 'undefined';
 }
 
 function showBrowserPrompt(){
