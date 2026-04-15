@@ -4208,11 +4208,7 @@ function subscribeToFirestore() {
 // BOOT
 // ═══════════════════════════════════════════════
 load();
-if(!isChrome()){
-  showBrowserPrompt();
-}else{
-  render();
-}
+render(); // Works in all modern browsers
 </script>
 </body>
 </html>
