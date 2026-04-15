@@ -553,17 +553,45 @@ const DEFAULT_SETTINGS={
   taxRate:0
 };
 let SETTINGS=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); // deep copy
-function loadSettings(){
-  try{const d=localStorage.getItem('ac_recon_settings');if(d)SETTINGS=JSON.parse(d);}catch(e){}
-  // Ensure all required fields exist (migration)
+function ensureSettingsDefaults(){
   if(!SETTINGS.pins) SETTINGS.pins={...DEFAULT_SETTINGS.pins};
   if(!SETTINGS.mechanics) SETTINGS.mechanics=[...DEFAULT_SETTINGS.mechanics];
   ['manager','sales','detailer','mech1','mech2'].forEach(k=>{
     if(!SETTINGS.pins[k]) SETTINGS.pins[k]=DEFAULT_SETTINGS.pins[k]||'0000';
   });
 }
+
+function loadSettings(){
+  try{const d=localStorage.getItem('ac_recon_settings');if(d)SETTINGS=JSON.parse(d);}catch(e){}
+  ensureSettingsDefaults();
+}
 function saveSettings(){
-  try{localStorage.setItem('ac_recon_settings',JSON.stringify(SETTINGS));}catch(e){}
+  const json=JSON.stringify(SETTINGS);
+  try{localStorage.setItem('ac_recon_settings',json);}catch(e){}
+  if(db){
+    db.collection('shops').doc('ac_settings').set({
+      settings:json,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(e=>console.warn('Settings sync failed:',e));
+  }
+}
+
+function subscribeToSettings(){
+  if(!db) return;
+  db.collection('shops').doc('ac_settings').onSnapshot(snap=>{
+    if(!snap.exists) return;
+    try{
+      const incoming=JSON.parse(snap.data().settings||'{}');
+      const incomingJson=JSON.stringify(incoming);
+      if(incomingJson!==JSON.stringify(SETTINGS)){
+        SETTINGS=incoming;
+        ensureSettingsDefaults();
+        try{localStorage.setItem('ac_recon_settings',incomingJson);}catch(e){}
+        buildSidebar();
+        if(ST.view==='settings') render();
+      }
+    }catch(e){console.warn('Settings parse error:',e);}
+  },err=>console.warn('Settings subscription error:',err));
 }
 function getMechs(){return SETTINGS.mechanics;}
 function getMMAP(){return Object.fromEntries(getMechs().map(m=>[m.id,m]));}
