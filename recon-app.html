@@ -606,8 +606,11 @@ function load(){
     saveSettings();
   }
   autoClockOutExpired();
-  // Start real-time Firestore listener
-  if(firebaseReady) subscribeToFirestore();
+  // Start real-time Firestore listeners
+  if(firebaseReady){
+    subscribeToFirestore();
+    subscribeToSettings();
+  }
 }
 
 function autoClockOutExpired(){
