@@ -511,6 +511,8 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
 // CONSTANTS
 // ═══════════════════════════════════════════════
 const STORAGE_KEY='ac_recon_v4';
+// Cloudflare Worker proxy — replace with your worker URL after deploying
+const AI_PROXY='https://ac-recon-ai.babushij.workers.dev';
 const RED='#C8102E';
 
 const ALL_STATUSES=[
@@ -2188,19 +2190,16 @@ function showVinModal(){
           r.onerror=rej;
           r.readAsDataURL(file);
         });
-        const resp=await fetch('https://api.anthropic.com/v1/messages',{
+        const resp=await fetch(AI_PROXY+'/vin',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
-            model:'claude-sonnet-4-20250514',max_tokens:100,
-            messages:[{role:'user',content:[
-              {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}},
-              {type:'text',text:'Extract the VIN (Vehicle Identification Number) from this image. Return ONLY the 17-character VIN, nothing else. If no VIN visible, return NULL.'}
-            ]}]
+            imageData:b64,
+            mediaType:file.type||'image/jpeg'
           })
         });
         const data=await resp.json();
-        const text=(data.content?.[0]?.text||'').trim().toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
+        const text=(data.vin||'').trim().toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
         if(text.length===17&&text!=='NULL'){
           status.textContent='✅ VIN found by AI!';status.style.color='#4ade80';
           await applyVin(text);return;
@@ -2326,24 +2325,14 @@ function renderDetail(c,v){
     if(!match) return null;
     const mimeType=match[1], b64data=match[2];
     try{
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      const resp=await fetch(AI_PROXY+'/receipt',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-6',
-          max_tokens:800,
-          messages:[{
-            role:'user',
-            content:[
-              {type:'image',source:{type:'base64',media_type:mimeType,data:b64data}},
-              {type:'text',text:'This is an auto parts or repair receipt. Extract every line item that has a cost. Look for columns like Cost, Extended, Amount, Price, or Total. Return ONLY a JSON array with no markdown, no explanation, no code blocks. Each item must have: {"description":"part name or service","cost":number}. Use the Extended or final column price if multiple price columns exist. Include tax as a separate item if shown. If a line has quantity, multiply unit price by quantity for the cost. Example: [{"description":"DieHard Platinum AGM Battery","cost":179.99},{"description":"Tax","cost":12.50}]. If no costs are visible at all, return [].'}
-            ]
-          }]
-        })
+        body:JSON.stringify({imageData:b64data,mediaType:mimeType})
       });
       if(!resp.ok) return null;
       const data=await resp.json();
-      const raw=(data.content?.[0]?.text||'').trim();
+      const raw=(data.items||'[]');
       const clean=raw.replace(/```json|```/g,'').trim();
       const arr=JSON.parse(clean);
       return Array.isArray(arr)?arr:null;
