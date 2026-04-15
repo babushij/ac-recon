@@ -690,7 +690,7 @@ function renderRoleScreen(){
   const el=document.getElementById('role-list');
   el.innerHTML='';
   // Show manager only on /admin URL
-  const isAdminPage=true; // admin.html always shows manager
+  const isAdminPage=true;
   getRoles().filter(r=>isAdminPage||r.id!=='manager').forEach(r=>{
     const btn=document.createElement('button');
     btn.className='role-btn';
@@ -4146,19 +4146,27 @@ try {
 }
 
 // Save vehicles to Firestore (batched write)
+function setSyncStatus(status){
+  const dot=document.getElementById('sync-dot');
+  if(!dot)return;
+  dot.className=status; // 'ok','err','syncing',''
+}
+
 async function saveToFirestore(vehicles) {
-  if(!db) return;
+  if(!db){setSyncStatus('err');return;}
+  setSyncStatus('syncing');
   try {
-    const batch = db.batch();
-    // Write the full vehicles array as one document for simplicity
     const ref = db.collection('shops').doc('automotive_connection');
-    batch.set(ref, {
+    await ref.set({
       vehicles: JSON.stringify(vehicles),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    await batch.commit();
+    setSyncStatus('ok');
+    console.log('Firestore save OK ✅');
   } catch(e) {
-    console.warn('Firestore save failed:', e);
+    setSyncStatus('err');
+    console.error('Firestore save failed:', e);
+    toast('Sync error — saved locally only','err');
   }
 }
 
@@ -4166,28 +4174,32 @@ async function saveToFirestore(vehicles) {
 function subscribeToFirestore() {
   if(!db) return;
   if(unsubscribeFirestore) unsubscribeFirestore();
+  setSyncStatus('syncing');
   unsubscribeFirestore = db.collection('shops').doc('automotive_connection')
     .onSnapshot(snap => {
-      if(!snap.exists) return;
+      setSyncStatus('ok');
+      if(!snap.exists){
+        console.log('Firestore: no data yet — first use');
+        return;
+      }
       try {
         const data = snap.data();
         const incoming = JSON.parse(data.vehicles || '[]');
-        // Only update if data actually changed (avoid render loop)
-        if(JSON.stringify(incoming) !== JSON.stringify(ST.vehicles)){
+        const currentJson = JSON.stringify(ST.vehicles);
+        const incomingJson = JSON.stringify(incoming);
+        if(incomingJson !== currentJson){
           ST.vehicles = incoming;
-          // Also update localStorage as offline cache
-          try { localStorage.setItem(STORAGE_KEY, data.vehicles); } catch(e) {}
-          // Re-render if app is visible
-          if(document.getElementById('app').style.display !== 'none'){
+          try { localStorage.setItem(STORAGE_KEY, incomingJson); } catch(e) {}
+          if(document.getElementById('app')?.style.display !== 'none'){
             render();
-            toast('Synced ↑');
           }
         }
       } catch(e) {
         console.warn('Firestore parse error:', e);
       }
     }, err => {
-      console.warn('Firestore subscription error:', err);
+      setSyncStatus('err');
+      console.error('Firestore subscription error:', err);
     });
 }
 
