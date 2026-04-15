@@ -764,6 +764,24 @@ function showPinPad(role){
     });
   }
 
+  // Keyboard support for desktop
+  function handlePinKeyboard(e){
+    if(!document.getElementById('pin-overlay')) return;
+    if(e.key>='0'&&e.key<='9') window.pinKey(e.key);
+    else if(e.key==='Backspace') window.pinKey('←');
+    else if(e.key==='Enter') window.pinKey('✓');
+    else if(e.key==='Escape') { document.getElementById('pin-overlay')?.remove(); document.removeEventListener('keydown',handlePinKeyboard); }
+  }
+  document.addEventListener('keydown', handlePinKeyboard);
+  // Clean up listener when overlay removed
+  const pinObserver=new MutationObserver(()=>{
+    if(!document.getElementById('pin-overlay')){
+      document.removeEventListener('keydown',handlePinKeyboard);
+      pinObserver.disconnect();
+    }
+  });
+  pinObserver.observe(document.body,{childList:true});
+
   window.pinKey=function(k){
     const errEl=document.getElementById('pin-err');
     if(errEl)errEl.style.display='none';
@@ -2117,12 +2135,93 @@ function showVinModal(){
   }
 
   // ── IMAGE UPLOAD TAB ─────────────────────────
-  function renderImgTab(){
-    // Redirect to camera tab which now handles both live scan and photo capture
-    setTab('cam');
+    function renderImgTab(){
+    const body=document.getElementById('vm-body');
+    body.innerHTML=`
+    <div style="padding:16px">
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:14px;text-align:center">Take a photo of the VIN barcode or VIN plate — AI will read it</div>
+      <input type="file" id="vm-img-input" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="vm-gallery-input" accept="image/*" style="display:none">
+      <button onclick="document.getElementById('vm-img-input').click()"
+        style="width:100%;background:#1a0e10;border:1.5px solid #C8102E;color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;font-family:inherit;text-align:left">
+        <div style="width:38px;height:38px;background:#C8102E;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="12" rx="2.5" stroke="#fff" stroke-width="1.5" fill="none"/><circle cx="10" cy="11" r="3" stroke="#fff" stroke-width="1.5" fill="none"/><path d="M7 5L8.2 3h3.6L13 5" stroke="#fff" stroke-width="1.5" fill="none"/></svg>
+        </div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#fff">📷 Take photo</div>
+          <div style="font-size:11px;color:#f87171">Point at VIN barcode or VIN sticker</div>
+        </div>
+      </button>
+      <button onclick="document.getElementById('vm-gallery-input').click()"
+        style="width:100%;background:#111318;border:1px solid #2a2f3f;color:#9ca3af;border-radius:10px;padding:12px 16px;margin-bottom:14px;cursor:pointer;font-family:inherit;font-size:13px">
+        📁 Choose from gallery
+      </button>
+      <div id="vm-img-status" style="text-align:center;font-size:13px;color:#9ca3af;min-height:20px"></div>
+      <div id="vm-img-preview" style="margin-top:8px"></div>
+    </div>`;
+
+    async function processVinImage(file){
+      const status=document.getElementById('vm-img-status');
+      const preview=document.getElementById('vm-img-preview');
+      if(!status||!preview) return;
+      status.textContent='Reading image...';status.style.color='#f59e0b';
+
+      // Try BarcodeDetector first (fast, no API needed)
+      if('BarcodeDetector' in window){
+        try{
+          const bd=new BarcodeDetector({formats:['code_128','code_39','qr_code','pdf417','data_matrix','ean_13','itf']});
+          const img=await createImageBitmap(file);
+          const codes=await bd.detect(img);
+          for(const code of codes){
+            const vin=extractVin(code.rawValue);
+            if(vin){status.textContent='✅ Barcode read!';status.style.color='#4ade80';await applyVin(vin);return;}
+          }
+        }catch(e){console.log('BarcodeDetector failed, trying AI:',e);}
+      }
+
+      // Fall back to AI (Claude vision)
+      status.textContent='Scanning with AI...';status.style.color='#f59e0b';
+      try{
+        const b64=await new Promise((res,rej)=>{
+          const r=new FileReader();
+          r.onload=()=>res(r.result.split(',')[1]);
+          r.onerror=rej;
+          r.readAsDataURL(file);
+        });
+        const resp=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            model:'claude-sonnet-4-20250514',max_tokens:100,
+            messages:[{role:'user',content:[
+              {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}},
+              {type:'text',text:'Extract the VIN (Vehicle Identification Number) from this image. Return ONLY the 17-character VIN, nothing else. If no VIN visible, return NULL.'}
+            ]}]
+          })
+        });
+        const data=await resp.json();
+        const text=(data.content?.[0]?.text||'').trim().toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
+        if(text.length===17&&text!=='NULL'){
+          status.textContent='✅ VIN found by AI!';status.style.color='#4ade80';
+          await applyVin(text);return;
+        }
+        status.textContent='Could not read VIN — try a clearer photo or type it manually';
+        status.style.color='#f87171';
+      }catch(e){
+        status.textContent='Scan failed — type VIN manually';
+        status.style.color='#f87171';
+        console.error('VIN AI scan error:',e);
+      }
+    }
+
+    setTimeout(()=>{
+      const inp=document.getElementById('vm-img-input');
+      const gal=document.getElementById('vm-gallery-input');
+      if(inp) inp.onchange=e=>{if(e.target.files[0])processVinImage(e.target.files[0]);inp.value='';};
+      if(gal) gal.onchange=e=>{if(e.target.files[0])processVinImage(e.target.files[0]);gal.value='';};
+    },100);
   }
 
-  // ── MANUAL ENTRY TAB ─────────────────────────
   function renderManTab(){
     const body=document.getElementById('vm-body');
     body.innerHTML=`
@@ -2193,8 +2292,10 @@ function showVinModal(){
   }
   window.applyVin=applyVin;
 
-  // Start on camera tab
-  setTab('cam');
+  // Start on best tab: live scan if BarcodeDetector available, else photo tab
+  const hasBD='BarcodeDetector' in window;
+  const isHttps=location.protocol==='https:'||location.hostname==='localhost';
+  setTab((hasBD&&isHttps)?'cam':'img');
 }
 window.showVinModal=showVinModal;
 
