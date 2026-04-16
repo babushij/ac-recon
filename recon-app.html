@@ -1924,8 +1924,9 @@ function showVinModal(){
     setBadge('🤖 Reading text with AI...');
     try{
       const v=await readVinWithAI(imgB64);
+      console.log('readVinWithAI returned:',v);
       if(v){showResult(v,'AI vision ✓');return;}
-    }catch(e){}
+    }catch(e){console.error('AI VIN scan error:',e);}
 
     // ── Fallback: photo visible, user types what they see ──
     showScanErr('Tap the VIN box and type the 17 characters you can read from the sticker in the photo above. Look for the line that starts with <strong style="color:#fff">VIN:</strong>');
@@ -1935,20 +1936,26 @@ function showVinModal(){
   async function readVinWithAI(imgB64){
     try{
       const match=imgB64.match(/^data:([^;]+);base64,(.+)$/);
-      if(!match) return null;
+      if(!match){console.error('readVinWithAI: invalid data URL');return null;}
       const mimeType=match[1];
       const b64data=match[2];
+      console.log('[VIN] Calling proxy',AI_PROXY,'with',Math.round(b64data.length/1024),'KB',mimeType);
 
       const resp=await fetch(AI_PROXY+'/vin',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({imageData:b64data,mediaType:mimeType})
       });
-      if(!resp.ok){console.error('VIN proxy error:',resp.status);return null;}
-      const data=await resp.json();
+      console.log('[VIN] Response status:',resp.status);
+      const text=await resp.text();
+      console.log('[VIN] Response body:',text);
+      if(!resp.ok){console.error('[VIN] Proxy error',resp.status,text);return null;}
+      const data=JSON.parse(text);
+      if(data.error){console.error('[VIN] Worker error:',data.error);return null;}
       const raw=(data.vin||'').trim().toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
+      console.log('[VIN] Extracted:',raw,'len:',raw.length);
       return raw.length===17?raw:null;
-    }catch(e){console.error('readVinWithAI error:',e);return null;}
+    }catch(e){console.error('[VIN] readVinWithAI exception:',e);return null;}
   }
 
 
