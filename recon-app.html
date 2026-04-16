@@ -615,6 +615,32 @@ let ST={role:null,vehicles:[],view:'dashboard',selectedId:null,searchQuery:'',ac
 
 const getV=id=>ST.vehicles.find(v=>v.id===id);
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36);
+
+// ── Image compression helper ──
+async function compressImage(file, maxWidth, quality){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality || 0.8);
+      resolve(dataUrl);
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = () => reject(new Error('File read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+
 const fmt$=n=>'$'+Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const fmtD=ts=>new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 
@@ -2709,7 +2735,7 @@ function renderDetail(c,v){
 
   c.innerHTML=`
   <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;flex-wrap:wrap">
-    <button class="back-btn" onclick="ST.view=ST.role==='manager'?'dashboard':'mypipeline';render()">← Back</button>
+    <button class="back-btn" onclick="ST.view=ST.role==='manager'?'dashboard':ST.role==='sales'?'salespipeline':ST.role==='detailer'?'detailer':'mypipeline';render()">← Back</button>
     <div style="flex:1;min-width:0">
       <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:3px">${v.year||''} ${v.make||''} ${v.model||''}</div>
       <div style="font-size:12px;color:#555d73;display:flex;gap:12px;flex-wrap:wrap">
@@ -2875,23 +2901,25 @@ function renderDetail(c,v){
   function buildPhotosTab(el){
     const fileInput=document.createElement('input');
     fileInput.type='file';fileInput.accept='image/*';fileInput.multiple=true;fileInput.capture='environment';fileInput.style.display='none';
-    fileInput.onchange=e=>{
-      Array.from(e.target.files).forEach(file=>{
-        const rd=new FileReader();
-        rd.onload=()=>addPhoto(rd.result);
-        rd.readAsDataURL(file);
-      });
+    fileInput.onchange=async e=>{
+      for(const file of Array.from(e.target.files)){
+        try{
+          const compressed=await compressImage(file,1600,0.8);
+          addPhoto(compressed);
+        }catch(err){console.error('Photo save error:',err);toast('Photo save failed','err');}
+      }
     };
     el.appendChild(fileInput);
 
     const libInput=document.createElement('input');
     libInput.type='file';libInput.accept='image/*';libInput.multiple=true;libInput.style.display='none';
-    libInput.onchange=e=>{
-      Array.from(e.target.files).forEach(file=>{
-        const rd=new FileReader();
-        rd.onload=()=>addPhoto(rd.result);
-        rd.readAsDataURL(file);
-      });
+    libInput.onchange=async e=>{
+      for(const file of Array.from(e.target.files)){
+        try{
+          const compressed=await compressImage(file,1600,0.8);
+          addPhoto(compressed);
+        }catch(err){console.error('Photo save error:',err);toast('Photo save failed','err');}
+      }
     };
     el.appendChild(libInput);
 
@@ -2931,10 +2959,22 @@ function renderDetail(c,v){
     el.appendChild(camInput);el.appendChild(libInput);
 
     function readReceipts(files){
-      Array.from(files).forEach(file=>{
-        const rd=new FileReader();
-        rd.onload=()=>addReceipt({name:file.name,data:rd.result,date:Date.now()});
-        rd.readAsDataURL(file);
+      Array.from(files).forEach(async file=>{
+        try{
+          // For PDFs, store as-is (can't compress)
+          if(file.type==='application/pdf'||file.name?.toLowerCase().endsWith('.pdf')){
+            const rd=new FileReader();
+            rd.onload=()=>addReceipt({name:file.name,data:rd.result,date:Date.now()});
+            rd.readAsDataURL(file);
+            return;
+          }
+          // For images, compress to 1200px wide JPEG at 80% quality
+          const compressed=await compressImage(file,1200,0.8);
+          addReceipt({name:file.name,data:compressed,date:Date.now()});
+        }catch(e){
+          console.error('Receipt save error:',e);
+          toast('Could not save receipt: '+e.message,'err');
+        }
       });
     }
 
@@ -4281,13 +4321,22 @@ async function saveToFirestore(vehicles) {
   if(!db){setSyncStatus('err');return;}
   setSyncStatus('syncing');
   try {
+    const json = JSON.stringify(vehicles);
+    // Firestore limit is 1MB per document — skip sync if too big, keep local
+    const sizeKB = json.length / 1024;
+    if(sizeKB > 900){
+      console.warn('Vehicles doc too big for Firestore:', Math.round(sizeKB)+'KB — saved locally only');
+      toast('Too much data to sync — cleanup old vehicles','err');
+      setSyncStatus('err');
+      return;
+    }
     const ref = db.collection('shops').doc('automotive_connection');
     await ref.set({
-      vehicles: JSON.stringify(vehicles),
+      vehicles: json,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     setSyncStatus('ok');
-    console.log('Firestore save OK ✅');
+    console.log('Firestore save OK ✅ ('+Math.round(sizeKB)+'KB)');
   } catch(e) {
     setSyncStatus('err');
     console.error('Firestore save failed:', e);
