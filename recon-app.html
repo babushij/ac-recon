@@ -2203,6 +2203,7 @@ function showVinModal(){
           r.onerror=rej;
           r.readAsDataURL(file);
         });
+        console.log('Sending image to VIN proxy, size:',Math.round(b64.length/1024),'KB');
         const resp=await fetch(AI_PROXY+'/vin',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -2211,16 +2212,24 @@ function showVinModal(){
             mediaType:file.type||'image/jpeg'
           })
         });
+        console.log('VIN proxy response status:',resp.status);
         const data=await resp.json();
+        console.log('VIN proxy response data:',data);
+        if(data.error){
+          status.textContent='Worker error: '+data.error;
+          status.style.color='#f87171';
+          console.error('VIN Worker error:',data.error);
+          return;
+        }
         const text=(data.vin||'').trim().toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
         if(text.length===17&&text!=='NULL'){
           status.textContent='✅ VIN found by AI!';status.style.color='#4ade80';
           await applyVin(text);return;
         }
-        status.textContent='Could not read VIN — try a clearer photo or type it manually';
+        status.textContent='Could not read VIN — response: '+JSON.stringify(data).slice(0,100);
         status.style.color='#f87171';
       }catch(e){
-        status.textContent='Scan failed — type VIN manually';
+        status.textContent='Scan failed: '+e.message;
         status.style.color='#f87171';
         console.error('VIN AI scan error:',e);
       }
