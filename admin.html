@@ -1934,34 +1934,21 @@ function showVinModal(){
   // ── Claude Vision: reads printed VIN text directly off the sticker photo ──
   async function readVinWithAI(imgB64){
     try{
-      // Extract base64 data and mime type from data URL
       const match=imgB64.match(/^data:([^;]+);base64,(.+)$/);
       if(!match) return null;
       const mimeType=match[1];
       const b64data=match[2];
 
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      const resp=await fetch(AI_PROXY+'/vin',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-6',
-          max_tokens:60,
-          messages:[{
-            role:'user',
-            content:[
-              {type:'image',source:{type:'base64',media_type:mimeType,data:b64data}},
-              {type:'text',text:'This is a vehicle door jamb sticker. Find the VIN number — it appears after "VIN:" as exactly 17 uppercase alphanumeric characters (no letters I, O, or Q). Reply with ONLY the 17-character VIN, nothing else. If not found, reply NULL.'}
-            ]
-          }]
-        })
+        body:JSON.stringify({imageData:b64data,mediaType:mimeType})
       });
-
-      if(!resp.ok) return null;
+      if(!resp.ok){console.error('VIN proxy error:',resp.status);return null;}
       const data=await resp.json();
-      const text=(data.content?.[0]?.text||'').trim().toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
-      if(text==='NULL'||text.length<10) return null;
-      return text.length===17 ? text : (text.match(/[A-HJ-NPR-Z0-9]{17}/)||[null])[0];
-    }catch(e){return null;}
+      const raw=(data.vin||'').trim().toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
+      return raw.length===17?raw:null;
+    }catch(e){console.error('readVinWithAI error:',e);return null;}
   }
 
 
