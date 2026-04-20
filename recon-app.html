@@ -532,7 +532,7 @@ const ALL_STATUSES=[
   {id:'booked',        label:'Booked',                color:'#818cf8',icon:'📒',group:'finish'},
   {id:'trade_in',      label:'Trade-in',              color:'#8b5cf6',icon:'🚘',group:'source'},
   {id:'received',      label:'Received',              color:'#06b6d4',icon:'📦',group:'lot'},
-  {id:'on_lot',        label:'On the lot',            color:'#22c55e',icon:'🅿️',group:'lot'},
+  {id:'on_lot',        label:'Inspection',             color:'#22c55e',icon:'🔍',group:'lot'},
   {id:'wip',           label:'Work in progress',      color:'#f59e0b',icon:'🔨',group:'work'},
   {id:'outside_shop',  label:'Outside shop',          color:'#a78bfa',icon:'🏭',group:'work'},
 ];
@@ -555,6 +555,15 @@ const DEFAULT_SETTINGS={
   taxRate:0
 };
 let SETTINGS=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); // deep copy
+// Update a specific field on a mechanic — used by settings inputs
+function updateMechField(mechId, field, value){
+  const idx = SETTINGS.mechanics.findIndex(m => m.id === mechId);
+  if(idx < 0) return;
+  SETTINGS.mechanics[idx][field] = value;
+  saveSettings();
+}
+window.updateMechField = updateMechField;
+
 function ensureSettingsDefaults(){
   if(!SETTINGS.pins) SETTINGS.pins={...DEFAULT_SETTINGS.pins};
   if(!SETTINGS.mechanics) SETTINGS.mechanics=[...DEFAULT_SETTINGS.mechanics];
@@ -1132,7 +1141,7 @@ function renderDashboard(c){
     const sessionStart=isActive?activeSessionsAll[0].start:null;
     const elapsed=isActive?Math.round((Date.now()-sessionStart)/60000):0;
     const eStr=elapsed>=60?Math.floor(elapsed/60)+'h '+elapsed%60+'m':elapsed+'m';
-    html+=`<div style="background:#111318;border:1px solid ${isActive?m.color+'66':'#1e2230'};border-radius:12px;padding:13px 15px;margin-bottom:9px;cursor:${primaryVeh?'pointer':'default'}" ${primaryVeh?`onclick="ST.selectedId='${primaryVeh.id}';ST.view='detail';ST.activeTab='timeclock';render()"`:''}>
+    html+=`<div style="background:#111318;border:1px solid ${isActive?m.color+'66':'#1e2230'};border-radius:12px;padding:13px 15px;margin-bottom:9px;cursor:pointer" onclick="ST.role='${m.id}';ST.view='mypipeline';render()">
       <div style="display:flex;align-items:center;gap:11px">
         <div style="width:40px;height:40px;border-radius:50%;background:${m.color}22;border:2px solid ${isActive?m.color:'#2a2f3f'};display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;position:relative">
           ${m.icon}${isActive?`<span style="position:absolute;bottom:-2px;right:-2px;width:11px;height:11px;background:#4ade80;border-radius:50%;border:2px solid #111318"></span>`:''}
@@ -1153,7 +1162,53 @@ function renderDashboard(c){
   html+=`<div style="margin-bottom:14px"></div>`;
 
   // ══════════════════════════════════════════
-  // 4. STATUS GROUPS (work / finish / lot / source)
+  
+  // ══════════════════════════════════════════
+  // 4. VEHICLES BY STATUS (ordered groups)
+  // ══════════════════════════════════════════
+  const STATUS_ORDER = [
+    {ids:['sale_pending','sold'], label:'Sold / Sale pending', icon:'💰', color:'#10b981'},
+    {ids:['customer_appt'],       label:'Appointment',         icon:'📅', color:'#06b6d4'},
+    {ids:['wip'],                 label:'Work in progress',    icon:'🔨', color:'#f59e0b'},
+    {ids:['recon'],               label:'In recon',            icon:'🔧', color:'#3b82f6'},
+    {ids:['on_lot'],              label:'Inspection',          icon:'🔍', color:'#22c55e'},
+    {ids:['parts'],               label:'Waiting on parts',    icon:'⏳', color:'#f59e0b'},
+    {ids:['body_daniel','body_jose'], label:'Body shop',       icon:'🏠', color:'#ec4899'},
+    {ids:['outside_shop'],        label:'Outside shop',        icon:'🏭', color:'#a78bfa'},
+    {ids:['received'],            label:'Received',            icon:'📦', color:'#8b5cf6'},
+  ];
+
+  STATUS_ORDER.forEach(grp=>{
+    const matching = vs.filter(v=>{
+      const sts = v.statuses||[];
+      return grp.ids.some(id=>sts.includes(id));
+    });
+    if(!matching.length) return;
+    html+=`<div class="sec-hdr" style="margin-top:18px">
+      <span style="color:${grp.color}">${grp.icon} ${grp.label}</span>
+      <span style="color:#555d73;font-weight:400">${matching.length}</span>
+    </div>`;
+    html+=`<div class="v-list">`;
+    matching.forEach(v=>{html+=vRowHTML(v);});
+    html+=`</div>`;
+  });
+
+  // Work complete (not booked) — separate group
+  const completeNotBooked = vs.filter(v=>{
+    const sts = v.statuses||[];
+    return sts.includes('work_complete') && !sts.includes('booked');
+  });
+  if(completeNotBooked.length){
+    html+=`<div class="sec-hdr" style="margin-top:18px">
+      <span style="color:#4ade80">✔️ Work complete — not booked</span>
+      <span style="color:#555d73;font-weight:400">${completeNotBooked.length}</span>
+    </div>`;
+    html+=`<div class="v-list">`;
+    completeNotBooked.forEach(v=>{html+=vRowHTML(v);});
+    html+=`</div>`;
+  }
+
+// 4. STATUS GROUPS (work / finish / lot / source)
   // ══════════════════════════════════════════
   ['work','finish','lot','source'].forEach(grp=>{
     ALL_STATUSES.filter(s=>s.group===grp).forEach(status=>{
@@ -4032,7 +4087,7 @@ function buildConcernsTab(el, v, save){
       <div style="font-size:14px;font-weight:600;color:#fff">Customer concerns</div>
       <div style="font-size:12px;color:#555d73;margin-top:2px">${concerns.length} logged · ${concerns.filter(c=>c.status==='pending').length} pending approval</div>
     </div>
-    ${(isSales||(v.statuses||[]).includes('customer_appt')||(v.statuses||[]).includes('work_complete'))?`<button id="add-concern-btn" style="background:#f59e0b;border:none;color:#000;font-size:12px;font-weight:700;padding:8px 14px;border-radius:8px;cursor:pointer">+ Add concern</button>`:''}
+    <button id="add-concern-btn" style="background:#f59e0b;border:none;color:#000;font-size:12px;font-weight:700;padding:8px 14px;border-radius:8px;cursor:pointer">+ Add concern</button>
   </div>
   <div id="concerns-list"></div>
   ${!concerns.length?`<div class="empty-sm" style="margin-top:20px">${isSales?'No concerns added yet. Tap "+ Add concern" to log what the customer reported.':'No customer concerns logged for this vehicle.'}</div>`:''}`;
