@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>AC Recon — Automotive Connection</title>
+<link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#C8102E">
+  <title>AC Recon — Automotive Connection</title>
 <style>
 /* ═══════════════════════════════════════════════════════
    AC RECON — INDUSTRIAL DARK UI
@@ -462,6 +464,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 </head>
 <body>
 
@@ -1351,7 +1354,19 @@ function renderVehicles(c){
   if(clearAll) clearAll.onclick=()=>{ST.vfInclude=[];ST.vfExclude=[];ST.vfMech='';ST.searchQuery='';renderVehicles(c);};
 
   const si=c.querySelector('#vs-search');
-  if(si){ si.oninput=e=>{ST.searchQuery=e.target.value;renderVehicles(c)}; }
+  if(si){
+    si.oninput=e=>{
+      ST.searchQuery=e.target.value;
+      const cursorPos=si.selectionStart;
+      renderVehicles(c);
+      // Restore focus and cursor position after re-render
+      const newSi=c.querySelector('#vs-search');
+      if(newSi){
+        newSi.focus();
+        try{newSi.setSelectionRange(cursorPos,cursorPos);}catch(e){}
+      }
+    };
+  }
 
   const sc=c.querySelector('#vs-clear');
   if(sc) sc.onclick=()=>{ST.searchQuery='';ST.vfInclude=[];ST.vfExclude=[];ST.vfMech='';renderVehicles(c);};
@@ -2388,7 +2403,19 @@ window.showVinModal=showVinModal;
 function renderDetail(c,v){
   if(!v){c.innerHTML='<div class="empty"><div class="empty-icon">🚗</div><div class="empty-msg">Vehicle not found</div></div>';return}
 
-  const save=updates=>{Object.assign(v,updates,{updatedAt:Date.now()});ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x);ST.vehicles.find(x=>x.id===v.id)&&(ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x));window.save();toast('Saved');refreshDetail();};
+  const save=updates=>{
+    const wasHigh = v.priority==='high' && v.assignedTo;
+    Object.assign(v,updates,{updatedAt:Date.now()});
+    ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x);
+    window.save();
+    toast('Saved');
+    refreshDetail();
+    // Trigger push notification if vehicle is now high-priority + assigned
+    const isHigh = v.priority==='high' && v.assignedTo;
+    if(isHigh && (!wasHigh || updates.assignedTo || updates.priority==='high')){
+      notifyHighPriority(v);
+    }
+  };
   const toggleSt=id=>{
     const cur=v.statuses||[];
     const next=cur.includes(id)?cur.filter(s=>s!==id):[...cur,id];
@@ -3375,7 +3402,7 @@ function renderMechPipeline(c){
         </div>
         <div style="font-size:11px;color:#555d73;margin-bottom:6px">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${!mechId?` · <span style="color:${assignedMech?assignedMech.color:'#374151'}">${assignedMech?assignedMech.icon+' '+assignedMech.name:'— Unassigned'}</span>`:''}</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-          ${WORK_S.map(s=>{const on=(v.statuses||[]).includes(s.id);return`<button class="status-quick-btn${on?' on':''}" data-vid="${v.id}" data-sid="${s.id}" style="${on?`background:${s.color}22;color:${s.color};border-color:${s.color}55`:''}">${s.icon} ${s.label}</button>`;}).join('')}
+          ${(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean).map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border:1px solid ${s.color}55">${s.icon} ${s.label}</span>`).join('')||'<span style="font-size:10px;color:#374151">No status set</span>'}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="font-size:13px;font-weight:700;color:${RED}">${fmt$(cost)}</span>
@@ -4435,11 +4462,119 @@ function subscribeToFirestore() {
     });
 }
 
+
+// ═══════════════════════════════════════════════
+// PUSH NOTIFICATIONS — Firebase Cloud Messaging
+// ═══════════════════════════════════════════════
+const VAPID_KEY = 'BJdbyJfViUT7Fy6GWz21vUPqu-hdbytJOZk5GqL2AyveTg22spGUXTP4vbUTyguu3OMZEZvDpfgN8TJJbNfq-ss';
+let messaging = null;
+let pushToken = null;
+
+async function initPushNotifications(){
+  if(!firebaseReady) return;
+  if(!('serviceWorker' in navigator)) return;
+  if(!('Notification' in window)) return;
+
+  try {
+    // Register service worker
+    const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    console.log('Service worker registered ✅');
+
+    messaging = firebase.messaging();
+
+    // Listen for messages while app is open (foreground)
+    messaging.onMessage(payload => {
+      console.log('Foreground push:', payload);
+      toast(payload.notification?.title || 'New notification');
+      // If user clicks it, route to vehicle detail
+      if(payload.data?.vehicleId){
+        // Store last notification so tapping the toast works
+        window.__lastPushVehicleId = payload.data.vehicleId;
+      }
+    });
+  } catch(e) {
+    console.warn('Push init failed:', e);
+  }
+}
+
+async function requestPushPermission(mechId){
+  if(!messaging) return null;
+  try {
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){
+      toast('Notifications blocked — enable in phone settings','err');
+      return null;
+    }
+    const reg = await navigator.serviceWorker.getRegistration();
+    const token = await messaging.getToken({vapidKey: VAPID_KEY, serviceWorkerRegistration: reg});
+    if(token && db){
+      // Save token under mechanic's entry in Firestore
+      await db.collection('shops').doc('ac_tokens').set({
+        [mechId]: token,
+        [mechId+'_updated']: firebase.firestore.FieldValue.serverTimestamp()
+      },{merge:true});
+      console.log('Push token saved for', mechId);
+      pushToken = token;
+      toast('Notifications enabled ✅');
+      return token;
+    }
+  } catch(e) {
+    console.error('Push permission error:',e);
+    toast('Could not enable notifications: '+e.message,'err');
+  }
+  return null;
+}
+
+// Call the notify endpoint when a high-priority vehicle is assigned
+async function notifyHighPriority(vehicle){
+  if(!vehicle.assignedTo || vehicle.priority !== 'high') return;
+  try {
+    await fetch(AI_PROXY+'/notify',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        mechId: vehicle.assignedTo,
+        vehicleId: vehicle.id,
+        title: '🔴 High priority vehicle',
+        body: `${vehicle.year||''} ${vehicle.make||''} ${vehicle.model||''} #${vehicle.stockNumber||'?'}`
+      })
+    });
+    console.log('Notification sent to', vehicle.assignedTo);
+  } catch(e){ console.warn('Notify failed:',e); }
+}
+
+// Enable notifications banner — shown once to each mechanic
+function maybeShowNotifBanner(){
+  if(!messaging) return;
+  if(!ST.role) return;
+  if(ST.role === 'manager' || ST.role === 'sales' || ST.role === 'detailer') return;
+  if(Notification.permission === 'granted') return;
+  if(Notification.permission === 'denied') return;
+  if(localStorage.getItem('notif_banner_dismissed')==='1') return;
+
+  const b = document.createElement('div');
+  b.id='notif-banner';
+  b.style.cssText='position:fixed;bottom:80px;left:12px;right:12px;z-index:800;background:#C8102E;color:#fff;border-radius:var(--r-lg);padding:13px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:fadeIn .2s';
+  b.innerHTML=`<span style="font-size:22px">🔔</span>
+    <div style="flex:1;font-size:12px;line-height:1.4"><div style="font-weight:700;margin-bottom:2px">Enable notifications</div><div style="opacity:.9">Get alerts for high-priority vehicles</div></div>
+    <button id="nb-enable" style="background:#fff;color:#C8102E;border:none;border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;cursor:pointer">Enable</button>
+    <button id="nb-dismiss" style="background:none;border:none;color:#fff;font-size:18px;padding:4px 8px;opacity:.7;cursor:pointer">✕</button>`;
+  document.body.appendChild(b);
+  document.getElementById('nb-enable').onclick = async()=>{
+    await requestPushPermission(ST.role);
+    b.remove();
+  };
+  document.getElementById('nb-dismiss').onclick = ()=>{
+    localStorage.setItem('notif_banner_dismissed','1');
+    b.remove();
+  };
+}
+
 // ═══════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════
 try { load(); } catch(e) { console.error('load() error:', e); }
-try { render(); } catch(e) { 
+try { render(); if(firebaseReady) initPushNotifications(); setTimeout(maybeShowNotifBanner, 2000); } catch(e) { 
   console.error('render() error:', e);
   // Fallback — show role screen directly
   const rs = document.getElementById('role-screen');
