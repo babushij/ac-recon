@@ -582,7 +582,7 @@ function migrateVehiclesToVisits(){
   let migrated = 0;
   ST.vehicles = ST.vehicles.map(v => {
     // Already migrated?
-    if(Array.isArray(v.visits)) return v;
+    if(Array.isArray(v.visits) && v.visits.length > 0) return v;
 
     // Build first visit from existing flat fields
     const visit = {
@@ -616,6 +616,50 @@ function migrateVehiclesToVisits(){
     return migratedV;
   });
   if(migrated > 0) console.log(`Migrated ${migrated} vehicles to visits format`);
+}
+
+
+// ═══════════════════════════════════════════════
+// Merge duplicate VINs — same VIN = same vehicle
+// Preserves all their visits combined, sorted by dateIn
+// ═══════════════════════════════════════════════
+function mergeDuplicateVins(){
+  if(!Array.isArray(ST.vehicles)) return false;
+  const byVin = {};
+  let mergedCount = 0;
+  ST.vehicles.forEach(v=>{
+    if(!v.vin) return; // skip VIN-less (can't merge those)
+    const vin = v.vin.trim().toUpperCase();
+    if(!byVin[vin]){
+      byVin[vin] = v;
+    } else {
+      // Merge this v into existing byVin[vin]
+      const existing = byVin[vin];
+      const existingVisits = existing.visits || [];
+      const newVisits = v.visits || [];
+      // Dedupe by visit id
+      const allVisits = [...existingVisits];
+      newVisits.forEach(nv=>{
+        if(!allVisits.find(ev=>ev.id===nv.id)){
+          allVisits.push(nv);
+        }
+      });
+      // Sort by dateIn
+      allVisits.sort((a,b)=>(a.dateIn||0)-(b.dateIn||0));
+      existing.visits = allVisits;
+      // Prefer populated fields
+      ['year','make','model','color','mileage','source'].forEach(f=>{
+        if(!existing[f] && v[f]) existing[f] = v[f];
+      });
+      existing.updatedAt = Math.max(existing.updatedAt||0, v.updatedAt||0);
+      mergedCount++;
+    }
+  });
+  // Also keep VIN-less vehicles as-is
+  const noVin = ST.vehicles.filter(v=>!v.vin);
+  ST.vehicles = Object.values(byVin).concat(noVin);
+  if(mergedCount>0) console.log(`Merged ${mergedCount} duplicate VINs`);
+  return mergedCount > 0;
 }
 
 // ═══════════════════════════════════════════════
@@ -740,6 +784,10 @@ const fmtD=ts=>new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numer
 // STORAGE
 // ═══════════════════════════════════════════════
 function save(){
+  // Ensure every vehicle has a visits[] structure and dedup by VIN before persisting
+  migrateVehiclesToVisits();
+  mergeDuplicateVins();
+  applyVisitShimAll();
   const json=JSON.stringify(ST.vehicles);
   try{localStorage.setItem(STORAGE_KEY,json);}catch(e){}
   // Sync to Firestore (async, non-blocking)
@@ -749,6 +797,7 @@ function load(){
   // Load from localStorage as immediate cache while Firestore connects
   try{const d=localStorage.getItem(STORAGE_KEY);ST.vehicles=d?JSON.parse(d):[]}catch(e){ST.vehicles=[];}
   migrateVehiclesToVisits();
+  mergeDuplicateVins();
   applyVisitShimAll();
   loadSettings();
   if(!Array.isArray(SETTINGS.mechanics)||SETTINGS.mechanics.length===0){
@@ -4589,16 +4638,28 @@ function subscribeToFirestore() {
       try {
         const data = snap.data();
         const incoming = JSON.parse(data.vehicles || '[]');
-        // Migrate on receive in case data is from older app version
-        const prev = ST.vehicles; ST.vehicles = incoming; migrateVehiclesToVisits(); applyVisitShimAll(); const migrated = ST.vehicles; ST.vehicles = prev;
-        const currentJson = JSON.stringify(ST.vehicles);
-        const incomingJson = JSON.stringify(incoming);
-        if(incomingJson !== currentJson){
-          ST.vehicles = incoming;
-          try { localStorage.setItem(STORAGE_KEY, incomingJson); } catch(e) {}
+        // Migrate incoming data if it's old format (no visits[])
+        const prev = ST.vehicles;
+        ST.vehicles = incoming;
+        migrateVehiclesToVisits();
+        mergeDuplicateVins();
+        applyVisitShimAll();
+        const migratedJson = JSON.stringify(ST.vehicles);
+        const currentJson = JSON.stringify(prev);
+        if(migratedJson !== currentJson){
+          try { localStorage.setItem(STORAGE_KEY, migratedJson); } catch(e) {}
           if(document.getElementById('app')?.style.display !== 'none'){
             render();
           }
+          // If migration changed the data (added visits[]), push back to Firestore once
+          const incomingJson = JSON.stringify(incoming);
+          if(migratedJson !== incomingJson){
+            console.log('Migration modified data — syncing back to Firestore');
+            saveToFirestore(ST.vehicles);
+          }
+        } else {
+          // Data unchanged, restore prev reference
+          ST.vehicles = prev;
         }
       } catch(e) {
         console.warn('Firestore parse error:', e);
