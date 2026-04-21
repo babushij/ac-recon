@@ -464,6 +464,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 </head>
 <body>
@@ -777,6 +778,98 @@ async function compressImage(file, maxWidth, quality){
 }
 
 
+// ═══════════════════════════════════════════════
+// FIREBASE STORAGE HELPERS — Round 1
+// Supports BOTH legacy base64 strings AND new {url,path,...} objects
+// so the app keeps working during/after migration.
+// ═══════════════════════════════════════════════
+
+// Return the display URL for a photo entry (works for both old & new format)
+function photoUrl(p){
+  if(!p) return '';
+  if(typeof p === 'string') return p; // legacy base64 string
+  return p.url || p.data || '';        // new {url,...} or legacy {data,...}
+}
+
+// Return the display URL for a receipt entry
+function receiptUrl(r){
+  if(!r) return '';
+  if(typeof r === 'string') return r;
+  return r.url || r.data || '';
+}
+
+// Receipt display name
+function receiptName(r){
+  if(!r) return 'receipt';
+  if(typeof r === 'string') return 'receipt.jpg';
+  return r.name || 'receipt';
+}
+
+// Receipt date (timestamp in ms)
+function receiptDate(r){
+  if(!r || typeof r === 'string') return Date.now();
+  return r.date || r.uploadedAt || Date.now();
+}
+
+// True if receipt is a PDF (based on name)
+function receiptIsPdf(r){
+  return receiptName(r).toLowerCase().endsWith('.pdf');
+}
+
+// Return storage path on a photo/receipt entry (for deletion), if any
+function storagePath(entry){
+  if(!entry || typeof entry === 'string') return null;
+  return entry.path || null;
+}
+
+// Upload a Blob to Firebase Storage at the given path.
+// Returns { url, path, uploadedAt } on success.
+async function uploadToStorage(blob, path){
+  if(!storage) throw new Error('Storage not initialized');
+  if(!blob) throw new Error('No file to upload');
+  const ref = storage.ref(path);
+  const snap = await ref.put(blob);
+  const url = await snap.ref.getDownloadURL();
+  return { url, path, uploadedAt: Date.now() };
+}
+
+// Delete a file from Firebase Storage. Silent on failure (may already be gone).
+async function deleteFromStorage(path){
+  if(!storage || !path) return;
+  try {
+    await storage.ref(path).delete();
+  } catch(e) {
+    console.warn('Storage delete failed (safe to ignore if object was already gone):', path, e.code || e.message);
+  }
+}
+
+// Convert a data URL string to a Blob for upload
+function dataUrlToBlob(dataUrl){
+  try {
+    const [header, base64] = dataUrl.split(',');
+    const mimeMatch = header.match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const binary = atob(base64);
+    const len = binary.length;
+    const buf = new Uint8Array(len);
+    for(let i=0;i<len;i++) buf[i] = binary.charCodeAt(i);
+    return new Blob([buf], { type: mime });
+  } catch(e) {
+    throw new Error('Invalid data URL: ' + e.message);
+  }
+}
+
+// Pick a file extension based on MIME type
+function extFromMime(mime){
+  if(!mime) return 'bin';
+  if(mime.includes('pdf')) return 'pdf';
+  if(mime.includes('png')) return 'png';
+  if(mime.includes('webp')) return 'webp';
+  if(mime.includes('gif')) return 'gif';
+  return 'jpg';
+}
+
+
 const fmt$=n=>'$'+Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const fmtD=ts=>new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 
@@ -786,7 +879,6 @@ const fmtD=ts=>new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numer
 function save(){
   // Ensure every vehicle has a visits[] structure and dedup by VIN before persisting
   migrateVehiclesToVisits();
-  mergeDuplicateVins();
   applyVisitShimAll();
   const json=JSON.stringify(ST.vehicles);
   try{localStorage.setItem(STORAGE_KEY,json);}catch(e){}
@@ -1515,7 +1607,7 @@ function vRowHTML(v){
   const cost=_vp+_vl+_vr;
   const mech=v.assignedTo?getMMAP()[v.assignedTo]:null;
   const pri=v.priority?PMAP[v.priority]:null;
-  const photo=v.photos&&v.photos[0];
+  const photo=photoUrl(v.photos&&v.photos[0]);
   const isSalePending=(v.statuses||[]).includes('sale_pending');
   const isSold=(v.statuses||[]).includes('sold');
   const borderColor=isSalePending?'#f59e0b55':isSold?'#10b98133':'#1e2230';
@@ -3218,7 +3310,7 @@ function renderDetail(c,v){
     const grid=document.createElement('div');grid.className='photo-grid';
     (v.photos||[]).forEach((p,i)=>{
       const wrap=document.createElement('div');wrap.className='photo-thumb';wrap.style.position='relative';
-      const img=document.createElement('img');img.src=p;img.style.cssText='width:100%;height:100%;object-fit:cover';
+      const img=document.createElement('img');img.src=photoUrl(p);img.style.cssText='width:100%;height:100%;object-fit:cover';
       const del=document.createElement('button');
       del.style.cssText='position:absolute;top:3px;right:3px;background:rgba(0,0,0,.7);border:none;color:#fff;width:20px;height:20px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer';
       del.textContent='✕';del.onclick=()=>delPhoto(i);
@@ -3270,9 +3362,10 @@ function renderDetail(c,v){
 
     (v.receipts||[]).forEach((r,i)=>{
       const row=document.createElement('div');row.className='receipt-row';
-      row.innerHTML=`<span style="font-size:22px">${r.name.endsWith('.pdf')?'📄':'🖼'}</span>
-        <div class="receipt-info"><div class="receipt-name">${r.name}</div><div class="receipt-date">${fmtD(r.date)}</div></div>
-        <a class="dl-link" href="${r.data}" download="${r.name}">⬇ Download</a>`;
+      const rName=receiptName(r);const rUrl=receiptUrl(r);const rDate=receiptDate(r);const isPdf=receiptIsPdf(r);
+      row.innerHTML=`<span style="font-size:22px">${isPdf?'📄':'🖼'}</span>
+        <div class="receipt-info"><div class="receipt-name">${rName}</div><div class="receipt-date">${fmtD(rDate)}</div></div>
+        <a class="dl-link" href="${rUrl}" download="${rName}" target="_blank" rel="noopener">⬇ Download</a>`;
       const del=document.createElement('button');del.className='del-btn';del.textContent='✕';del.onclick=()=>delReceipt(i);
       row.appendChild(del);el.appendChild(row);
     });
@@ -3481,7 +3574,7 @@ function renderCompleted(c){
 
     html+=`<div style="background:#111318;border:1px solid ${isBooked?'#818cf844':hasReceipts?'#34d39933':'#1e2230'};border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='repairs';render()">
       <div style="display:flex;align-items:flex-start;gap:12px">
-        ${v.photos?.[0]?`<img src="${v.photos[0]}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">`:
+        ${v.photos?.[0]?`<img src="${photoUrl(v.photos[0])}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">`:
           `<div style="width:56px;height:56px;background:#1e2230;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#374151;font-size:18px">🚗</div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px">${v.year||''} ${v.make||''} ${v.model||''}</div>
@@ -3588,7 +3681,7 @@ function renderMechPipeline(c){
       }
     }
     return`<div class="vehicle-card-grid" data-vid="${v.id}">
-      ${v.photos?.[0]?`<div class="vcg-img"><img src="${v.photos[0]}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#374151;font-size:12px">No photo</div>`}
+      ${v.photos?.[0]?`<div class="vcg-img"><img src="${photoUrl(v.photos[0])}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#374151;font-size:12px">No photo</div>`}
       <div class="vcg-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:14px;font-weight:600;color:#fff;flex:1;min-width:0">${v.year||''} ${v.make||''} ${v.model||''}</div>
@@ -3833,7 +3926,7 @@ function renderDetailerQueue(c){
   queue.forEach(v=>{
     const pri=PMAP[v.priority||'medium'];
     html+=`<div class="vehicle-card-grid">
-      ${v.photos?.[0]?`<div class="vcg-img"><img src="${v.photos[0]}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#374151;font-size:12px">No photo</div>`}
+      ${v.photos?.[0]?`<div class="vcg-img"><img src="${photoUrl(v.photos[0])}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#374151;font-size:12px">No photo</div>`}
       <div class="vcg-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:14px;font-weight:600;color:#fff">${v.year||''} ${v.make||''} ${v.model||''}</div>
@@ -3993,7 +4086,7 @@ function renderSalesPipeline(c){
     sold.forEach(v=>{
       const recon=(v.repairs||[]).reduce((a,r)=>a+Number(r.cost||0),0);
       html+=`<div class="v-row" data-vid="${v.id}">
-        ${v.photos?.[0]?`<div class="v-row-photo"><img src="${v.photos[0]}" loading="lazy"></div>`:`<div class="v-row-photo-empty"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M2 10L4 5h8l2 5H2z" stroke="#374151" stroke-width="1.2" fill="none"/></svg></div>`}
+        ${v.photos?.[0]?`<div class="v-row-photo"><img src="${photoUrl(v.photos[0])}" loading="lazy"></div>`:`<div class="v-row-photo-empty"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M2 10L4 5h8l2 5H2z" stroke="#374151" stroke-width="1.2" fill="none"/></svg></div>`}
         <div style="min-width:0"><div class="v-name">${v.year||''} ${v.make||''} ${v.model||''}</div>
         <div class="v-meta">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}</div>
         <div class="v-tags"><span class="v-tag" style="background:#10b98122;color:#10b981;border-color:#10b98133">💰 Sold</span>
@@ -4084,7 +4177,7 @@ function openSalesAddVehicleModal(){
 function salePendingCardHTML(v, isSales){
   const concerns=v.concerns||[];
   const pendingC=concerns.filter(c=>c.status==='pending');
-  const photo=v.photos?.[0]||'';
+  const photo=photoUrl(v.photos?.[0]);
 
   return `<div class="sp-card" data-vid="${v.id}" style="background:#111318;border:2px solid #f59e0b55;border-radius:12px;margin-bottom:12px;overflow:hidden;cursor:pointer">
     <div style="background:#1a1200;padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #f59e0b22">
@@ -4440,6 +4533,17 @@ function renderSettings(c){
     </div>
 
     <div class="panel">
+      <div class="panel-title">STORAGE MIGRATION</div>
+      <div style="font-size:12px;color:#555d73;margin-bottom:12px">Move existing photos and receipts out of the database and into Firebase Storage. This fixes the 1&nbsp;MB Firestore limit and prevents silent data loss. Safe — original data stays until upload is confirmed.</div>
+      <div id="storage-migration-stats" style="font-size:12px;color:#9ca3af;margin-bottom:12px;font-family:'Courier New',monospace"></div>
+      <button id="btn-migrate-storage" onclick="startStorageMigration()"
+        style="width:100%;background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7;border-radius:9px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px">
+        🚀 Migrate photos &amp; receipts to Storage
+      </button>
+      <div id="storage-migration-progress" style="display:none;background:#0d0f14;border:1px solid #1e2230;border-radius:8px;padding:10px 12px;max-height:260px;overflow-y:auto;font-family:'Courier New',monospace;font-size:11px;color:#9ca3af;line-height:1.6"></div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">RESET</div>
       <button onclick="if(confirm('Reset ALL PINs to defaults?')){SETTINGS.pins={...DEFAULT_SETTINGS.pins};saveSettings();renderSettings(document.getElementById('content'));toast('PINs reset to defaults')}"
         class="danger-btn" style="width:100%;padding:11px;border-radius:9px;margin-bottom:8px">Reset all PINs to defaults</button>
@@ -4485,7 +4589,179 @@ function renderSettings(c){
     renderSettings(c);
     toast('Mechanic added — set a name and PIN');
   };
+
+  // Populate storage migration stats on render
+  updateStorageMigrationStats();
 }
+
+// ═══════════════════════════════════════════════
+// STORAGE MIGRATION — one-tap move from Firestore to Firebase Storage
+// ═══════════════════════════════════════════════
+function updateStorageMigrationStats(){
+  const el=document.getElementById('storage-migration-stats');
+  if(!el) return;
+  let legacyPhotos=0, migratedPhotos=0, legacyReceipts=0, migratedReceipts=0;
+  for(const v of ST.vehicles){
+    const visits=(v.visits&&v.visits.length)?v.visits:[v];
+    for(const vi of visits){
+      if(!vi||typeof vi!=='object') continue;
+      for(const p of (vi.photos||[])){
+        if(typeof p==='string') legacyPhotos++;
+        else if(p&&p.url) migratedPhotos++;
+        else if(p&&p.data) legacyPhotos++;
+      }
+      for(const r of (vi.receipts||[])){
+        if(typeof r==='string') legacyReceipts++;
+        else if(r&&r.url) migratedReceipts++;
+        else if(r&&r.data) legacyReceipts++;
+      }
+    }
+  }
+  const totalLegacy=legacyPhotos+legacyReceipts;
+  el.innerHTML=`Photos: <span style="color:#fbbf24">${legacyPhotos} legacy</span> · <span style="color:#6ee7b7">${migratedPhotos} in Storage</span><br>Receipts: <span style="color:#fbbf24">${legacyReceipts} legacy</span> · <span style="color:#6ee7b7">${migratedReceipts} in Storage</span>`;
+  const btn=document.getElementById('btn-migrate-storage');
+  if(btn){
+    if(totalLegacy===0){
+      btn.disabled=true;
+      btn.style.opacity='0.5';
+      btn.style.cursor='not-allowed';
+      btn.textContent='✅ All files already in Storage';
+    }
+  }
+}
+
+async function startStorageMigration(){
+  if(!storage){
+    toast('Firebase Storage not available','err');
+    return;
+  }
+  const btn=document.getElementById('btn-migrate-storage');
+  const log=document.getElementById('storage-migration-progress');
+  if(!btn||!log) return;
+
+  btn.disabled=true;
+  btn.style.opacity='0.5';
+  btn.style.cursor='not-allowed';
+  btn.textContent='Migrating…';
+  log.style.display='block';
+  log.innerHTML='';
+
+  const logLine=(msg,color)=>{
+    const line=document.createElement('div');
+    if(color) line.style.color=color;
+    line.textContent=msg;
+    log.appendChild(line);
+    log.scrollTop=log.scrollHeight;
+  };
+
+  const shopId='automotive_connection';
+  let photosMigrated=0, photosFailed=0;
+  let receiptsMigrated=0, receiptsFailed=0;
+  let vehiclesTouched=0;
+
+  logLine('═══ Storage migration starting ═══','#6ee7b7');
+  logLine(`${ST.vehicles.length} vehicles to scan`);
+
+  for(const v of ST.vehicles){
+    let vehicleChanged=false;
+    const visits=(v.visits&&v.visits.length)?v.visits:[];
+    // Build a list of targets: top-level + every visit
+    const targets=[{obj:v,label:'(top-level)'}];
+    for(let j=0;j<visits.length;j++){
+      targets.push({obj:visits[j],label:`visit #${j+1}`});
+    }
+
+    for(const t of targets){
+      const holder=t.obj;
+      if(!holder||typeof holder!=='object') continue;
+
+      // PHOTOS
+      if(Array.isArray(holder.photos)){
+        for(let i=0;i<holder.photos.length;i++){
+          const p=holder.photos[i];
+          if(p&&typeof p==='object'&&p.url) continue;
+          let dataUrl=null;
+          if(typeof p==='string') dataUrl=p;
+          else if(p&&typeof p==='object'&&p.data) dataUrl=p.data;
+          if(!dataUrl||!dataUrl.startsWith('data:')){continue;}
+          try {
+            const blob=dataUrlToBlob(dataUrl);
+            const ext=extFromMime(blob.type);
+            const path=`shops/${shopId}/vehicles/${v.id}/photos/${uid()}.${ext}`;
+            const obj=await uploadToStorage(blob,path);
+            holder.photos[i]=obj;
+            photosMigrated++;
+            vehicleChanged=true;
+            logLine(`✅ ${v.stockNumber||'?'} photo ${i+1} ${t.label} → ${Math.round(blob.size/1024)} KB`,'#6ee7b7');
+          } catch(e) {
+            photosFailed++;
+            logLine(`❌ ${v.stockNumber||'?'} photo ${i+1} ${t.label}: ${e.message}`,'#fca5a5');
+          }
+        }
+      }
+
+      // RECEIPTS
+      if(Array.isArray(holder.receipts)){
+        for(let i=0;i<holder.receipts.length;i++){
+          const r=holder.receipts[i];
+          if(r&&typeof r==='object'&&r.url) continue;
+          let dataUrl=null, name='receipt';
+          if(typeof r==='string'){dataUrl=r;name='receipt.jpg';}
+          else if(r&&typeof r==='object'){
+            dataUrl=r.data;
+            name=r.name||'receipt';
+          }
+          if(!dataUrl||!dataUrl.startsWith('data:')){continue;}
+          try {
+            const blob=dataUrlToBlob(dataUrl);
+            const ext=extFromMime(blob.type);
+            const path=`shops/${shopId}/vehicles/${v.id}/receipts/${uid()}.${ext}`;
+            const obj=await uploadToStorage(blob,path);
+            holder.receipts[i]={...obj,name,date:(r&&r.date)||Date.now()};
+            receiptsMigrated++;
+            vehicleChanged=true;
+            logLine(`✅ ${v.stockNumber||'?'} receipt ${i+1} (${name}) ${t.label} → ${Math.round(blob.size/1024)} KB`,'#6ee7b7');
+          } catch(e) {
+            receiptsFailed++;
+            logLine(`❌ ${v.stockNumber||'?'} receipt ${i+1} ${t.label}: ${e.message}`,'#fca5a5');
+          }
+        }
+      }
+    }
+
+    if(vehicleChanged){
+      vehiclesTouched++;
+      try {
+        save();
+      } catch(e) {
+        logLine(`⚠ Save failed for ${v.stockNumber}: ${e.message}`,'#fbbf24');
+      }
+    }
+  }
+
+  logLine('','');
+  logLine('═══ Migration complete ═══','#6ee7b7');
+  logLine(`Photos: ${photosMigrated} migrated, ${photosFailed} failed`);
+  logLine(`Receipts: ${receiptsMigrated} migrated, ${receiptsFailed} failed`);
+  logLine(`Vehicles updated: ${vehiclesTouched}`);
+
+  if(photosMigrated+receiptsMigrated>0){
+    toast(`Migrated ${photosMigrated+receiptsMigrated} files to Storage`);
+  } else if(photosFailed+receiptsFailed===0){
+    toast('No legacy files to migrate');
+  } else {
+    toast('Migration finished with errors — see log','err');
+  }
+
+  btn.disabled=false;
+  btn.style.opacity='1';
+  btn.style.cursor='pointer';
+  btn.textContent='🚀 Migrate photos & receipts to Storage';
+  updateStorageMigrationStats();
+}
+
+window.startStorageMigration=startStorageMigration;
+window.updateStorageMigrationStats=updateStorageMigrationStats;
 
 // ═══════════════════════════════════════════════
 // BROWSER CHECK — require Chrome for best experience
@@ -4571,6 +4847,7 @@ const firebaseConfig = {
 };
 
 let db = null;
+let storage = null;
 let unsubscribeFirestore = null;
 let firebaseReady = false;
 
@@ -4578,6 +4855,7 @@ try {
   if(typeof firebase !== 'undefined'){
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    storage = firebase.storage();
     firebaseReady = true;
     console.log('Firebase connected ✅');
   } else {
@@ -4586,6 +4864,7 @@ try {
 } catch(e) {
   console.warn('Firebase init failed — offline mode', e);
   db = null;
+  storage = null;
   firebaseReady = false;
 }
 
@@ -4642,7 +4921,6 @@ function subscribeToFirestore() {
         const prev = ST.vehicles;
         ST.vehicles = incoming;
         migrateVehiclesToVisits();
-        mergeDuplicateVins();
         applyVisitShimAll();
         const migratedJson = JSON.stringify(ST.vehicles);
         const currentJson = JSON.stringify(prev);
