@@ -567,6 +567,86 @@ function updateMechField(mechId, field, value){
 }
 window.updateMechField = updateMechField;
 
+
+// ═══════════════════════════════════════════════
+// MIGRATION — flat vehicle → vehicle with visits[]
+// ═══════════════════════════════════════════════
+function migrateVehiclesToVisits(){
+  if(!Array.isArray(ST.vehicles)) return;
+
+  // Fields that move INTO each visit
+  const VISIT_FIELDS = ['stockNumber','statuses','assignedTo','priority',
+    'apptDate','parts','laborLines','repairs','receipts','photos','notes',
+    'concerns','comments','timeSessions'];
+
+  let migrated = 0;
+  ST.vehicles = ST.vehicles.map(v => {
+    // Already migrated?
+    if(Array.isArray(v.visits)) return v;
+
+    // Build first visit from existing flat fields
+    const visit = {
+      id: v.id + '-v1',
+      dateIn: v.createdAt || Date.now(),
+      dateOut: null
+    };
+    VISIT_FIELDS.forEach(f => {
+      if(v[f] !== undefined) visit[f] = v[f];
+    });
+    // Defaults for empty arrays
+    ['statuses','parts','laborLines','repairs','receipts','photos','concerns','comments','timeSessions'].forEach(f=>{
+      if(!Array.isArray(visit[f])) visit[f] = [];
+    });
+
+    // New vehicle shape: permanent fields at top, visits[] holding work data
+    const migratedV = {
+      id: v.id,
+      vin: v.vin || '',
+      year: v.year || '',
+      make: v.make || '',
+      model: v.model || '',
+      color: v.color || '',
+      mileage: v.mileage || '',
+      source: v.source || '',
+      visits: [visit],
+      createdAt: v.createdAt || Date.now(),
+      updatedAt: v.updatedAt || Date.now()
+    };
+    migrated++;
+    return migratedV;
+  });
+  if(migrated > 0) console.log(`Migrated ${migrated} vehicles to visits format`);
+}
+
+// ═══════════════════════════════════════════════
+// VISIT HELPERS — get current visit, or create new one
+// ═══════════════════════════════════════════════
+function currentVisit(v){
+  if(!v || !Array.isArray(v.visits) || !v.visits.length) return null;
+  // Current = most recent non-booked, or last if all booked
+  const open = v.visits.find(visit => !(visit.statuses||[]).includes('booked'));
+  return open || v.visits[v.visits.length-1];
+}
+
+function startNewVisit(v, overrides={}){
+  const visit = {
+    id: v.id + '-v' + ((v.visits||[]).length + 1),
+    dateIn: Date.now(),
+    dateOut: null,
+    stockNumber: overrides.stockNumber || '',
+    statuses: overrides.statuses || ['received'],
+    assignedTo: overrides.assignedTo || '',
+    priority: overrides.priority || 'medium',
+    apptDate: overrides.apptDate || '',
+    parts: [], laborLines: [], repairs: [],
+    receipts: [], photos: [], notes: '',
+    concerns: [], comments: [], timeSessions: []
+  };
+  v.visits = [...(v.visits||[]), visit];
+  v.updatedAt = Date.now();
+  return visit;
+}
+
 function ensureSettingsDefaults(){
   if(!SETTINGS.pins) SETTINGS.pins={...DEFAULT_SETTINGS.pins};
   if(!SETTINGS.mechanics) SETTINGS.mechanics=[...DEFAULT_SETTINGS.mechanics];
@@ -668,6 +748,8 @@ function save(){
 function load(){
   // Load from localStorage as immediate cache while Firestore connects
   try{const d=localStorage.getItem(STORAGE_KEY);ST.vehicles=d?JSON.parse(d):[]}catch(e){ST.vehicles=[];}
+  migrateVehiclesToVisits();
+  applyVisitShimAll();
   loadSettings();
   if(!Array.isArray(SETTINGS.mechanics)||SETTINGS.mechanics.length===0){
     SETTINGS.mechanics=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.mechanics));
@@ -703,8 +785,8 @@ function autoClockOutExpired(){
     if(sessCount>0) toastLines.push(`${m.name} auto clocked out at ${timeStr}`);
   });
   if(toastLines.length){
-    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(ST.vehicles));}catch(e){}
-    // Show after render so toast system is ready
+    // Persist to localStorage AND Firestore so all devices see mechanics clocked out
+    save();
     setTimeout(()=>toastLines.forEach((msg,i)=>setTimeout(()=>toast(msg),i*800)),400);
   }
 }
@@ -2406,11 +2488,22 @@ function renderDetail(c,v){
   const save=updates=>{
     const wasHigh = v.priority==='high' && v.assignedTo;
     Object.assign(v,updates,{updatedAt:Date.now()});
+    // ALSO write work fields to the current visit record
+    const cur = currentVisit(v);
+    if(cur){
+      const VISIT_FIELDS = ['stockNumber','statuses','assignedTo','priority',
+        'apptDate','parts','laborLines','repairs','receipts','photos','notes',
+        'concerns','comments','timeSessions'];
+      VISIT_FIELDS.forEach(f => { if(v[f] !== undefined) cur[f] = v[f]; });
+      // If booked just set, mark dateOut
+      if((v.statuses||[]).includes('booked') && !cur.dateOut){
+        cur.dateOut = Date.now();
+      }
+    }
     ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x);
     window.save();
     toast('Saved');
     refreshDetail();
-    // Trigger push notification if vehicle is now high-priority + assigned
     const isHigh = v.priority==='high' && v.assignedTo;
     if(isHigh && (!wasHigh || updates.assignedTo || updates.priority==='high')){
       notifyHighPriority(v);
@@ -2613,6 +2706,57 @@ function renderDetail(c,v){
   }
 
 
+
+  function buildHistoryTab(el){
+    const visits = v.visits || [];
+    if(!visits.length){
+      el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-msg">No service history</div></div>';
+      return;
+    }
+    const curVisitId = currentVisit(v)?.id;
+    const sorted = [...visits].sort((a,b)=> (b.dateIn||0)-(a.dateIn||0));
+
+    let html = '<div style="font-size:11px;color:var(--text3);margin-bottom:12px;letter-spacing:.5px;text-transform:uppercase;font-weight:600">'+visits.length+' service visit'+(visits.length!==1?'s':'')+' for this vehicle</div>';
+
+    sorted.forEach((visit, idx)=>{
+      const isCurrent = visit.id === curVisitId;
+      const visitNum = visits.length - sorted.indexOf(visit);
+      const statusLabels = (visit.statuses||[]).map(sid=>SMAP[sid]).filter(Boolean);
+      const partsCost = (visit.parts||[]).reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+      const laborCost = (visit.laborLines||[]).reduce((a,l)=>a+((parseFloat(l.hours)||0)*(parseFloat(l.rate)||0)),0);
+      const legacyCost = (visit.repairs||[]).reduce((a,r)=>a+Number(r.cost||0),0);
+      const total = partsCost + laborCost + legacyCost;
+      const mech = visit.assignedTo ? getMMAP()[visit.assignedTo] : null;
+      const dateIn = visit.dateIn ? new Date(visit.dateIn).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'}) : '—';
+      const dateOut = visit.dateOut ? new Date(visit.dateOut).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'}) : null;
+      const isBooked = (visit.statuses||[]).includes('booked');
+
+      html += '<div style="background:var(--surface);border:1px solid '+(isCurrent?'#C8102E':'var(--border)')+';border-left:3px solid '+(isCurrent?'#C8102E':(isBooked?'#818cf8':'var(--border2)'))+';border-radius:var(--r-lg);padding:14px 15px;margin-bottom:10px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">';
+      html += '<div><div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:3px">Visit #'+visitNum+' '+(isCurrent?'<span style="font-size:10px;background:#C8102E22;color:#C8102E;padding:2px 7px;border-radius:var(--r);letter-spacing:.5px;margin-left:6px;font-weight:700;text-transform:uppercase">Current</span>':'')+'</div>';
+      html += '<div style="font-size:11px;color:var(--text3);letter-spacing:.3px">In: <strong style="color:var(--text2)">'+dateIn+'</strong>';
+      if(dateOut) html += ' · Out: <strong style="color:var(--text2)">'+dateOut+'</strong>';
+      html += '</div></div>';
+      html += '<div style="font-size:15px;font-weight:800;color:#C8102E;text-align:right;font-variant-numeric:tabular-nums">'+fmt$(total)+'</div>';
+      html += '</div>';
+
+      html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:11px;color:var(--text3);margin-bottom:8px">';
+      html += '<div><span style="color:var(--text4);text-transform:uppercase;font-weight:600;letter-spacing:.5px">Stock #</span> <span style="color:var(--text2);font-weight:600">'+(visit.stockNumber||'—')+'</span></div>';
+      html += '<div><span style="color:var(--text4);text-transform:uppercase;font-weight:600;letter-spacing:.5px">Mechanic</span> <span style="color:'+(mech?mech.color:'var(--text3)')+';font-weight:600">'+(mech?mech.icon+' '+mech.name:'— Unassigned')+'</span></div>';
+      html += '<div><span style="color:var(--text4);text-transform:uppercase;font-weight:600;letter-spacing:.5px">Parts</span> <span style="color:var(--text2);font-weight:600">'+(visit.parts||[]).length+'</span></div>';
+      html += '<div><span style="color:var(--text4);text-transform:uppercase;font-weight:600;letter-spacing:.5px">Labor</span> <span style="color:var(--text2);font-weight:600">'+(visit.laborLines||[]).length+' line'+((visit.laborLines||[]).length!==1?'s':'')+'</span></div>';
+      html += '</div>';
+
+      if(statusLabels.length){
+        html += '<div style="display:flex;flex-wrap:wrap;gap:3px">';
+        html += statusLabels.map(s=>'<span class="v-tag" style="background:'+s.color+'22;color:'+s.color+';border:1px solid '+s.color+'55">'+s.icon+' '+s.label+'</span>').join('');
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }
+
   // ══════════════════════════════════════════════
   // TIME CLOCK TAB
   // ══════════════════════════════════════════════
@@ -2797,7 +2941,7 @@ function renderDetail(c,v){
   const pri=v.priority?PMAP[v.priority]:null;
   const totalCost=(v.repairs||[]).reduce((a,r)=>a+Number(r.cost||0),0);
 
-  const TABS=['overview','statuses','concerns','photos','repairs','receipts','timeclock','frazer'];
+  const TABS=['overview','statuses','concerns','photos','repairs','receipts','timeclock','history','frazer'];
 
   setTopbar(`${v.year||''} ${v.make||''} ${v.model||''}`,
     `<button class="out-btn" onclick="ST.view='invoice';render()">🧾 Invoice</button>
@@ -2849,6 +2993,7 @@ function renderDetail(c,v){
       case 'receipts':  buildReceiptsTab(el);break;
       case 'frazer':    buildFrazerTab(el);break;
       case 'timeclock': buildTimeClockTab(el);break;
+      case 'history':   buildHistoryTab(el);break;
     }
   }
 
@@ -4444,6 +4589,8 @@ function subscribeToFirestore() {
       try {
         const data = snap.data();
         const incoming = JSON.parse(data.vehicles || '[]');
+        // Migrate on receive in case data is from older app version
+        const prev = ST.vehicles; ST.vehicles = incoming; migrateVehiclesToVisits(); applyVisitShimAll(); const migrated = ST.vehicles; ST.vehicles = prev;
         const currentJson = JSON.stringify(ST.vehicles);
         const incomingJson = JSON.stringify(incoming);
         if(incomingJson !== currentJson){
@@ -4462,6 +4609,32 @@ function subscribeToFirestore() {
     });
 }
 
+
+
+// ═══════════════════════════════════════════════
+// VISIT SHIM — transparent access to current visit fields
+// All old code reads v.stockNumber, v.statuses, etc.
+// Shim reads from current visit and writes to current visit
+// ═══════════════════════════════════════════════
+function applyVisitShim(v){
+  if(!v || !Array.isArray(v.visits) || !v.visits.length) return v;
+  const cur = currentVisit(v);
+  if(!cur) return v;
+  // Copy visit fields onto top-level of v so existing reads work
+  const SHIM_FIELDS = ['stockNumber','statuses','assignedTo','priority',
+    'apptDate','parts','laborLines','repairs','receipts','photos','notes',
+    'concerns','comments','timeSessions'];
+  SHIM_FIELDS.forEach(f => {
+    if(cur[f] !== undefined) v[f] = cur[f];
+  });
+  return v;
+}
+
+// Apply shim to all vehicles after load / after Firestore sync
+function applyVisitShimAll(){
+  if(!Array.isArray(ST.vehicles)) return;
+  ST.vehicles.forEach(applyVisitShim);
+}
 
 // ═══════════════════════════════════════════════
 // PUSH NOTIFICATIONS — Firebase Cloud Messaging
