@@ -467,6 +467,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -893,6 +894,307 @@ function extFromMime(mime){
   if(mime.includes('webp')) return 'webp';
   if(mime.includes('gif')) return 'gif';
   return 'jpg';
+}
+
+
+// ═══════════════════════════════════════════════
+// DOCUMENT SCANNER — in-browser edge detect, perspective
+// correct, grayscale enhance, grayscale PDF output
+// ═══════════════════════════════════════════════
+
+// Load an image file (Blob/File) into an HTMLImageElement
+async function loadFileAsImage(file){
+  const reader = new FileReader();
+  const dataUrl = await new Promise((res, rej)=>{
+    reader.onload = ()=>res(reader.result);
+    reader.onerror = ()=>rej(new Error('File read failed'));
+    reader.readAsDataURL(file);
+  });
+  const img = new Image();
+  await new Promise((res, rej)=>{
+    img.onload = res;
+    img.onerror = ()=>rej(new Error('Image decode failed'));
+    img.src = dataUrl;
+  });
+  return img;
+}
+
+// Downscale to a working size for edge detection (faster + more robust)
+function toWorkingCanvas(img, maxDim){
+  const maxD = maxDim || 800;
+  const ratio = Math.min(1, maxD / Math.max(img.width, img.height));
+  const w = Math.round(img.width * ratio);
+  const h = Math.round(img.height * ratio);
+  const cvs = document.createElement('canvas');
+  cvs.width = w; cvs.height = h;
+  const ctx = cvs.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  return {canvas: cvs, ctx, scale: ratio};
+}
+
+// Simple grayscale buffer from canvas
+function grayFromCanvas(canvas){
+  const ctx = canvas.getContext('2d');
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = img.data;
+  const gray = new Uint8ClampedArray(canvas.width * canvas.height);
+  for(let i = 0, j = 0; i < data.length; i += 4, j++){
+    gray[j] = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114) | 0;
+  }
+  return {data: gray, w: canvas.width, h: canvas.height};
+}
+
+// Sobel edge magnitude
+function sobel(gray){
+  const {data, w, h} = gray;
+  const out = new Uint8ClampedArray(w * h);
+  for(let y = 1; y < h - 1; y++){
+    for(let x = 1; x < w - 1; x++){
+      const i = y * w + x;
+      const tl = data[i-w-1], t = data[i-w], tr = data[i-w+1];
+      const l  = data[i-1],               r  = data[i+1];
+      const bl = data[i+w-1], b = data[i+w], br = data[i+w+1];
+      const gx = -tl - 2*l - bl + tr + 2*r + br;
+      const gy = -tl - 2*t - tr + bl + 2*b + br;
+      const mag = Math.sqrt(gx*gx + gy*gy);
+      out[i] = mag > 255 ? 255 : mag;
+    }
+  }
+  return {data: out, w, h};
+}
+
+// Find the largest quadrilateral in the edge map.
+// Heuristic: find the outermost strong edges on each side of the image
+// and return 4 corner points. Returns null if detection is too weak.
+function detectQuadrilateral(edges, threshold){
+  const {data, w, h} = edges;
+  const t = threshold || 60;
+
+  // Find outermost edge pixels per column (top and bottom) and per row (left and right)
+  const topEdge = new Array(w).fill(-1);
+  const botEdge = new Array(w).fill(-1);
+  const leftEdge = new Array(h).fill(-1);
+  const rightEdge = new Array(h).fill(-1);
+
+  for(let x = 0; x < w; x++){
+    for(let y = 0; y < h; y++){
+      if(data[y*w + x] > t){ topEdge[x] = y; break; }
+    }
+    for(let y = h - 1; y >= 0; y--){
+      if(data[y*w + x] > t){ botEdge[x] = y; break; }
+    }
+  }
+  for(let y = 0; y < h; y++){
+    for(let x = 0; x < w; x++){
+      if(data[y*w + x] > t){ leftEdge[y] = x; break; }
+    }
+    for(let x = w - 1; x >= 0; x--){
+      if(data[y*w + x] > t){ rightEdge[y] = x; break; }
+    }
+  }
+
+  // Estimate corners as the intersection regions between adjacent side edges.
+  // Simple approach: median of the outermost points in each side's "near the corner" region.
+  const cornerFromSide = (side1, side2, range, getXFromSide1, getYFromSide1, getXFromSide2, getYFromSide2)=>{
+    // side1 is indexed by x (or y), side2 by the other; pick points near their endpoints
+    const pts = [];
+    for(let i = 0; i < range; i++){
+      if(side1[i] >= 0) pts.push([getXFromSide1(i, side1[i]), getYFromSide1(i, side1[i])]);
+    }
+    if(!pts.length) return null;
+    pts.sort((a,b)=>a[0]+a[1]-b[0]-b[1]);
+    return pts[0]; // topleft-most
+  };
+
+  // Simplified corner-finding: use min/max x,y of all edge points above threshold,
+  // then refine corners by scanning nearby.
+  // For a rectangle-ish paper, corners are approximately:
+  //   TL: min(x+y), TR: max(x-y), BR: max(x+y), BL: min(x-y)
+  let tlSum = Infinity, trDiff = -Infinity, brSum = -Infinity, blDiff = Infinity;
+  let tl = null, tr = null, br = null, bl = null;
+  let edgeCount = 0;
+  for(let y = 0; y < h; y++){
+    for(let x = 0; x < w; x++){
+      if(data[y*w + x] <= t) continue;
+      edgeCount++;
+      const sum = x + y, diff = x - y;
+      if(sum < tlSum){ tlSum = sum; tl = [x, y]; }
+      if(diff > trDiff){ trDiff = diff; tr = [x, y]; }
+      if(sum > brSum){ brSum = sum; br = [x, y]; }
+      if(diff < blDiff){ blDiff = diff; bl = [x, y]; }
+    }
+  }
+
+  if(!tl || !tr || !br || !bl || edgeCount < 100) return null;
+
+  // Sanity check: corners should span most of the image
+  const spanX = Math.max(tr[0], br[0]) - Math.min(tl[0], bl[0]);
+  const spanY = Math.max(bl[1], br[1]) - Math.min(tl[1], tr[1]);
+  if(spanX < w * 0.4 || spanY < h * 0.4) return null;
+
+  return { tl, tr, br, bl };
+}
+
+// Apply a perspective warp given 4 corners from the source image
+// Output is an axis-aligned rectangle of the given dimensions
+function perspectiveWarp(srcCanvas, corners, outW, outH){
+  const src = srcCanvas.getContext('2d').getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+  const out = document.createElement('canvas');
+  out.width = outW; out.height = outH;
+  const outCtx = out.getContext('2d');
+  const outImg = outCtx.createImageData(outW, outH);
+
+  const {tl, tr, br, bl} = corners;
+
+  // Bilinear lerp of 4 corners using normalized (u,v) coords
+  for(let y = 0; y < outH; y++){
+    const v = y / (outH - 1);
+    // Interp top and bottom edges
+    const topX = tl[0] + (tr[0] - tl[0]) * 0; // filled per-x below
+    for(let x = 0; x < outW; x++){
+      const u = x / (outW - 1);
+      // Bilinear interp corners → source x,y
+      const sx = (1-u)*(1-v)*tl[0] + u*(1-v)*tr[0] + u*v*br[0] + (1-u)*v*bl[0];
+      const sy = (1-u)*(1-v)*tl[1] + u*(1-v)*tr[1] + u*v*br[1] + (1-u)*v*bl[1];
+      const sxi = Math.max(0, Math.min(src.width-1, Math.round(sx)));
+      const syi = Math.max(0, Math.min(src.height-1, Math.round(sy)));
+      const srcIdx = (syi * src.width + sxi) * 4;
+      const outIdx = (y * outW + x) * 4;
+      outImg.data[outIdx]   = src.data[srcIdx];
+      outImg.data[outIdx+1] = src.data[srcIdx+1];
+      outImg.data[outIdx+2] = src.data[srcIdx+2];
+      outImg.data[outIdx+3] = 255;
+    }
+  }
+  outCtx.putImageData(outImg, 0, 0);
+  return out;
+}
+
+// Convert a canvas to enhanced grayscale with contrast + mild local normalization
+function enhanceGrayscale(srcCanvas){
+  const w = srcCanvas.width, h = srcCanvas.height;
+  const ctx = srcCanvas.getContext('2d');
+  const img = ctx.getImageData(0, 0, w, h);
+  const data = img.data;
+  // 1) Convert to gray
+  const gray = new Uint8ClampedArray(w * h);
+  for(let i = 0, j = 0; i < data.length; i += 4, j++){
+    gray[j] = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114) | 0;
+  }
+  // 2) Estimate overall brightness (sample median via histogram)
+  const hist = new Uint32Array(256);
+  for(let i = 0; i < gray.length; i++) hist[gray[i]]++;
+  let acc = 0, median = 128;
+  for(let i = 0; i < 256; i++){ acc += hist[i]; if(acc >= gray.length / 2){ median = i; break; } }
+  // 3) Stretch contrast — paper should be bright, ink should be dark
+  const blackPt = Math.max(0, median - 80);
+  const whitePt = Math.min(255, median + 80);
+  const range = Math.max(1, whitePt - blackPt);
+  for(let i = 0, j = 0; i < data.length; i += 4, j++){
+    let v = ((gray[j] - blackPt) / range) * 255;
+    if(v < 0) v = 0; else if(v > 255) v = 255;
+    data[i] = data[i+1] = data[i+2] = v | 0;
+    data[i+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return srcCanvas;
+}
+
+// Main scanner pipeline — takes File or HTMLImageElement,
+// returns an object { processed, previewDataUrl, detected }
+async function processDocumentScan(fileOrImage, opts){
+  opts = opts || {};
+  const targetDpi = opts.dpi || 300;
+  const img = fileOrImage instanceof HTMLImageElement
+    ? fileOrImage
+    : await loadFileAsImage(fileOrImage);
+
+  // 1) Work on a downscaled copy for edge detection
+  const {canvas: workCanvas, scale} = toWorkingCanvas(img, 800);
+  const gray = grayFromCanvas(workCanvas);
+  const edges = sobel(gray);
+  const detected = detectQuadrilateral(edges, 60);
+
+  // 2) Draw full-res source for perspective warp
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = img.width;
+  srcCanvas.height = img.height;
+  srcCanvas.getContext('2d').drawImage(img, 0, 0);
+
+  let outputCanvas;
+  if(detected){
+    // Scale corners back up to full-res image
+    const c = {
+      tl: [detected.tl[0]/scale, detected.tl[1]/scale],
+      tr: [detected.tr[0]/scale, detected.tr[1]/scale],
+      br: [detected.br[0]/scale, detected.br[1]/scale],
+      bl: [detected.bl[0]/scale, detected.bl[1]/scale]
+    };
+    // Compute output dims from detected quad (preserve aspect)
+    const widthTop = Math.hypot(c.tr[0]-c.tl[0], c.tr[1]-c.tl[1]);
+    const widthBot = Math.hypot(c.br[0]-c.bl[0], c.br[1]-c.bl[1]);
+    const heightL = Math.hypot(c.bl[0]-c.tl[0], c.bl[1]-c.tl[1]);
+    const heightR = Math.hypot(c.br[0]-c.tr[0], c.br[1]-c.tr[1]);
+    let outW = Math.round(Math.max(widthTop, widthBot));
+    let outH = Math.round(Math.max(heightL, heightR));
+    // Cap at 300 DPI letter-ish if way too big (prevent OOM on phones)
+    const maxSide = Math.max(2550, 3300);
+    if(Math.max(outW, outH) > maxSide * 1.5){
+      const s = (maxSide * 1.5) / Math.max(outW, outH);
+      outW = Math.round(outW * s);
+      outH = Math.round(outH * s);
+    }
+    outputCanvas = perspectiveWarp(srcCanvas, c, outW, outH);
+  } else {
+    // Fallback: use full image
+    outputCanvas = srcCanvas;
+  }
+
+  // 3) Enhance to grayscale
+  enhanceGrayscale(outputCanvas);
+
+  // 4) Build JPEG data URL + return
+  const jpegDataUrl = outputCanvas.toDataURL('image/jpeg', 0.85);
+
+  return {
+    canvas: outputCanvas,
+    dataUrl: jpegDataUrl,
+    detected: !!detected,
+    width: outputCanvas.width,
+    height: outputCanvas.height
+  };
+}
+
+// Build a PDF blob from a scanned canvas at the given DPI.
+// Aspect ratio is preserved (page size = canvas size / DPI inches).
+function buildScanPdf(canvas, dpi){
+  if(typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF){
+    throw new Error('jsPDF not loaded');
+  }
+  const {jsPDF} = window.jspdf;
+  const d = dpi || 300;
+  // Page dimensions in points (1 pt = 1/72 inch)
+  const pageW = (canvas.width / d) * 72;
+  const pageH = (canvas.height / d) * 72;
+  const orientation = pageW > pageH ? 'landscape' : 'portrait';
+  const pdf = new jsPDF({
+    orientation,
+    unit: 'pt',
+    format: [pageW, pageH],
+    compress: true
+  });
+  const imgData = canvas.toDataURL('image/jpeg', 0.8);
+  pdf.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
+  return pdf.output('blob');
+}
+
+async function blobToDataUrl(blob){
+  return new Promise((res, rej)=>{
+    const r = new FileReader();
+    r.onload = ()=>res(r.result);
+    r.onerror = ()=>rej(new Error('Blob read failed'));
+    r.readAsDataURL(blob);
+  });
 }
 
 
@@ -3322,6 +3624,9 @@ function renderDetail(c,v){
     if(tabContent) renderTabContent(tabContent);
     const badgeRow=c.querySelector('#status-badges');
     if(badgeRow) badgeRow.innerHTML=statusBadges(v);
+    // Also refresh the tabs row so the 'active' class moves with the selected tab
+    const tabsRow=c.querySelector('#detail-tabs');
+    if(tabsRow) tabsRow.innerHTML=TABS.map(t=>`<button class="tab-btn${ST.activeTab===t?' active':''}" onclick="ST.activeTab='${t}';refreshDetail()">${(t||'').charAt(0).toUpperCase()+(t||'').slice(1)}</button>`).join('');
   }
 
   function statusBadges(veh){
@@ -3345,7 +3650,7 @@ function renderDetail(c,v){
     </div>
   </div>
   <div id="status-badges" class="v-tags" style="margin-bottom:14px">${statusBadges(v)}</div>
-  <div class="tabs">${TABS.map(t=>`<button class="tab-btn${ST.activeTab===t?' active':''}" onclick="ST.activeTab='${t}';refreshDetail()">${(t||'').charAt(0).toUpperCase()+(t||'').slice(1)}</button>`).join('')}</div>
+  <div id="detail-tabs" class="tabs">${TABS.map(t=>`<button class="tab-btn${ST.activeTab===t?' active':''}" onclick="ST.activeTab='${t}';refreshDetail()">${(t||'').charAt(0).toUpperCase()+(t||'').slice(1)}</button>`).join('')}</div>
   <div id="tab-content"></div>`;
 
   window.refreshDetail=refreshDetail;
@@ -3559,7 +3864,17 @@ function renderDetail(c,v){
     const libInput=document.createElement('input');
     libInput.type='file';libInput.accept='image/*,application/pdf';libInput.multiple=true;libInput.style.display='none';
     libInput.onchange=e=>{readReceipts(e.target.files)};
+
+    // Scanner inputs (image-only, one file at a time)
+    const scanCamInput=document.createElement('input');
+    scanCamInput.type='file';scanCamInput.accept='image/*';scanCamInput.capture='environment';scanCamInput.style.display='none';
+    scanCamInput.onchange=e=>{const f=e.target.files&&e.target.files[0]; if(f) startDocumentScan(f); scanCamInput.value='';};
+    const scanLibInput=document.createElement('input');
+    scanLibInput.type='file';scanLibInput.accept='image/*';scanLibInput.style.display='none';
+    scanLibInput.onchange=e=>{const f=e.target.files&&e.target.files[0]; if(f) startDocumentScan(f); scanLibInput.value='';};
+
     el.appendChild(camInput);el.appendChild(libInput);
+    el.appendChild(scanCamInput);el.appendChild(scanLibInput);
 
     function readReceipts(files){
       Array.from(files).forEach(async file=>{
@@ -3581,6 +3896,161 @@ function renderDetail(c,v){
       });
     }
 
+    // SCANNER FLOW: photo → edge-detect → grayscale → preview → AI extract → confirm → PDF
+    async function startDocumentScan(file){
+      const overlay=document.createElement('div');
+      overlay.id='scan-overlay';
+      overlay.style.cssText='position:fixed;inset:0;background:#000;z-index:9990;display:flex;flex-direction:column;overflow-y:auto';
+      overlay.innerHTML=`
+        <div style="padding:14px 18px;display:flex;align-items:center;gap:14px;background:#0e1117;border-bottom:1px solid #1e2230;position:sticky;top:0;z-index:1">
+          <button id="scan-cancel" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:7px 13px;border-radius:7px;cursor:pointer">← Cancel</button>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:700;color:#fff">Scanning receipt…</div>
+            <div id="scan-status" style="font-size:11px;color:#8896a8;margin-top:2px">Processing image</div>
+          </div>
+        </div>
+        <div style="flex:1;padding:18px;display:flex;flex-direction:column;align-items:center;gap:16px;min-height:0">
+          <div id="scan-preview" style="width:100%;max-width:420px;background:#0e1117;border:1px solid #1e2230;border-radius:10px;padding:10px;min-height:300px;display:flex;align-items:center;justify-content:center">
+            <div style="color:#8896a8;font-size:13px">⏳ Detecting edges…</div>
+          </div>
+          <div id="scan-info" style="width:100%;max-width:420px;font-size:11px;color:#555d73;text-align:center"></div>
+          <div id="scan-actions" style="width:100%;max-width:420px;display:none;flex-direction:column;gap:8px"></div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const cleanup=()=>{overlay.remove();};
+      overlay.querySelector('#scan-cancel').onclick=cleanup;
+
+      const setStatus=t=>{const el=overlay.querySelector('#scan-status'); if(el) el.textContent=t;};
+      const setInfo=t=>{const el=overlay.querySelector('#scan-info'); if(el) el.textContent=t;};
+
+      try {
+        setStatus('Processing image');
+        const result = await processDocumentScan(file, {dpi: 300});
+        const preview = overlay.querySelector('#scan-preview');
+        preview.innerHTML='';
+        const previewImg=document.createElement('img');
+        previewImg.src=result.dataUrl;
+        previewImg.style.cssText='max-width:100%;max-height:50vh;border-radius:8px;display:block;margin:0 auto';
+        preview.appendChild(previewImg);
+
+        setInfo(`${result.detected ? '✅ Edges detected — perspective corrected' : '⚠ No clean edges found — using full image'} · ${result.width}×${result.height}px`);
+
+        const actions=overlay.querySelector('#scan-actions');
+        actions.style.display='flex';
+        actions.innerHTML=`
+          <button id="scan-confirm" style="background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">✓ Use this scan → extract parts</button>
+          <button id="scan-retake" style="background:#1e2230;border:1px solid #374151;color:#fff;font-size:13px;font-weight:500;padding:11px;border-radius:9px;cursor:pointer">📷 Retake</button>
+          <button id="scan-skip-extract" style="background:transparent;border:1px solid #1e2230;color:#8896a8;font-size:12px;padding:10px;border-radius:9px;cursor:pointer">Save PDF without AI extraction</button>`;
+
+        overlay.querySelector('#scan-retake').onclick=()=>{cleanup(); scanCamInput.click();};
+        overlay.querySelector('#scan-skip-extract').onclick=async()=>{
+          setStatus('Building PDF…');
+          actions.style.display='none';
+          await saveScanAsPdf(result.canvas, [], cleanup);
+        };
+        overlay.querySelector('#scan-confirm').onclick=async()=>{
+          setStatus('Asking AI to read parts from receipt…');
+          actions.style.display='none';
+          try {
+            const aiItems = await scanReceiptWithAI(result.dataUrl);
+            if(!aiItems || !Array.isArray(aiItems) || !aiItems.length){
+              setStatus('No items extracted — you can still save the scan as a PDF');
+              showExtractionResults(result, [], overlay, cleanup);
+            } else {
+              showExtractionResults(result, aiItems, overlay, cleanup);
+            }
+          } catch(e){
+            console.error('AI extraction failed:', e);
+            setStatus('AI extraction failed — save PDF only');
+            showExtractionResults(result, [], overlay, cleanup);
+          }
+        };
+      } catch(e){
+        console.error('Scan processing error:',e);
+        setStatus('Processing failed: '+e.message);
+        const actions=overlay.querySelector('#scan-actions');
+        actions.style.display='flex';
+        actions.innerHTML=`<button id="scan-close" style="background:#7f1d1d;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Close</button>`;
+        overlay.querySelector('#scan-close').onclick=cleanup;
+      }
+    }
+
+    // Show extracted items + let user tick which to add, then save everything
+    function showExtractionResults(scanResult, items, overlay, cleanup){
+      const actions=overlay.querySelector('#scan-actions');
+      actions.style.display='flex';
+      if(!items.length){
+        actions.innerHTML=`
+          <div style="padding:12px;background:#1a1200;border:1px solid #f59e0b44;border-radius:8px;color:#fbbf24;font-size:12px;text-align:center">No parts detected — save the scan as a PDF archive</div>
+          <button id="scan-save-pdf" style="background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">💾 Save as PDF receipt</button>
+          <button id="scan-cancel-2" style="background:transparent;border:1px solid #1e2230;color:#8896a8;font-size:12px;padding:10px;border-radius:9px;cursor:pointer">Cancel</button>`;
+      } else {
+        const rows=items.map((item,i)=>`
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0d0f14;border:1px solid #1e2230;border-radius:8px;cursor:pointer">
+            <input type="checkbox" id="sx-${i}" checked style="width:16px;height:16px;accent-color:#f59e0b">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(item.description||'').replace(/"/g,'&quot;')}</div>
+              <div style="font-size:11px;color:#8896a8">${item.cost?('$'+Number(item.cost).toFixed(2)):'—'}</div>
+            </div>
+          </label>`).join('');
+        actions.innerHTML=`
+          <div style="font-size:12px;color:#8896a8;letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:4px">Extracted parts (${items.length})</div>
+          <div style="display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow-y:auto">${rows}</div>
+          <button id="scan-save-with-parts" style="background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer;margin-top:8px">💾 Save PDF + add selected parts</button>
+          <button id="scan-save-pdf-only" style="background:#1e2230;border:1px solid #374151;color:#fff;font-size:13px;font-weight:500;padding:11px;border-radius:9px;cursor:pointer">Save PDF only (no parts)</button>
+          <button id="scan-cancel-2" style="background:transparent;border:1px solid #1e2230;color:#8896a8;font-size:12px;padding:10px;border-radius:9px;cursor:pointer">Cancel</button>`;
+      }
+
+      const cancelBtn=overlay.querySelector('#scan-cancel-2'); if(cancelBtn) cancelBtn.onclick=cleanup;
+      const pdfOnlyA=overlay.querySelector('#scan-save-pdf'); if(pdfOnlyA) pdfOnlyA.onclick=()=>saveScanAsPdf(scanResult.canvas, [], cleanup, overlay);
+      const pdfOnlyB=overlay.querySelector('#scan-save-pdf-only'); if(pdfOnlyB) pdfOnlyB.onclick=()=>saveScanAsPdf(scanResult.canvas, [], cleanup, overlay);
+      const saveBtn=overlay.querySelector('#scan-save-with-parts');
+      if(saveBtn) saveBtn.onclick=()=>{
+        const picked=items.filter((_,i)=>overlay.querySelector('#sx-'+i)?.checked);
+        saveScanAsPdf(scanResult.canvas, picked, cleanup, overlay);
+      };
+    }
+
+    // Finalise: add parts → build PDF → save as receipt → cleanup
+    async function saveScanAsPdf(canvas, partsToAdd, cleanup, overlay){
+      try {
+        if(overlay){
+          const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Building PDF…';
+          const ac=overlay.querySelector('#scan-actions'); if(ac) ac.style.display='none';
+        }
+        // Add picked parts first so even if PDF save fails, parts persist
+        if(partsToAdd && partsToAdd.length){
+          const newParts=[...(v.parts||[])];
+          partsToAdd.forEach(item=>{
+            newParts.push({name:item.description||'', partNum:'', cost:parseFloat(item.cost)||0, qty:1});
+          });
+          writeToCurrentVisit(v,'parts',newParts);
+          save({parts:newParts});
+          toast(`Added ${partsToAdd.length} part${partsToAdd.length!==1?'s':''}`);
+        }
+        const pdfBlob = buildScanPdf(canvas, 300);
+        const pdfDataUrl = await blobToDataUrl(pdfBlob);
+        const ts = new Date();
+        const stamp = ts.toISOString().slice(0,10).replace(/-/g,'')+'_'+ts.toTimeString().slice(0,5).replace(':','');
+        const name = `Scan_${stamp}.pdf`;
+        addReceipt({name, data:pdfDataUrl, date:Date.now()});
+        toast('Receipt saved ✓');
+        if(cleanup) cleanup();
+      } catch(e){
+        console.error('Save scan error:',e);
+        toast('Save failed: '+e.message,'err');
+        if(overlay){
+          const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Save failed: '+e.message;
+          const ac=overlay.querySelector('#scan-actions');
+          if(ac){
+            ac.style.display='flex';
+            ac.innerHTML=`<button id="scan-close-err" style="background:#7f1d1d;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Close</button>`;
+            overlay.querySelector('#scan-close-err').onclick=cleanup;
+          }
+        }
+      }
+    }
+
     const zone=document.createElement('div');zone.className='cam-zone';
     zone.innerHTML=`<div class="cam-icon" style="background:#1a1600"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="2" width="16" height="18" rx="2.5" stroke="#f59e0b" stroke-width="1.5" fill="none"/><line x1="6" y1="7" x2="16" y2="7" stroke="#f59e0b" stroke-width="1.2"/><line x1="6" y1="11" x2="16" y2="11" stroke="#f59e0b" stroke-width="1.2"/><line x1="6" y1="15" x2="11" y2="15" stroke="#f59e0b" stroke-width="1.2"/></svg></div>
       <div class="cam-title" style="color:#fbbf24">Scan receipt</div><div class="cam-sub">Camera · image · PDF</div>`;
@@ -3591,6 +4061,16 @@ function renderDetail(c,v){
     libBtn.style.cssText='width:100%;padding:10px;margin-bottom:14px;border-radius:8px;font-size:13px';
     libBtn.onclick=()=>libInput.click();
     el.appendChild(libBtn);
+
+    // Scan (camera) + Scan (library) buttons — scanner-style output with edge detect + grayscale PDF
+    const scanRow=document.createElement('div');
+    scanRow.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px';
+    scanRow.innerHTML=`
+      <button id="scan-btn-cam" style="background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7;font-size:12px;font-weight:700;padding:11px 10px;border-radius:8px;cursor:pointer;line-height:1.3">📷 Scan (B&W PDF)<div style="font-size:10px;font-weight:500;opacity:.8;margin-top:2px">camera → auto crop</div></button>
+      <button id="scan-btn-lib" style="background:#1e2230;border:1px solid #374151;color:#cbd5e1;font-size:12px;font-weight:700;padding:11px 10px;border-radius:8px;cursor:pointer;line-height:1.3">📁 Scan from library<div style="font-size:10px;font-weight:500;opacity:.8;margin-top:2px">pick existing photo</div></button>`;
+    el.appendChild(scanRow);
+    scanRow.querySelector('#scan-btn-cam').onclick=()=>scanCamInput.click();
+    scanRow.querySelector('#scan-btn-lib').onclick=()=>scanLibInput.click();
 
     (v.receipts||[]).forEach((r,i)=>{
       const row=document.createElement('div');row.className='receipt-row';
@@ -4555,6 +5035,7 @@ function renderApprovals(c){
           `:''}
           ${con.status==='approved'?`<span style="background:#0a1f0f;color:#4ade80;border:1px solid #4ade8033;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px">✓ Approved${con.assignedTo?' → '+(getMMAP()[con.assignedTo]?.name||''):''}</span>`:''}
           ${con.status==='rejected'?`<span style="background:#1c0000;color:#f87171;border:1px solid #f8717133;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px">✕ Rejected</span>`:''}
+          ${ST.masterPinUnlocked?`<button data-delete-concern="${vId}|${con.id}" title="Delete concern" style="background:#1a0d0d;border:1px solid #f8717155;color:#fca5a5;font-size:11px;font-weight:700;padding:4px 9px;border-radius:6px;cursor:pointer;margin-top:4px">🗑 Delete</button>`:''}
         </div>
       </div>
     </div>`;
@@ -4635,6 +5116,13 @@ function renderApprovals(c){
       openAssignConcernModal(vid,cid);
     };
   });
+  c.querySelectorAll('[data-delete-concern]').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
+      const [vid,cid]=btn.dataset.deleteConcern.split('|');
+      deleteConcern(vid,cid);
+    };
+  });
 }
 
 function updateConcern(vehicleId, concernId, updates){
@@ -4646,6 +5134,24 @@ function updateConcern(vehicleId, concernId, updates){
   toast(updates.status==='approved'?'Concern approved':'Concern rejected');
   render();
 }
+
+// Delete a concern entirely (gated by Master PIN — button only shows when unlocked)
+window.deleteConcern=function(vehicleId, concernId){
+  if(!ST.masterPinUnlocked){
+    toast('Unlock with Master PIN first','err');
+    return;
+  }
+  const v=ST.vehicles.find(x=>x.id===vehicleId);
+  if(!v) return;
+  const concern=(v.concerns||[]).find(c=>c.id===concernId);
+  if(!concern) return;
+  if(!confirm('Delete this concern?\n\n"'+(concern.description||'').slice(0,120)+'"\n\nThis cannot be undone.')) return;
+  const newConcerns=(v.concerns||[]).filter(c=>c.id!==concernId);
+  writeToCurrentVisit(v, 'concerns', newConcerns);
+  save();
+  toast('Concern deleted');
+  render();
+};
 
 function openAssignConcernModal(vehicleId, concernId){
   const overlay=document.createElement('div');
@@ -4737,6 +5243,7 @@ function buildConcernsTab(el, v, save){
             <button onclick="updateConcern('${v.id}','${con.id}',{status:'rejected'})" style="background:#7f1d1d;border:none;color:#fca5a5;font-size:11px;font-weight:700;padding:4px 9px;border-radius:5px;cursor:pointer">✕</button>
             <button onclick="openAssignConcernModal('${v.id}','${con.id}')" style="background:#1e3a5f;border:none;color:#93c5fd;font-size:11px;font-weight:600;padding:4px 9px;border-radius:5px;cursor:pointer">+ Mech</button>
           </div>`:''}
+          ${ST.masterPinUnlocked?`<button onclick="deleteConcern('${v.id}','${con.id}')" title="Delete concern" style="background:#1a0d0d;border:1px solid #f8717155;color:#fca5a5;font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;cursor:pointer;margin-top:6px;display:block;margin-left:auto">🗑 Delete</button>`:''}
         </div>
       </div>`;
     list.appendChild(row);
