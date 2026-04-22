@@ -520,6 +520,9 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
 const STORAGE_KEY='ac_recon_v4';
 // Cloudflare Worker proxy — replace with your worker URL after deploying
 const AI_PROXY='https://ac-recon-ai.babushij.workers.dev';
+// Separate worker for receipt extraction — tuned prompt, better parts detection
+// If set to null/empty, falls back to AI_PROXY/receipt
+const AI_PROXY_RECEIPT='__RECEIPT_WORKER_URL_HERE__';
 const RED='#C8102E';
 
 const ALL_STATUSES=[
@@ -902,21 +905,37 @@ function extFromMime(mime){
 // correct, grayscale enhance, grayscale PDF output
 // ═══════════════════════════════════════════════
 
-// Load an image file (Blob/File) into an HTMLImageElement
+// Load an image file (Blob/File) into an HTMLImageElement-like object (has width/height,
+// drawable onto a canvas). Handles iOS HEIC, large files, and the fallback to <img>.
 async function loadFileAsImage(file){
-  const reader = new FileReader();
-  const dataUrl = await new Promise((res, rej)=>{
-    reader.onload = ()=>res(reader.result);
-    reader.onerror = ()=>rej(new Error('File read failed'));
-    reader.readAsDataURL(file);
-  });
-  const img = new Image();
-  await new Promise((res, rej)=>{
-    img.onload = res;
-    img.onerror = ()=>rej(new Error('Image decode failed'));
-    img.src = dataUrl;
-  });
-  return img;
+  // Strategy 1: createImageBitmap — fastest, best HEIC support on iOS 16+
+  if(typeof createImageBitmap === 'function'){
+    try {
+      const bitmap = await createImageBitmap(file);
+      // Return a canvas-wrapped ImageBitmap that behaves like an HTMLImageElement
+      // for the drawImage consumer
+      return bitmap;
+    } catch(e){
+      console.warn('createImageBitmap failed, falling back:', e.message);
+    }
+  }
+
+  // Strategy 2: blob URL into <img>
+  let objectUrl = null;
+  try {
+    objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise((res, rej)=>{
+      const timer = setTimeout(()=>rej(new Error('Image decode timeout (10s)')), 10000);
+      img.onload = ()=>{clearTimeout(timer); res();};
+      img.onerror = ()=>{clearTimeout(timer); rej(new Error('Image format not supported by browser (try a JPEG or PNG)'));};
+      img.src = objectUrl;
+    });
+    return img;
+  } catch(e){
+    if(objectUrl) URL.revokeObjectURL(objectUrl);
+    throw e;
+  }
 }
 
 // Downscale to a working size for edge detection (faster + more robust)
@@ -1105,7 +1124,9 @@ function enhanceGrayscale(srcCanvas){
 async function processDocumentScan(fileOrImage, opts){
   opts = opts || {};
   const targetDpi = opts.dpi || 300;
-  const img = fileOrImage instanceof HTMLImageElement
+  const isDrawable = fileOrImage instanceof HTMLImageElement ||
+                     (typeof ImageBitmap !== 'undefined' && fileOrImage instanceof ImageBitmap);
+  const img = isDrawable
     ? fileOrImage
     : await loadFileAsImage(fileOrImage);
 
@@ -3139,19 +3160,29 @@ function renderDetail(c,v){
   // ══════════════════════════════════════════════
   async function scanReceiptWithAI(imgB64){
     const match=imgB64.match(/^data:([^;]+);base64,(.+)$/);
-    if(!match) return null;
+    if(!match){console.error('Receipt AI: image not data URL');return null;}
     const mimeType=match[1], b64data=match[2];
+    // Prefer dedicated receipt worker if configured, else fall back to old /receipt
+    const useNewWorker = AI_PROXY_RECEIPT && !AI_PROXY_RECEIPT.includes('__RECEIPT_WORKER_URL_HERE__');
+    const endpoint = useNewWorker ? AI_PROXY_RECEIPT + '/receipt' : AI_PROXY + '/receipt';
     try{
-      const resp=await fetch(AI_PROXY+'/receipt',{
+      console.log('[Receipt AI] POST', endpoint, Math.round(b64data.length/1024)+'KB', mimeType);
+      const resp=await fetch(endpoint,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({imageData:b64data,mediaType:mimeType})
       });
-      if(!resp.ok) return null;
+      if(!resp.ok){
+        const errText = await resp.text().catch(()=>'');
+        console.error('Receipt AI HTTP', resp.status, errText.slice(0,300));
+        return null;
+      }
       const data=await resp.json();
+      if(data.debug_raw){console.warn('[Receipt AI] raw output:',data.debug_raw);}
       const raw=(data.items||'[]');
       const clean=raw.replace(/```json|```/g,'').trim();
       const arr=JSON.parse(clean);
+      console.log('[Receipt AI] Extracted', Array.isArray(arr)?arr.length:0, 'items');
       return Array.isArray(arr)?arr:null;
     }catch(e){console.error('Receipt AI error',e);return null;}
   }
