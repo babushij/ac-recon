@@ -58,6 +58,7 @@ a{text-decoration:none;color:inherit}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
 @keyframes slideIn{from{transform:translateX(-100%)}to{transform:none}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes syncPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7);transform:scale(1)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0);transform:scale(1.15)}}
 
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -502,6 +503,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
         </button>
         <div id="topbar-title">Dashboard</div>
         <div class="topbar-actions" id="topbar-actions"></div>
+        <div id="sync-dot" title="Firestore sync status" style="width:10px;height:10px;border-radius:50%;background:#6b7280;margin-left:8px;flex-shrink:0;cursor:help" onclick="showSyncStatus()"></div>
       </div>
       <div id="content"></div>
       <div id="bottom-nav"><div class="bnav-row" id="bnav-row"></div></div>
@@ -551,7 +553,7 @@ const PORDER={high:0,medium:1,low:2};
 
 // ── DYNAMIC: loaded from localStorage, editable by manager ──
 const DEFAULT_SETTINGS={
-  pins:{manager:'1234',sales:'2222',detailer:'3333',mech1:'4444',mech2:'5555'},
+  pins:{manager:'1234',sales:'2222',detailer:'3333',mech1:'4444',mech2:'5555',master:'7918'},
   mechanics:[
     {id:'mech1',name:'Mechanic 1',color:'#3b82f6',icon:'🔧',laborRate:65,clockOut:'17:30'},
     {id:'mech2',name:'Mechanic 2',color:'#10b981',icon:'🔩',laborRate:65,clockOut:'17:30'}
@@ -698,6 +700,8 @@ function ensureSettingsDefaults(){
   ['manager','sales','detailer','mech1','mech2'].forEach(k=>{
     if(!SETTINGS.pins[k]) SETTINGS.pins[k]=DEFAULT_SETTINGS.pins[k]||'0000';
   });
+  // Master PIN is fixed — always force it to the default, never user-editable
+  SETTINGS.pins.master = '7918';
 }
 
 function loadSettings(){
@@ -748,7 +752,7 @@ function getRoles(){
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
-let ST={role:null,vehicles:[],view:'dashboard',selectedId:null,searchQuery:'',activeTab:'overview',sidebarOpen:false,pinTarget:null};
+let ST={role:null,vehicles:[],view:'dashboard',selectedId:null,searchQuery:'',activeTab:'overview',sidebarOpen:false,pinTarget:null,masterPinUnlocked:false};
 
 const getV=id=>ST.vehicles.find(v=>v.id===id);
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36);
@@ -3075,7 +3079,13 @@ function renderDetail(c,v){
       html += '<div style="font-size:11px;color:var(--text3);letter-spacing:.3px">In: <strong style="color:var(--text2)">'+dateIn+'</strong>';
       if(dateOut) html += ' · Out: <strong style="color:var(--text2)">'+dateOut+'</strong>';
       html += '</div></div>';
-      html += '<div style="font-size:15px;font-weight:800;color:#C8102E;text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0">'+fmt$(total)+'</div>';
+      html += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">';
+      html += '<div style="font-size:15px;font-weight:800;color:#C8102E;text-align:right;font-variant-numeric:tabular-nums">'+fmt$(total)+'</div>';
+      // Per-visit delete button — OWN visits only, when unlocked, and only if >1 visit exists on this record
+      if(isOwn && ST.masterPinUnlocked && ownVisits.length > 1){
+        html += '<button onclick="event.stopPropagation();deleteVisitById(\''+visit.id+'\')" title="Delete this visit" style="background:#1a0d0d;border:1px solid #f8717155;color:#fca5a5;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer">🗑 Delete</button>';
+      }
+      html += '</div>';
       html += '</div>';
 
       html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:11px;color:var(--text3);margin-bottom:8px">';
@@ -3283,7 +3293,7 @@ function renderDetail(c,v){
 
   setTopbar(`${v.year||''} ${v.make||''} ${v.model||''}`,
     `<button class="out-btn" onclick="ST.view='invoice';render()">🧾 Invoice</button>
-     <button class="danger-btn" onclick="if(confirm('Delete this vehicle?')){ST.vehicles=ST.vehicles.filter(x=>x.id!=='${v.id}');save();toast('Removed');ST.view='dashboard';render()}">🗑</button>`);
+     ${ST.masterPinUnlocked?`<button class="danger-btn" onclick="if(confirm('Delete this vehicle?')){ST.vehicles=ST.vehicles.filter(x=>x.id!=='${v.id}');save();toast('Removed');ST.view='dashboard';render()}">🗑</button>`:''}`);
 
   function refreshDetail(){
     const cur=ST.vehicles.find(x=>x.id===v.id)||v;
@@ -3508,10 +3518,14 @@ function renderDetail(c,v){
     (v.photos||[]).forEach((p,i)=>{
       const wrap=document.createElement('div');wrap.className='photo-thumb';wrap.style.position='relative';
       const img=document.createElement('img');img.src=photoUrl(p);img.style.cssText='width:100%;height:100%;object-fit:cover';
-      const del=document.createElement('button');
-      del.style.cssText='position:absolute;top:3px;right:3px;background:rgba(0,0,0,.7);border:none;color:#fff;width:20px;height:20px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer';
-      del.textContent='✕';del.onclick=()=>delPhoto(i);
-      wrap.appendChild(img);wrap.appendChild(del);grid.appendChild(wrap);
+      wrap.appendChild(img);
+      if(ST.masterPinUnlocked){
+        const del=document.createElement('button');
+        del.style.cssText='position:absolute;top:3px;right:3px;background:rgba(0,0,0,.7);border:none;color:#fff;width:20px;height:20px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer';
+        del.textContent='✕';del.onclick=()=>{if(confirm('Delete this photo?')) delPhoto(i);};
+        wrap.appendChild(del);
+      }
+      grid.appendChild(wrap);
     });
     if(!v.photos?.length){const ep=document.createElement('div');ep.style.cssText='color:#374151;font-size:12px;padding:16px 0;text-align:center;grid-column:1/-1';ep.textContent='No photos yet';grid.appendChild(ep);}
     el.appendChild(grid);
@@ -3563,8 +3577,12 @@ function renderDetail(c,v){
       row.innerHTML=`<span style="font-size:22px">${isPdf?'📄':'🖼'}</span>
         <div class="receipt-info"><div class="receipt-name">${rName}</div><div class="receipt-date">${fmtD(rDate)}</div></div>
         <a class="dl-link" href="${rUrl}" download="${rName}" target="_blank" rel="noopener">⬇ Download</a>`;
-      const del=document.createElement('button');del.className='del-btn';del.textContent='✕';del.onclick=()=>delReceipt(i);
-      row.appendChild(del);el.appendChild(row);
+      if(ST.masterPinUnlocked){
+        const del=document.createElement('button');del.className='del-btn';del.textContent='✕';
+        del.onclick=()=>{if(confirm('Delete this receipt?')) delReceipt(i);};
+        row.appendChild(del);
+      }
+      el.appendChild(row);
     });
     if(!v.receipts?.length){const ep=document.createElement('div');ep.style.cssText='color:#374151;font-size:13px;padding:14px 0;text-align:center';ep.textContent='No receipts uploaded yet';el.appendChild(ep);}
   }
@@ -4730,6 +4748,17 @@ function renderSettings(c){
     </div>
 
     <div class="panel">
+      <div class="panel-title">🔐 DESTRUCTIVE ACTIONS</div>
+      <div style="font-size:12px;color:#555d73;margin-bottom:12px">Delete buttons for vehicles, visits, photos, and receipts are hidden by default. Unlock with the Master PIN to show them for this session. Lock again or close the browser to re-hide.</div>
+      <div id="master-pin-status" style="font-size:12px;font-weight:600;padding:10px 12px;border-radius:8px;margin-bottom:10px;text-align:center;letter-spacing:.5px;text-transform:uppercase;${ST.masterPinUnlocked?'background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7':'background:#1a0d0d;border:1px solid #f8717155;color:#fca5a5'}">
+        ${ST.masterPinUnlocked?'🔓 UNLOCKED — delete buttons visible':'🔒 LOCKED — delete buttons hidden'}
+      </div>
+      ${ST.masterPinUnlocked
+        ? `<button onclick="lockMasterPin()" style="width:100%;background:#1a0d0d;border:1px solid #f8717155;color:#fca5a5;border-radius:9px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">🔒 Lock now</button>`
+        : `<button onclick="showMasterPinPad(()=>renderSettings(document.getElementById('content')))" style="width:100%;background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7;border-radius:9px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">🔓 Unlock with Master PIN</button>`}
+    </div>
+
+    <div class="panel">
       <div class="panel-title">STORAGE MIGRATION</div>
       <div style="font-size:12px;color:#555d73;margin-bottom:12px">Move existing photos and receipts out of the database and into Firebase Storage. This fixes the 1&nbsp;MB Firestore limit and prevents silent data loss. Safe — original data stays until upload is confirmed.</div>
       <div id="storage-migration-stats" style="font-size:12px;color:#9ca3af;margin-bottom:12px;font-family:'Courier New',monospace"></div>
@@ -4961,6 +4990,140 @@ window.startStorageMigration=startStorageMigration;
 window.updateStorageMigrationStats=updateStorageMigrationStats;
 
 // ═══════════════════════════════════════════════
+// MASTER PIN — gates destructive actions per-session
+// ═══════════════════════════════════════════════
+function showMasterPinPad(onSuccess){
+  document.getElementById('master-pin-overlay')?.remove();
+  let entered = '';
+  const overlay = document.createElement('div');
+  overlay.id = 'master-pin-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
+  overlay.innerHTML = `
+  <div style="width:100%;max-width:320px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:32px;margin-bottom:8px">🔐</div>
+      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">Master PIN</div>
+      <div style="font-size:12px;color:#555d73">Required to enable destructive actions</div>
+    </div>
+    <div id="mpin-dots" style="display:flex;justify-content:center;gap:14px;margin-bottom:28px">
+      ${[0,1,2,3].map(i=>`<div style="width:16px;height:16px;border-radius:50%;border:2px solid #374151;background:transparent" id="mpd-${i}"></div>`).join('')}
+    </div>
+    <div id="mpin-err" style="display:none;text-align:center;color:#f87171;font-size:13px;margin-bottom:14px">Incorrect Master PIN</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      ${[1,2,3,4,5,6,7,8,9,'←',0,'✓'].map(k=>`
+      <button onclick="mpinKey('${k}')" style="background:${k==='✓'?'#C8102E':k==='←'?'#1e2230':'#161921'};border:1px solid #2a2f3f;color:#fff;font-size:${k==='←'||k==='✓'?'20':'22'}px;font-weight:600;padding:18px 0;border-radius:12px;cursor:pointer;font-family:inherit">${k}</button>`).join('')}
+    </div>
+    <button onclick="document.getElementById('master-pin-overlay').remove()" style="width:100%;margin-top:16px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">Cancel</button>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  function updateDots(){
+    [0,1,2,3].forEach(i=>{
+      const d = document.getElementById(`mpd-${i}`);
+      if(d){d.style.background = i<entered.length?'#C8102E':'transparent';d.style.borderColor = i<entered.length?'#C8102E':'#374151';}
+    });
+  }
+
+  function handleKey(e){
+    if(!document.getElementById('master-pin-overlay')) return;
+    if(e.key>='0'&&e.key<='9') window.mpinKey(e.key);
+    else if(e.key==='Backspace') window.mpinKey('←');
+    else if(e.key==='Enter') window.mpinKey('✓');
+    else if(e.key==='Escape'){document.getElementById('master-pin-overlay')?.remove(); document.removeEventListener('keydown',handleKey);}
+  }
+  document.addEventListener('keydown', handleKey);
+  const obs = new MutationObserver(()=>{
+    if(!document.getElementById('master-pin-overlay')){
+      document.removeEventListener('keydown', handleKey);
+      obs.disconnect();
+    }
+  });
+  obs.observe(document.body, {childList:true});
+
+  window.mpinKey = function(k){
+    const errEl = document.getElementById('mpin-err');
+    if(errEl) errEl.style.display = 'none';
+    if(k==='←'){entered = entered.slice(0,-1);}
+    else if(k==='✓'){
+      const correct = (SETTINGS.pins && SETTINGS.pins.master) || '7918';
+      if(entered === correct){
+        overlay.remove();
+        ST.masterPinUnlocked = true;
+        toast('🔓 Destructive actions unlocked for this session');
+        if(typeof onSuccess === 'function') onSuccess();
+        else render();
+      } else {
+        entered = '';
+        updateDots();
+        if(errEl) errEl.style.display = 'block';
+        const pad = overlay.querySelector('div[style*="max-width"]');
+        if(pad){pad.style.animation = 'none'; setTimeout(()=>{pad.style.animation = 'shake .4s ease';}, 10);}
+      }
+      return;
+    } else {
+      if(entered.length < 4) entered += k;
+    }
+    updateDots();
+    if(entered.length === 4){
+      setTimeout(()=>window.mpinKey('✓'), 100);
+    }
+  };
+}
+
+function lockMasterPin(){
+  ST.masterPinUnlocked = false;
+  toast('🔒 Destructive actions locked');
+  render();
+}
+
+window.showMasterPinPad = showMasterPinPad;
+window.lockMasterPin = lockMasterPin;
+
+// Delete an individual visit from its owning vehicle (History tab action)
+// Gated by Master PIN (defensive — button only shows when unlocked anyway)
+// Refuses to delete the last remaining visit on a vehicle.
+window.deleteVisitById = function(visitId){
+  if(!ST.masterPinUnlocked){
+    toast('Unlock with Master PIN first','err');
+    return;
+  }
+  // Find the owning vehicle
+  const vehicle = ST.vehicles.find(v => (v.visits||[]).some(vi => vi.id === visitId));
+  if(!vehicle){
+    toast('Visit not found','err');
+    return;
+  }
+  if((vehicle.visits||[]).length <= 1){
+    alert('Cannot delete the last remaining visit. Delete the whole vehicle instead from the header.');
+    return;
+  }
+  const visit = vehicle.visits.find(vi => vi.id === visitId);
+  const visitIdx = vehicle.visits.findIndex(vi => vi.id === visitId) + 1;
+  const stock = visit.stockNumber || vehicle.stockNumber || '—';
+  const partsCount = (visit.parts||[]).length;
+  const laborCount = (visit.laborLines||[]).length;
+  const photoCount = (visit.photos||[]).length;
+  const receiptCount = (visit.receipts||[]).length;
+  const summary = 'This will permanently delete:\n'
+    + '  • Visit #' + visitIdx + ' (Stock #' + stock + ')\n'
+    + '  • ' + partsCount + ' parts entries\n'
+    + '  • ' + laborCount + ' labor lines\n'
+    + '  • ' + photoCount + ' photos (linked)\n'
+    + '  • ' + receiptCount + ' receipts (linked)\n'
+    + '\nContinue?';
+  if(!confirm(summary)) return;
+
+  // Remove the visit from the vehicle
+  vehicle.visits = vehicle.visits.filter(vi => vi.id !== visitId);
+  // Refresh top-level shim so the UI reads the next-current visit
+  applyVisitShim(vehicle);
+  vehicle.updatedAt = Date.now();
+  save();
+  toast('Visit deleted');
+  render();
+};
+
+// ═══════════════════════════════════════════════
 // BROWSER CHECK — require Chrome for best experience
 // ═══════════════════════════════════════════════
 function isChrome(){
@@ -5048,6 +5211,11 @@ let storage = null;
 let unsubscribeFirestore = null;
 let firebaseReady = false;
 
+// Track vehicle IDs that failed to sync to Firestore (e.g., over size limit).
+// On incoming Firestore updates, these are preserved locally instead of being
+// overwritten by the smaller-but-stale cloud copy.
+let pendingUnsyncedIds = new Set();
+
 try {
   if(typeof firebase !== 'undefined'){
     firebase.initializeApp(firebaseConfig);
@@ -5069,8 +5237,53 @@ try {
 function setSyncStatus(status){
   const dot=document.getElementById('sync-dot');
   if(!dot)return;
-  dot.className=status; // 'ok','err','syncing',''
+  dot.className=status; // kept for backward compat
+  // Visually color the dot
+  const colors = {
+    ok: '#10b981',        // green — synced
+    syncing: '#f59e0b',   // amber — in progress
+    err: '#ef4444',       // red — failed
+  };
+  dot.style.background = colors[status] || '#6b7280';
+  dot.title = {
+    ok: 'Synced to cloud ✓ (click for details)',
+    syncing: 'Syncing…',
+    err: 'Sync FAILED — tap for details',
+  }[status] || 'Firestore sync status';
+  // If error, pulse to draw attention
+  if(status === 'err'){
+    dot.style.animation = 'syncPulse 1.5s infinite';
+  } else {
+    dot.style.animation = '';
+  }
 }
+
+// Click-to-diagnose sync health
+window.showSyncStatus = function(){
+  const vehicleCount = (ST.vehicles||[]).length;
+  const jsonSize = JSON.stringify(ST.vehicles||[]).length;
+  const sizeKB = Math.round(jsonSize / 1024);
+  const pendingCount = pendingUnsyncedIds.size;
+  const status = document.getElementById('sync-dot')?.className || 'unknown';
+  const statusText = {
+    ok: '✅ All good — latest data is in the cloud.',
+    syncing: '⏳ Sync in progress…',
+    err: '❌ SYNC FAILING — new changes exist only on this device!',
+    '': '⚠ Sync state unknown. Check internet connection.'
+  }[status] || 'Unknown status';
+
+  let msg = statusText + '\n\n';
+  msg += 'Records: ' + vehicleCount + '\n';
+  msg += 'Data size: ' + sizeKB + ' KB\n';
+  msg += 'Firestore limit: 1024 KB (1 MB)\n';
+  if(sizeKB > 900){
+    msg += '\n⚠ OVER SIZE LIMIT — Firestore cannot save. Run Storage Migration in Settings to fix.\n';
+  }
+  if(pendingCount > 0){
+    msg += '\n' + pendingCount + ' record(s) saved locally only — not yet in cloud.\n';
+  }
+  alert(msg);
+};
 
 async function saveToFirestore(vehicles) {
   if(!db){setSyncStatus('err');return;}
@@ -5081,7 +5294,10 @@ async function saveToFirestore(vehicles) {
     const sizeKB = json.length / 1024;
     if(sizeKB > 900){
       console.warn('Vehicles doc too big for Firestore:', Math.round(sizeKB)+'KB — saved locally only');
-      toast('Too much data to sync — cleanup old vehicles','err');
+      // Remember every current vehicle ID as "pending unsynced" so next Firestore push
+      // doesn't overwrite them with the stale cloud copy
+      pendingUnsyncedIds = new Set(vehicles.map(v=>v.id));
+      toast('⚠ Over 1MB — only saved locally. Run Storage Migration!','err');
       setSyncStatus('err');
       return;
     }
@@ -5090,11 +5306,15 @@ async function saveToFirestore(vehicles) {
       vehicles: json,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // Sync succeeded — clear the pending list
+    pendingUnsyncedIds.clear();
     setSyncStatus('ok');
     console.log('Firestore save OK ✅ ('+Math.round(sizeKB)+'KB)');
   } catch(e) {
     setSyncStatus('err');
     console.error('Firestore save failed:', e);
+    // Also mark all current IDs as pending on any sync error
+    pendingUnsyncedIds = new Set(vehicles.map(v=>v.id));
     toast('Sync error — saved locally only','err');
   }
 }
@@ -5114,22 +5334,40 @@ function subscribeToFirestore() {
       try {
         const data = snap.data();
         const incoming = JSON.parse(data.vehicles || '[]');
-        // Migrate incoming data if it's old format (no visits[])
-        const prev = ST.vehicles;
-        ST.vehicles = incoming;
+        const prev = ST.vehicles || [];
+
+        // PROTECTION: preserve any local vehicles that failed to sync (pendingUnsyncedIds)
+        // OR that simply don't exist in the incoming cloud data (local-only additions).
+        // This prevents Firestore's stale copy from wiping out new records created
+        // while the doc was over the size limit.
+        const incomingIds = new Set(incoming.map(v=>v.id));
+        const preservedLocal = prev.filter(v=>{
+          if(!v || !v.id) return false;
+          // If this local vehicle is flagged as pending, keep it
+          if(pendingUnsyncedIds.has(v.id)) return true;
+          // If Firestore doesn't know about it at all, also keep it
+          if(!incomingIds.has(v.id)) return true;
+          return false;
+        });
+
+        const merged = [...incoming, ...preservedLocal];
+        ST.vehicles = merged;
         migrateVehiclesToVisits();
         applyVisitShimAll();
-        const migratedJson = JSON.stringify(ST.vehicles);
-        const currentJson = JSON.stringify(prev);
-        if(migratedJson !== currentJson){
-          try { localStorage.setItem(STORAGE_KEY, migratedJson); } catch(e) {}
+
+        const mergedJson = JSON.stringify(ST.vehicles);
+        const prevJson = JSON.stringify(prev);
+
+        if(mergedJson !== prevJson){
+          try { localStorage.setItem(STORAGE_KEY, mergedJson); } catch(e) {}
           if(document.getElementById('app')?.style.display !== 'none'){
             render();
           }
-          // If migration changed the data (added visits[]), push back to Firestore once
+          // If we merged in local-only vehicles OR migration changed the data,
+          // push back to Firestore so the cloud catches up (size permitting)
           const incomingJson = JSON.stringify(incoming);
-          if(migratedJson !== incomingJson){
-            console.log('Migration modified data — syncing back to Firestore');
+          if(mergedJson !== incomingJson){
+            console.log('Local-only or migrated data detected — syncing back to Firestore');
             saveToFirestore(ST.vehicles);
           }
         } else {
