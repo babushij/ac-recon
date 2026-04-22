@@ -889,7 +889,10 @@ function load(){
   // Load from localStorage as immediate cache while Firestore connects
   try{const d=localStorage.getItem(STORAGE_KEY);ST.vehicles=d?JSON.parse(d):[]}catch(e){ST.vehicles=[];}
   migrateVehiclesToVisits();
-  mergeDuplicateVins();
+  // NOTE: mergeDuplicateVins() is intentionally NOT called here.
+  // It was causing silent data loss when new entries with existing VINs
+  // got combined with older records. Duplicates are now prevented at the
+  // point of entry (see submitAdd → VIN-exists check).
   applyVisitShimAll();
   loadSettings();
   if(!Array.isArray(SETTINGS.mechanics)||SETTINGS.mechanics.length===0){
@@ -1825,21 +1828,87 @@ function renderAdd(c){
     if(formData.bodyShop&&!formData.statuses.includes(formData.bodyShop))formData.statuses.push(formData.bodyShop);
     // Auto high priority if sale pending or sold
     const autoHighPri=formData.statuses.includes('sale_pending')||formData.statuses.includes('sold');
-    const vehicle={
-      id:uid(),vin,stockNumber:stock,year,make,model,
+
+    // Package up the inputs so either branch (new vehicle OR new visit) can use them
+    const inputs={
+      vin, stock, year, make, model,
       color:c.querySelector('#av-color').value.trim(),
       mileage:c.querySelector('#av-mileage').value.trim(),
-      source:formData.source,statuses:formData.statuses,
+      source:formData.source,
+      statuses:[...formData.statuses],
       assignedTo:c.querySelector('#av-mech').value,
       priority:autoHighPri?'high':c.querySelector('#av-priority').value,
       notes:c.querySelector('#av-notes').value.trim(),
-      apptDate:formData.apptDate||'',
+      apptDate:formData.apptDate||''
+    };
+
+    // ═══ VIN-exists check — prevents silent duplicate overwrites ═══
+    const existing=ST.vehicles.find(x=>(x.vin||'').trim().toUpperCase()===vin);
+    if(existing){
+      showVinExistsModal(existing, inputs);
+      return;
+    }
+
+    // No duplicate — create a brand new vehicle record
+    createNewVehicleFromInputs(inputs);
+  };
+
+  window.createNewVehicleFromInputs=function(inputs){
+    const vehicle={
+      id:uid(),
+      vin:inputs.vin,
+      stockNumber:inputs.stock,
+      year:inputs.year,
+      make:inputs.make,
+      model:inputs.model,
+      color:inputs.color,
+      mileage:inputs.mileage,
+      source:inputs.source,
+      statuses:inputs.statuses,
+      assignedTo:inputs.assignedTo,
+      priority:inputs.priority,
+      notes:inputs.notes,
+      apptDate:inputs.apptDate,
       repairs:[],photos:[],receipts:[],comments:[],
       createdAt:Date.now(),updatedAt:Date.now()
     };
-    ST.vehicles.push(vehicle);save();
+    ST.vehicles.push(vehicle);
+    save();
     toast(`${vehicle.year} ${vehicle.make} ${vehicle.model} added`);
     ST.selectedId=vehicle.id;ST.view='detail';ST.activeTab='overview';render();
+  };
+
+  window.addVisitToExistingVehicle=function(vehicleId, inputs){
+    const v=ST.vehicles.find(x=>x.id===vehicleId);
+    if(!v){toast('Existing vehicle not found','err');return;}
+    // Ensure visits[] exists (migrate if needed)
+    if(!Array.isArray(v.visits)||!v.visits.length){
+      migrateVehiclesToVisits();
+    }
+    // Create a fresh visit with the new stock # and status tags
+    const visit={
+      id: v.id + '-v' + ((v.visits||[]).length + 1),
+      dateIn: Date.now(),
+      dateOut: null,
+      stockNumber: inputs.stock,
+      statuses: inputs.statuses,
+      assignedTo: inputs.assignedTo,
+      priority: inputs.priority,
+      apptDate: inputs.apptDate,
+      parts: [], laborLines: [], repairs: [],
+      receipts: [], photos: [], notes: inputs.notes,
+      concerns: [], comments: [], timeSessions: []
+    };
+    v.visits = [...(v.visits||[]), visit];
+    // Keep vehicle-level static info updated if new values are supplied
+    if(inputs.color) v.color = inputs.color;
+    if(inputs.mileage) v.mileage = inputs.mileage;
+    v.updatedAt = Date.now();
+    // Apply shim so the UI reads current visit fields from the top level
+    applyVisitShim(v);
+    save();
+    toast(`New visit added to ${v.year} ${v.make} ${v.model}`);
+    ST.selectedId=v.id;ST.view='detail';ST.activeTab='history';render();
   };
 }
 
@@ -1850,6 +1919,81 @@ function makeTagBtn(label,active,color){
   if(active)btn.style.cssText=`background:${color}22;color:${color};border-color:${color}55`;
   return btn;
 }
+
+// ═══════════════════════════════════════════════
+// VIN-EXISTS MODAL — prevents duplicate overwrite
+// When user enters a vehicle whose VIN is already on file, ask them:
+//   - Add as a NEW VISIT to the existing record (preserves history), OR
+//   - Create as a SEPARATE vehicle anyway (same VIN, different record)
+//   - Cancel
+// ═══════════════════════════════════════════════
+function showVinExistsModal(existingVehicle, inputs){
+  const v=existingVehicle;
+  const visitCount=(v.visits||[]).length||1;
+  const lastVisit=(v.visits||[]).slice(-1)[0];
+  const lastStatuses=((lastVisit&&lastVisit.statuses)||v.statuses||[]).map(id=>SMAP[id]?.label||id).join(', ')||'—';
+  const createdStr=v.createdAt?fmtD(v.createdAt):'—';
+
+  // Remove any existing instance
+  const existingModal=document.getElementById('vin-exists-modal');
+  if(existingModal) existingModal.remove();
+
+  const modal=document.createElement('div');
+  modal.id='vin-exists-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;font-family:inherit';
+  modal.innerHTML=`
+    <div style="background:#0e1117;border:1px solid #1e2230;border-radius:14px;max-width:460px;width:100%;padding:22px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px">
+        <div style="font-size:28px;line-height:1">⚠️</div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#fbbf24;margin-bottom:4px">This VIN is already on file</div>
+          <div style="font-size:12px;color:#8896a8">${inputs.vin}</div>
+        </div>
+      </div>
+
+      <div style="background:#131824;border:1px solid #243048;border-radius:10px;padding:12px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;color:#e8eaf2;margin-bottom:6px">${v.year||''} ${v.make||''} ${v.model||''}</div>
+        <div style="font-size:11px;color:#8896a8;line-height:1.6">
+          Existing Stock&nbsp;#: <span style="color:#e8eaf2">${v.stockNumber||'—'}</span><br>
+          ${visitCount} visit${visitCount!==1?'s':''} on file<br>
+          Added: <span style="color:#e8eaf2">${createdStr}</span><br>
+          Latest status: <span style="color:#e8eaf2">${lastStatuses}</span>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:#8896a8;margin-bottom:14px;line-height:1.6">
+        You're entering Stock #<span style="color:#e8eaf2">${inputs.stock}</span>. What would you like to do?
+      </div>
+
+      <button id="vin-add-visit" style="width:100%;background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7;border-radius:9px;padding:13px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left">
+        <div style="font-weight:700;margin-bottom:2px">➕ Add as new visit</div>
+        <div style="font-size:11px;opacity:.8;font-weight:400">Attach to the existing record. Keeps all history, photos, receipts.</div>
+      </button>
+
+      <button id="vin-create-separate" style="width:100%;background:#0d0f14;border:1px solid #374151;color:#9ca3af;border-radius:9px;padding:13px;font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left">
+        <div style="font-weight:700;margin-bottom:2px">📄 Create as separate record</div>
+        <div style="font-size:11px;opacity:.8;font-weight:400">New standalone vehicle with the same VIN (title-swap, rebuild, etc.).</div>
+      </button>
+
+      <button id="vin-cancel" style="width:100%;background:transparent;border:1px solid #1e2230;color:#555d73;border-radius:9px;padding:11px;font-size:12px;font-weight:500;cursor:pointer">
+        Cancel
+      </button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#vin-add-visit').onclick=()=>{
+    modal.remove();
+    addVisitToExistingVehicle(v.id, inputs);
+  };
+  modal.querySelector('#vin-create-separate').onclick=()=>{
+    modal.remove();
+    createNewVehicleFromInputs(inputs);
+  };
+  modal.querySelector('#vin-cancel').onclick=()=>modal.remove();
+  modal.onclick=e=>{if(e.target===modal) modal.remove();};
+}
+window.showVinExistsModal=showVinExistsModal;
 
 // ═══════════════════════════════════════════════
 // VIN SCAN MODAL  — camera barcode + image + manual
