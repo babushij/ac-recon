@@ -3602,9 +3602,21 @@ function renderDetail(c,v){
   const addRepair=r=>{const rep={...r,id:uid(),date:Date.now(),cost:parseFloat(r.cost)||0};writeToCurrentVisit(v,'repairs',[...(v.repairs||[]),rep]);save();};
   const delRepair=id=>{writeToCurrentVisit(v,'repairs',(v.repairs||[]).filter(r=>r.id!==id));save();};
   const addPhoto=imgData=>{writeToCurrentVisit(v,'photos',[...(v.photos||[]),imgData]);save();};
-  const delPhoto=i=>{writeToCurrentVisit(v,'photos',(v.photos||[]).filter((_,j)=>j!==i));save();};
+  const delPhoto=i=>{
+    const entry=(v.photos||[])[i];
+    const path=storagePath(entry);
+    if(path) deleteFromStorage(path); // fire-and-forget
+    writeToCurrentVisit(v,'photos',(v.photos||[]).filter((_,j)=>j!==i));
+    save();
+  };
   const addReceipt=r=>{writeToCurrentVisit(v,'receipts',[...(v.receipts||[]),r]);save();};
-  const delReceipt=i=>{writeToCurrentVisit(v,'receipts',(v.receipts||[]).filter((_,j)=>j!==i));save();};
+  const delReceipt=i=>{
+    const entry=(v.receipts||[])[i];
+    const path=storagePath(entry);
+    if(path) deleteFromStorage(path); // fire-and-forget
+    writeToCurrentVisit(v,'receipts',(v.receipts||[]).filter((_,j)=>j!==i));
+    save();
+  };
 
   const statuses=(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean);
   const mech=v.assignedTo?getMMAP()[v.assignedTo]:null;
@@ -3803,14 +3815,33 @@ function renderDetail(c,v){
   }
 
   function buildPhotosTab(el){
+    async function saveOnePhoto(file){
+      try {
+        const compressedDataUrl = await compressImage(file, 1600, 0.8);
+        if(storage){
+          try {
+            const blob = dataUrlToBlob(compressedDataUrl);
+            const path = `shops/automotive_connection/vehicles/${v.id}/photos/${uid()}.jpg`;
+            const obj = await uploadToStorage(blob, path);
+            addPhoto({...obj});
+            return;
+          } catch(upErr){
+            console.warn('Photo upload to Storage failed, using inline:', upErr);
+          }
+        }
+        // Fallback: inline base64
+        addPhoto(compressedDataUrl);
+      } catch(err){
+        console.error('Photo save error:', err);
+        toast('Photo save failed', 'err');
+      }
+    }
+
     const fileInput=document.createElement('input');
     fileInput.type='file';fileInput.accept='image/*';fileInput.multiple=true;fileInput.capture='environment';fileInput.style.display='none';
     fileInput.onchange=async e=>{
       for(const file of Array.from(e.target.files)){
-        try{
-          const compressed=await compressImage(file,1600,0.8);
-          addPhoto(compressed);
-        }catch(err){console.error('Photo save error:',err);toast('Photo save failed','err');}
+        await saveOnePhoto(file);
       }
     };
     el.appendChild(fileInput);
@@ -3819,10 +3850,7 @@ function renderDetail(c,v){
     libInput.type='file';libInput.accept='image/*';libInput.multiple=true;libInput.style.display='none';
     libInput.onchange=async e=>{
       for(const file of Array.from(e.target.files)){
-        try{
-          const compressed=await compressImage(file,1600,0.8);
-          addPhoto(compressed);
-        }catch(err){console.error('Photo save error:',err);toast('Photo save failed','err');}
+        await saveOnePhoto(file);
       }
     };
     el.appendChild(libInput);
@@ -3879,16 +3907,39 @@ function renderDetail(c,v){
     function readReceipts(files){
       Array.from(files).forEach(async file=>{
         try{
-          // For PDFs, store as-is (can't compress)
-          if(file.type==='application/pdf'||file.name?.toLowerCase().endsWith('.pdf')){
+          const isPdf = file.type==='application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
+          if(isPdf){
+            // Try upload to Storage first; fall back to inline data URL
+            if(storage){
+              try {
+                const path = `shops/automotive_connection/vehicles/${v.id}/receipts/${uid()}.pdf`;
+                const obj = await uploadToStorage(file, path);
+                addReceipt({...obj, name:file.name, date:Date.now()});
+                return;
+              } catch(upErr){
+                console.warn('Receipt PDF upload failed, using inline:', upErr);
+              }
+            }
             const rd=new FileReader();
             rd.onload=()=>addReceipt({name:file.name,data:rd.result,date:Date.now()});
             rd.readAsDataURL(file);
             return;
           }
           // For images, compress to 1200px wide JPEG at 80% quality
-          const compressed=await compressImage(file,1200,0.8);
-          addReceipt({name:file.name,data:compressed,date:Date.now()});
+          const compressedDataUrl=await compressImage(file,1200,0.8);
+          // Upload compressed JPEG to Storage if available
+          if(storage){
+            try {
+              const blob = dataUrlToBlob(compressedDataUrl);
+              const path = `shops/automotive_connection/vehicles/${v.id}/receipts/${uid()}.jpg`;
+              const obj = await uploadToStorage(blob, path);
+              addReceipt({...obj, name:file.name, date:Date.now()});
+              return;
+            } catch(upErr){
+              console.warn('Receipt image upload failed, using inline:', upErr);
+            }
+          }
+          addReceipt({name:file.name,data:compressedDataUrl,date:Date.now()});
         }catch(e){
           console.error('Receipt save error:',e);
           toast('Could not save receipt: '+e.message,'err');
@@ -4028,12 +4079,34 @@ function renderDetail(c,v){
           save({parts:newParts});
           toast(`Added ${partsToAdd.length} part${partsToAdd.length!==1?'s':''}`);
         }
+
+        if(overlay){const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Building PDF…';}
         const pdfBlob = buildScanPdf(canvas, 300);
-        const pdfDataUrl = await blobToDataUrl(pdfBlob);
         const ts = new Date();
         const stamp = ts.toISOString().slice(0,10).replace(/-/g,'')+'_'+ts.toTimeString().slice(0,5).replace(':','');
         const name = `Scan_${stamp}.pdf`;
-        addReceipt({name, data:pdfDataUrl, date:Date.now()});
+
+        let receiptEntry;
+        // Prefer direct upload to Firebase Storage — keeps Firestore doc small
+        if(storage){
+          try {
+            if(overlay){const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Uploading to cloud storage…';}
+            const path = `shops/automotive_connection/vehicles/${v.id}/receipts/${uid()}.pdf`;
+            const obj = await uploadToStorage(pdfBlob, path);
+            receiptEntry = { ...obj, name, date: Date.now() };
+            console.log('Scan uploaded to Storage:', obj.url);
+          } catch(upErr){
+            console.warn('Storage upload failed, falling back to inline data URL:', upErr);
+            const pdfDataUrl = await blobToDataUrl(pdfBlob);
+            receiptEntry = { name, data: pdfDataUrl, date: Date.now() };
+          }
+        } else {
+          // No Storage available — inline (old behavior)
+          const pdfDataUrl = await blobToDataUrl(pdfBlob);
+          receiptEntry = { name, data: pdfDataUrl, date: Date.now() };
+        }
+
+        addReceipt(receiptEntry);
         toast('Receipt saved ✓');
         if(cleanup) cleanup();
       } catch(e){
