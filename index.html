@@ -2936,7 +2936,7 @@ function renderDetail(c,v){
   // RECEIPT SCANNER (AI)
   // ══════════════════════════════════════════════
   // Extract auto parts from a receipt (image OR PDF) via the Worker.
-  // Accepts a data URL string — the function handles image/pdf detection.
+  // Returns: {items: [...], tax: number, documentType: 'image'|'pdf'} or null on error
   async function scanReceiptWithAI(dataUrl){
     const match=dataUrl.match(/^data:([^;]+);base64,(.+)$/);
     if(!match){console.error('Receipt AI: input not a data URL');return null;}
@@ -2949,7 +2949,6 @@ function renderDetail(c,v){
       const resp=await fetch(endpoint,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        // Send as documentData (v2 Worker) — legacy Worker accepts imageData too via the docData ?? fallback
         body:JSON.stringify({documentData:b64data,imageData:b64data,mediaType:mimeType})
       });
       if(!resp.ok){
@@ -2962,8 +2961,10 @@ function renderDetail(c,v){
       const raw=(data.items||'[]');
       const clean=raw.replace(/```json|```/g,'').trim();
       const arr=JSON.parse(clean);
-      console.log('[Receipt AI] Extracted', Array.isArray(arr)?arr.length:0, 'items');
-      return Array.isArray(arr)?arr:null;
+      const items = Array.isArray(arr) ? arr : [];
+      const tax = typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0;
+      console.log('[Receipt AI] Extracted', items.length, 'items · tax $', tax.toFixed(2));
+      return {items, tax, documentType: data.documentType || 'image'};
     }catch(e){console.error('Receipt AI error',e);return null;}
   }
 
@@ -3104,16 +3105,22 @@ function renderDetail(c,v){
           imgB64=await autoRotateImage(file);
         }
         st.textContent='Scanning with AI...';
-        let items=await scanReceiptWithAI(imgB64);
+        let result=await scanReceiptWithAI(imgB64);
+        let items = result && result.items ? result.items : null;
         if(!items||!items.length){
           st.textContent='Retrying with enhanced scan...';
-          items=await scanReceiptWithAI(await enhanceReceiptImage(imgB64));
+          result=await scanReceiptWithAI(await enhanceReceiptImage(imgB64));
+          items = result && result.items ? result.items : null;
         }
         if(!items||!items.length){st.textContent='Could not read receipt — fill the frame with the receipt.';st.style.color='#f87171';return;}
         st.textContent=`Found ${items.length} item${items.length!==1?'s':''}. Review and confirm:`;
         st.style.color='#34d399';
         let h=`<div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;overflow:hidden;margin-top:6px">`;
-        items.forEach((item,i)=>{h+=`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #1e2230"><input type="checkbox" id="ri-${i}" checked style="accent-color:#C8102E;width:16px;height:16px;flex-shrink:0"><span style="flex:1;font-size:13px;color:#e2e4ea">${item.description}</span><span style="font-size:13px;font-weight:600;color:#C8102E;white-space:nowrap">${fmt$(item.cost)}</span></div>`;});
+        items.forEach((item,i)=>{
+          // New shape has eachCost+quantity, legacy has cost only
+          const displayCost = item.eachCost != null ? (item.eachCost * (item.quantity||1)) : (item.cost||0);
+          h+=`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #1e2230"><input type="checkbox" id="ri-${i}" checked style="accent-color:#C8102E;width:16px;height:16px;flex-shrink:0"><span style="flex:1;font-size:13px;color:#e2e4ea">${item.description}</span><span style="font-size:13px;font-weight:600;color:#C8102E;white-space:nowrap">${fmt$(displayCost)}</span></div>`;
+        });
         h+=`</div><button class="btn-red" style="margin-top:10px;width:100%;padding:11px;border-radius:8px;font-size:13px;font-weight:600" onclick="window.confirmReceiptItems(${JSON.stringify(items).replace(/"/g,'&quot;')})">Add checked items to parts</button>`;
         pv.innerHTML=h;
       }catch(e){st.textContent='Error: '+e.message;st.style.color='#f87171';console.error(e);}
@@ -3121,7 +3128,20 @@ function renderDetail(c,v){
     window.confirmReceiptItems=function(itemsJson){
       const items=typeof itemsJson==='string'?JSON.parse(itemsJson.replace(/&quot;/g,'"')):itemsJson;
       let added=0;
-      items.forEach((item,i)=>{const cb=document.getElementById(`ri-${i}`);if(cb&&cb.checked){v.parts=[...(v.parts||[]),{name:item.description,partNum:'',cost:parseFloat(item.cost)||0,qty:1}];added++;}});
+      items.forEach((item,i)=>{
+        const cb=document.getElementById(`ri-${i}`);
+        if(cb&&cb.checked){
+          const qty = item.quantity || 1;
+          const each = item.eachCost != null ? item.eachCost : (item.cost || 0);
+          v.parts=[...(v.parts||[]),{
+            name:item.description,
+            partNum:item.partNumber||'',
+            cost:parseFloat(each)||0,
+            qty:parseInt(qty)||1
+          }];
+          added++;
+        }
+      });
       if(added>0)save({parts:v.parts});
       toast(`Added ${added} part${added!==1?'s':''}!`);
       const st=document.getElementById('receipt-scan-status');const pv=document.getElementById('receipt-preview-items');
@@ -3803,13 +3823,13 @@ function renderDetail(c,v){
   }
 
   // ═══════════════════════════════════════════════
-  // RECEIPT EXTRACTION MODAL — AI reads parts from the uploaded file
+  // RECEIPT EXTRACTION MODAL — AI reads parts, user edits before save
   // ═══════════════════════════════════════════════
   function openExtractionModal(vehicle, fileName, dataUrl, isPdf){
     const overlay=document.createElement('div');
     overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.90);z-index:9990;display:flex;flex-direction:column;padding:18px;overflow-y:auto';
     overlay.innerHTML=`
-      <div style="max-width:480px;width:100%;margin:0 auto;background:#111318;border:1px solid #1e2230;border-radius:14px;overflow:hidden">
+      <div style="max-width:560px;width:100%;margin:0 auto;background:#111318;border:1px solid #1e2230;border-radius:14px;overflow:hidden">
         <div style="padding:16px 18px;border-bottom:1px solid #1e2230;display:flex;align-items:center;gap:14px">
           <div style="flex:1;min-width:0">
             <div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🧾 ${fileName}</div>
@@ -3817,25 +3837,22 @@ function renderDetail(c,v){
           </div>
           <button id="ex-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:7px 13px;border-radius:7px;cursor:pointer;flex-shrink:0">Close</button>
         </div>
-        <div id="ex-body" style="padding:16px 18px;min-height:200px"></div>
+        <div id="ex-body" style="padding:14px 16px;min-height:200px"></div>
       </div>`;
     document.body.appendChild(overlay);
     const cleanup=()=>overlay.remove();
     overlay.querySelector('#ex-close').onclick=cleanup;
-
-    // Click outside modal body to close
     overlay.onclick=(e)=>{if(e.target===overlay) cleanup();};
 
     const setStatus=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#fbbf24';}};
     const setStatusOk=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#6ee7b7';}};
     const setStatusErr=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#f87171';}};
 
-    // Call AI then render results
-    scanReceiptWithAI(dataUrl).then(items=>{
+    scanReceiptWithAI(dataUrl).then(result=>{
       const body=overlay.querySelector('#ex-body');
-      if(!body) return; // modal already closed
+      if(!body) return;
 
-      if(!items){
+      if(!result){
         setStatusErr('AI extraction failed');
         body.innerHTML=`
           <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6">
@@ -3846,32 +3863,131 @@ function renderDetail(c,v){
         return;
       }
 
+      const items = result.items || [];
+      const taxTotal = result.tax || 0;
+
       if(items.length===0){
-        setStatusOk('No parts detected — save blank or add manually');
+        setStatusOk('No parts detected');
       } else {
-        setStatusOk(`Found ${items.length} part${items.length!==1?'s':''}`);
+        setStatusOk(`Found ${items.length} part${items.length!==1?'s':''}${taxTotal?` · tax $${taxTotal.toFixed(2)}`:''}`);
       }
 
-      const rowsHtml = items.length
-        ? items.map((item,i)=>`
-          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0d0f14;border:1px solid #1e2230;border-radius:8px;cursor:pointer;margin-bottom:6px">
-            <input type="checkbox" id="ex-pick-${i}" checked style="width:16px;height:16px;accent-color:#f59e0b;flex-shrink:0">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(item.description||'').replace(/"/g,'&quot;')}</div>
-              <div style="font-size:11px;color:#8896a8">${item.partNumber?('#'+item.partNumber+' · '):''}${item.cost?('$'+Number(item.cost).toFixed(2)):'—'}</div>
-            </div>
-          </label>`).join('')
-        : '<div style="padding:18px;text-align:center;color:#8896a8;font-size:13px;line-height:1.5">No auto parts detected in this receipt.<br><span style="color:#555d73;font-size:11px">You can still confirm — the receipt file is saved.</span></div>';
+      // Local working copy; user edits update this before save.
+      // Distribute tax proportionally across items by subtotal weight.
+      const subtotal = items.reduce((a,it)=>a + (Number(it.eachCost)||0) * (Number(it.quantity)||1), 0);
+      const working = items.map((it, idx)=>{
+        const each = Number(it.eachCost)||0;
+        const qty = Number(it.quantity)||1;
+        const lineTotal = each * qty;
+        // Per-item tax share proportional to line total
+        const taxShare = (subtotal > 0 && taxTotal > 0) ? (lineTotal / subtotal) * taxTotal : 0;
+        // Each-cost after tax share (split evenly across qty)
+        const eachWithTax = qty > 0 ? (lineTotal + taxShare) / qty : each;
+        return {
+          description: it.description || '',
+          partNumber: it.partNumber || '',
+          eachCost: eachWithTax, // includes proportional tax
+          quantity: qty,
+          pick: true,
+          _id: 'ex-row-'+idx
+        };
+      });
 
-      body.innerHTML=`
-        ${items.length?`<div style="font-size:11px;font-weight:700;color:#555d73;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Pick parts to add</div>`:''}
-        <div style="max-height:50vh;overflow-y:auto">${rowsHtml}</div>
-        <button id="ex-add" style="width:100%;background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:12px;border-radius:9px;cursor:pointer;margin-top:12px">${items.length?'✓ Add selected parts':'✓ Done'}</button>`;
+      const renderRows = ()=>{
+        const rowsDiv = overlay.querySelector('#ex-rows');
+        if(!rowsDiv) return;
+        rowsDiv.innerHTML = working.map((row,i)=>{
+          const lineTotal = (Number(row.eachCost)||0) * (Number(row.quantity)||1);
+          return `
+          <div style="padding:11px;background:#0d0f14;border:1px solid ${row.pick?'#2a2f3f':'#1e2230'};border-radius:9px;margin-bottom:8px;opacity:${row.pick?'1':'0.5'}">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <input type="checkbox" data-ex-pick="${i}" ${row.pick?'checked':''} style="width:16px;height:16px;accent-color:#f59e0b;flex-shrink:0">
+              <input type="text" data-ex-desc="${i}" value="${(row.description||'').replace(/"/g,'&quot;')}" placeholder="Description"
+                style="flex:1;min-width:0;background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:7px 9px;color:#e2e4ea;font-size:13px">
+            </div>
+            <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:8px;align-items:center;padding-left:26px">
+              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px">Part #</span>
+              <input type="text" data-ex-partnum="${i}" value="${(row.partNumber||'').replace(/"/g,'&quot;')}" placeholder="—"
+                style="grid-column:2 / span 3;background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#9ca3af;font-size:12px;font-family:ui-monospace,monospace">
+              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px">Each</span>
+              <input type="number" step="0.01" min="0" data-ex-cost="${i}" value="${Number(row.eachCost||0).toFixed(2)}"
+                style="background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#C8102E;font-size:13px;font-weight:600;text-align:right;font-family:ui-monospace,monospace">
+              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px;text-align:center">×&nbsp;qty</span>
+              <input type="number" step="1" min="1" data-ex-qty="${i}" value="${row.quantity||1}"
+                style="background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#e2e4ea;font-size:13px;text-align:center;font-family:ui-monospace,monospace">
+              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px;text-align:right">Line</span>
+              <span data-ex-line="${i}" style="font-size:13px;font-weight:700;color:#fbbf24;text-align:right;padding:6px 9px;font-family:ui-monospace,monospace">$${lineTotal.toFixed(2)}</span>
+            </div>
+          </div>`;
+        }).join('');
+
+        // Wire up live updates
+        overlay.querySelectorAll('[data-ex-pick]').forEach(cb=>{
+          cb.onchange = (e)=>{
+            const i = +cb.dataset.exPick;
+            working[i].pick = cb.checked;
+            renderRows(); // re-render to update opacity + row bg
+            updateTotal();
+          };
+        });
+        overlay.querySelectorAll('[data-ex-desc]').forEach(inp=>{
+          inp.oninput = ()=>{ working[+inp.dataset.exDesc].description = inp.value; };
+        });
+        overlay.querySelectorAll('[data-ex-partnum]').forEach(inp=>{
+          inp.oninput = ()=>{ working[+inp.dataset.exPartnum].partNumber = inp.value; };
+        });
+        overlay.querySelectorAll('[data-ex-cost]').forEach(inp=>{
+          inp.oninput = ()=>{
+            const i = +inp.dataset.exCost;
+            working[i].eachCost = parseFloat(inp.value) || 0;
+            const lineEl = overlay.querySelector(`[data-ex-line="${i}"]`);
+            if(lineEl) lineEl.textContent = '$'+(working[i].eachCost * working[i].quantity).toFixed(2);
+            updateTotal();
+          };
+        });
+        overlay.querySelectorAll('[data-ex-qty]').forEach(inp=>{
+          inp.oninput = ()=>{
+            const i = +inp.dataset.exQty;
+            const q = parseInt(inp.value) || 1;
+            working[i].quantity = q > 0 ? q : 1;
+            const lineEl = overlay.querySelector(`[data-ex-line="${i}"]`);
+            if(lineEl) lineEl.textContent = '$'+(working[i].eachCost * working[i].quantity).toFixed(2);
+            updateTotal();
+          };
+        });
+      };
+
+      const updateTotal = ()=>{
+        const totalEl = overlay.querySelector('#ex-total');
+        if(!totalEl) return;
+        const total = working.filter(r=>r.pick).reduce((a,r)=>a + (Number(r.eachCost)||0) * (Number(r.quantity)||1), 0);
+        const pickedCount = working.filter(r=>r.pick).length;
+        totalEl.textContent = `${pickedCount} part${pickedCount!==1?'s':''} · $${total.toFixed(2)}`;
+      };
+
+      body.innerHTML = items.length ? `
+        <div style="font-size:11px;color:#8896a8;letter-spacing:.4px;line-height:1.5;margin-bottom:10px">
+          Each part's cost includes its share of tax. Edit any field below.
+        </div>
+        <div id="ex-rows"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;margin-top:4px">
+          <div style="font-size:11px;color:#555d73;text-transform:uppercase;letter-spacing:.6px">Selected total</div>
+          <div id="ex-total" style="font-size:15px;font-weight:700;color:#fbbf24;font-family:ui-monospace,monospace">—</div>
+        </div>
+        <button id="ex-add" style="width:100%;background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer;margin-top:10px">✓ Add selected parts</button>
+      ` : `
+        <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.5">
+          No auto parts detected in this receipt.<br>
+          <span style="color:#555d73;font-size:11px">You can still confirm — the receipt file is saved.</span>
+        </div>
+        <button id="ex-add" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">✓ Done</button>
+      `;
+
+      if(items.length){ renderRows(); updateTotal(); }
 
       overlay.querySelector('#ex-add').onclick=()=>{
-        const picked=items.filter((_,i)=>overlay.querySelector('#ex-pick-'+i)?.checked);
-        if(picked.length>0){
-          // Re-fetch vehicle in case user has navigated
+        const picked = working.filter(r=>r.pick);
+        if(picked.length > 0){
           const freshV = ST.vehicles.find(x=>x.id===vehicle.id);
           if(!freshV){
             toast('Vehicle no longer exists','err');
@@ -3879,12 +3995,12 @@ function renderDetail(c,v){
             return;
           }
           const newParts=[...(freshV.parts||[])];
-          picked.forEach(item=>{
+          picked.forEach(row=>{
             newParts.push({
-              name:item.description||'',
-              partNum:item.partNumber||'',
-              cost:parseFloat(item.cost)||0,
-              qty:1
+              name: row.description || '',
+              partNum: row.partNumber || '',
+              cost: parseFloat(row.eachCost) || 0,
+              qty: parseInt(row.quantity) || 1
             });
           });
           writeToCurrentVisit(freshV, 'parts', newParts);
@@ -3907,6 +4023,7 @@ function renderDetail(c,v){
       }
     });
   }
+
 
 
   function buildFrazerTab(el){

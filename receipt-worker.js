@@ -26,30 +26,36 @@ const MODEL = 'claude-haiku-4-5-20251001';
 const SYSTEM_PROMPT = `You are an auto parts receipt/invoice extractor. Your ONLY job: find real physical auto parts that were purchased.
 
 CRITICAL RULES:
-1. Output ONLY a JSON array. No prose. No markdown fences. No explanation.
-2. Shape: [{"description": "string", "cost": number, "partNumber": "string"}]
-3. EXCLUDE everything that is NOT a physical part being purchased, including:
-   - Sales tax, county tax, state tax, local tax, VAT, GST
+1. Output ONLY a JSON object with two keys. No prose. No markdown fences. No explanation.
+2. Shape: {"items": [{"description": "string", "eachCost": number, "quantity": number, "partNumber": "string"}], "tax": number}
+3. For each line item:
+   - eachCost: the PER-UNIT price BEFORE tax (if receipt shows "each" and "qty", use each; if receipt only shows a line total, compute each = line_total / quantity)
+   - quantity: the quantity for that line (default 1 if not shown)
+   - partNumber: include ONLY if clearly shown on that line, otherwise ""
+   - description: exactly as written on the receipt, trimmed of clutter (leading stars, SKU codes in parens, duplicate spaces)
+4. tax: total sales tax amount on the receipt (sum of all tax lines). Use 0 if no tax shown.
+5. EXCLUDE from items[] everything that is NOT a physical part being purchased:
+   - Sales tax (capture in the separate tax field instead)
    - Shipping, delivery, handling, freight fees
    - Labor charges, shop fees, diagnostic fees, disposal fees, hazmat fees
    - Core deposits, core charges, core refunds (CORE / CORE CHG / CORE DEP / CORE FEE) - these are a deposit on the OLD part, not a new purchase
    - Warranty fees, insurance, extended service plans, protection plans
-   - Rounding adjustments, discounts, coupons, promos (show only the discounted line, not the discount)
    - Subtotals, totals, balance due, payments, change, tips
    - Restock fees, enviro fees, shop supplies
    - Customer info, vendor info, addresses, phone numbers, dates
-4. For each part, use the cost BEFORE tax. If "each" and "qty" are shown, use each × qty.
-5. Use the description exactly as written on the receipt, but trim receipt clutter (leading stars *, trailing SKU codes in parens, duplicate spaces).
-6. partNumber: include ONLY if the receipt clearly shows one on that line. Otherwise empty string "".
-7. If the document shows no identifiable parts (blurry, not a receipt, unreadable), return exactly [].
+6. If the document shows no identifiable parts, return {"items": [], "tax": 0}.
 
 IMPORTANT for PDFs: Process ONLY the first page. Even if multi-page, extract only from page 1.
 
-Example valid output for a receipt with 2 parts + tax + core:
-[{"description":"BRAKE PAD SET FRONT","cost":89.99,"partNumber":"D1234"},{"description":"BRAKE ROTOR FRONT","cost":64.50,"partNumber":"BR9012"}]
+Example — receipt with 2 parts (qty 1 each), shipping, tax:
+  BRAKE PAD SET FRONT  qty 1  $89.99
+  BRAKE ROTOR FRONT    qty 2  $64.50 each (line total $129.00)
+  Shipping:            $5.00
+  Tax:                 $14.85
+Output:
+{"items":[{"description":"BRAKE PAD SET FRONT","eachCost":89.99,"quantity":1,"partNumber":"D1234"},{"description":"BRAKE ROTOR FRONT","eachCost":64.50,"quantity":2,"partNumber":"BR9012"}],"tax":14.85}
 
-Example valid output for a non-parts document:
-[]`;
+Example — non-parts document: {"items": [], "tax": 0}`;
 
 export default {
   async fetch(request, env, ctx) {
@@ -132,8 +138,8 @@ async function handleReceipt(request, env) {
           {
             type: 'text',
             text: isPdf
-              ? 'Extract auto parts from page 1 of this PDF invoice. Return ONLY the JSON array.'
-              : 'Extract auto parts from this receipt image. Return ONLY the JSON array.'
+              ? 'Extract auto parts from page 1 of this PDF invoice. Return ONLY a JSON object with {"items": [...], "tax": number}.'
+              : 'Extract auto parts from this receipt image. Return ONLY a JSON object with {"items": [...], "tax": number}.'
           }
         ]
       }
@@ -184,23 +190,45 @@ async function handleReceipt(request, env) {
     parsed = JSON.parse(cleaned);
   } catch (e) {
     console.error('Claude returned non-JSON:', rawText.slice(0, 500));
-    return json({ items: '[]', documentType: docType, debug_raw: rawText.slice(0, 300) });
+    return json({ items: '[]', tax: 0, documentType: docType, debug_raw: rawText.slice(0, 300) });
   }
 
-  if (!Array.isArray(parsed)) {
-    return json({ items: '[]', documentType: docType, debug_raw: 'Not an array' });
+  // New shape: {items: [...], tax: N}. Fall back to legacy if Claude returned bare array.
+  let itemsRaw, tax;
+  if (Array.isArray(parsed)) {
+    // Legacy response — Claude gave a bare array
+    itemsRaw = parsed;
+    tax = 0;
+  } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
+    itemsRaw = parsed.items;
+    tax = typeof parsed.tax === 'number' ? parsed.tax : parseFloat(parsed.tax) || 0;
+  } else {
+    return json({ items: '[]', tax: 0, documentType: docType, debug_raw: 'Unexpected shape' });
   }
 
-  const items = parsed
+  const items = itemsRaw
     .filter(item => item && typeof item === 'object' && item.description)
-    .map(item => ({
-      description: String(item.description || '').trim(),
-      cost: typeof item.cost === 'number' ? item.cost : parseFloat(item.cost) || 0,
-      partNumber: String(item.partNumber || item.part_number || '').trim()
-    }))
+    .map(item => {
+      // Support both new shape (eachCost+quantity) and legacy (cost only)
+      const qty = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 1;
+      const eachCost = typeof item.eachCost === 'number'
+        ? item.eachCost
+        : parseFloat(item.eachCost) ||
+          (typeof item.cost === 'number' ? item.cost : parseFloat(item.cost) || 0);
+      return {
+        description: String(item.description || '').trim(),
+        eachCost,
+        quantity: qty > 0 ? qty : 1,
+        partNumber: String(item.partNumber || item.part_number || '').trim()
+      };
+    })
     .filter(item => item.description.length > 0);
 
-  return json({ items: JSON.stringify(items), documentType: docType });
+  return json({
+    items: JSON.stringify(items),
+    tax: tax || 0,
+    documentType: docType
+  });
 }
 
 function corsHeaders() {
