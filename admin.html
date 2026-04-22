@@ -4495,76 +4495,142 @@ function renderApprovals(c){
   setTopbar('Concern approvals','');
   const count=pendingConcernCount();
 
-  // Collect all vehicles with concerns
+  // Collect all vehicles with any concerns
   const withConcerns=ST.vehicles.filter(v=>(v.concerns||[]).length>0);
-  const withPending=withConcerns.filter(v=>(v.concerns||[]).some(c=>c.status==='pending'));
+
+  // Split into two groups:
+  //   needsApproval: has >=1 pending concern
+  //   allReviewed:   every concern already reviewed
+  const needsApproval=withConcerns.filter(v=>(v.concerns||[]).some(c=>c.status==='pending'));
+  const allReviewed=withConcerns.filter(v=>!(v.concerns||[]).some(c=>c.status==='pending'));
+
+  // Order vehicles within each group
+  // Needs approval: oldest pending concern first
+  needsApproval.sort((a,b)=>{
+    const aOldestPending=Math.min(...(a.concerns||[]).filter(c=>c.status==='pending').map(c=>c.createdAt||0));
+    const bOldestPending=Math.min(...(b.concerns||[]).filter(c=>c.status==='pending').map(c=>c.createdAt||0));
+    return aOldestPending-bOldestPending;
+  });
+  // Reviewed: most recent reviewed action first
+  allReviewed.sort((a,b)=>{
+    const aLatest=Math.max(...(a.concerns||[]).map(c=>c.reviewedAt||c.createdAt||0));
+    const bLatest=Math.max(...(b.concerns||[]).map(c=>c.reviewedAt||c.createdAt||0));
+    return bLatest-aLatest;
+  });
 
   let html='';
 
-  if(withPending.length){
+  // Empty state
+  if(!withConcerns.length){
+    html+=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">No concerns to review</div><div class="empty-sub">Customer concerns submitted by sales will appear here</div></div>`;
+    c.innerHTML=html;
+    return;
+  }
+
+  // Top summary banner (only if there's anything pending)
+  if(count>0){
     html+=`<div style="background:#1a0e10;border:1px solid #C8102E44;border-radius:12px;padding:13px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
       <span style="font-size:22px">⚠️</span>
       <div style="font-size:14px;font-weight:600;color:#fca5a5">${count} concern${count!==1?'s':''} awaiting your approval</div>
     </div>`;
   }
 
-  withConcerns.forEach(v=>{
-    const concerns=v.concerns||[];
-    const hasPending=concerns.some(c=>c.status==='pending');
-    html+=`<div style="background:#111318;border:1px solid ${hasPending?'#C8102E44':'#1e2230'};border-radius:12px;margin-bottom:14px;overflow:hidden">
-      <div style="padding:12px 16px;border-bottom:1px solid #1e2230;display:flex;align-items:center;gap:10px">
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:600;color:#fff">${v.year||''} ${v.make||''} ${v.model||''}</div>
-          <div style="font-size:11px;color:#555d73">#${v.stockNumber||'—'} · ${concerns.length} concern${concerns.length!==1?'s':''}</div>
+  // Render a single concern row (inner, used inside vehicle cards)
+  function concernRow(con, vId){
+    const isPending=con.status==='pending';
+    return `<div style="padding:10px 0;border-bottom:1px solid #1e2230">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:#e2e4ea;font-weight:500;margin-bottom:3px;line-height:1.5">${con.description}</div>
+          <div style="font-size:11px;color:#555d73">By ${con.addedBy} · ${fmtD(con.createdAt)}${con.reviewedAt?` · reviewed ${fmtD(con.reviewedAt)}`:''}</div>
+          ${con.managerNote?`<div style="font-size:11px;color:#9ca3af;margin-top:4px;font-style:italic">Note: ${con.managerNote}</div>`:''}
         </div>
-        ${hasPending?`<span style="background:#C8102E;color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:8px">Action needed</span>`:'<span style="background:#065f46;color:#4ade80;font-size:10px;font-weight:700;padding:3px 9px;border-radius:8px">All reviewed</span>'}
-      </div>
-      <div style="padding:8px 16px 14px">
-        ${concerns.map(con=>`
-          <div style="padding:10px 0;border-bottom:1px solid #1e2230">
-            <div style="display:flex;align-items:flex-start;gap:10px">
-              <div style="flex:1">
-                <div style="font-size:13px;color:#e2e4ea;font-weight:500;margin-bottom:3px">${con.description}</div>
-                <div style="font-size:11px;color:#555d73">By ${con.addedBy} · ${fmtD(con.createdAt)}</div>
-                ${con.managerNote?`<div style="font-size:11px;color:#9ca3af;margin-top:4px;font-style:italic">Note: ${con.managerNote}</div>`:''}
-              </div>
-              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
-                ${con.status==='pending'?`
-                  <div style="display:flex;gap:5px">
-                    <button data-approve="${v.id}|${con.id}" style="background:#065f46;border:none;color:#4ade80;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">✓ Approve</button>
-                    <button data-reject="${v.id}|${con.id}" style="background:#7f1d1d;border:none;color:#fca5a5;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">✕ Reject</button>
-                  </div>`:''}
-                ${con.status==='pending'?`<button data-approve-assign="${v.id}|${con.id}" style="background:#1e3a5f;border:none;color:#93c5fd;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;white-space:nowrap">✓ Approve + assign mechanic</button>`:''}
-                ${con.status==='approved'?`<span style="background:#0a1f0f;color:#4ade80;border:1px solid #4ade8033;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px">✓ Approved${con.assignedTo?' → '+getMMAP()[con.assignedTo]?.name:''}</span>`:''}
-                ${con.status==='rejected'?`<span style="background:#1c0000;color:#f87171;border:1px solid #f8717133;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px">✕ Rejected</span>`:''}
-              </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
+          ${isPending?`
+            <div style="display:flex;gap:5px">
+              <button data-approve="${vId}|${con.id}" style="background:#065f46;border:none;color:#4ade80;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">✓ Approve</button>
+              <button data-reject="${vId}|${con.id}" style="background:#7f1d1d;border:none;color:#fca5a5;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">✕ Reject</button>
             </div>
-          </div>`).join('')}
+            <button data-approve-assign="${vId}|${con.id}" style="background:#1e3a5f;border:none;color:#93c5fd;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;white-space:nowrap">✓ Approve + assign mechanic</button>
+          `:''}
+          ${con.status==='approved'?`<span style="background:#0a1f0f;color:#4ade80;border:1px solid #4ade8033;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px">✓ Approved${con.assignedTo?' → '+(getMMAP()[con.assignedTo]?.name||''):''}</span>`:''}
+          ${con.status==='rejected'?`<span style="background:#1c0000;color:#f87171;border:1px solid #f8717133;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px">✕ Rejected</span>`:''}
+        </div>
       </div>
     </div>`;
-  });
+  }
 
-  if(!withConcerns.length){
-    html+=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">No concerns to review</div><div class="empty-sub">Customer concerns submitted by sales will appear here</div></div>`;
+  // Render one vehicle card, with concerns ordered per the section's rules
+  function vehicleCard(v, section){
+    const concerns=v.concerns||[];
+    const pending=concerns
+      .filter(c=>c.status==='pending')
+      .sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); // oldest first
+    const reviewed=concerns
+      .filter(c=>c.status!=='pending')
+      .sort((a,b)=>(b.reviewedAt||b.createdAt||0)-(a.reviewedAt||a.createdAt||0)); // newest first
+
+    // Section-specific concern ordering
+    let orderedConcerns;
+    let borderColor;
+    let badge;
+    if(section==='pending'){
+      // Pending block goes first (oldest first), then reviewed siblings (newest first)
+      orderedConcerns=[...pending, ...reviewed];
+      borderColor='#C8102E44';
+      badge=`<span style="background:#C8102E;color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:8px">${pending.length} pending</span>`;
+    } else {
+      orderedConcerns=reviewed; // all reviewed, newest first
+      borderColor='#1e2230';
+      badge=`<span style="background:#065f46;color:#4ade80;font-size:10px;font-weight:700;padding:3px 9px;border-radius:8px">All reviewed</span>`;
+    }
+
+    return `<div style="background:#111318;border:1px solid ${borderColor};border-radius:12px;margin-bottom:14px;overflow:hidden">
+      <div style="padding:12px 16px;border-bottom:1px solid #1e2230;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='concerns';render()">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.year||''} ${v.make||''} ${v.model||''}</div>
+          <div style="font-size:11px;color:#555d73">#${v.stockNumber||'—'} · ${concerns.length} concern${concerns.length!==1?'s':''} · tap to open →</div>
+        </div>
+        ${badge}
+      </div>
+      <div style="padding:8px 16px 14px">
+        ${orderedConcerns.map(con=>concernRow(con, v.id)).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ═══ Section 1: Needs approval ═══
+  if(needsApproval.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:#f87171;letter-spacing:1px;margin:0 0 10px;text-transform:uppercase">🔴 Needs approval · ${needsApproval.length} vehicle${needsApproval.length!==1?'s':''} · oldest first</div>`;
+    needsApproval.forEach(v=>{ html += vehicleCard(v, 'pending'); });
+  }
+
+  // ═══ Section 2: Reviewed ═══
+  if(allReviewed.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:#555d73;letter-spacing:1px;margin:${needsApproval.length?'22px':'0'} 0 10px;text-transform:uppercase">✓ Reviewed · ${allReviewed.length} vehicle${allReviewed.length!==1?'s':''} · newest first</div>`;
+    allReviewed.forEach(v=>{ html += vehicleCard(v, 'reviewed'); });
   }
 
   c.innerHTML=html;
 
   c.querySelectorAll('[data-approve]').forEach(btn=>{
-    btn.onclick=()=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
       const [vid,cid]=btn.dataset.approve.split('|');
       updateConcern(vid,cid,{status:'approved'});
     };
   });
   c.querySelectorAll('[data-reject]').forEach(btn=>{
-    btn.onclick=()=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
       const [vid,cid]=btn.dataset.reject.split('|');
       const note=prompt('Reason for rejection (optional):');
       updateConcern(vid,cid,{status:'rejected',managerNote:note||''});
     };
   });
   c.querySelectorAll('[data-approve-assign]').forEach(btn=>{
-    btn.onclick=()=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
       const [vid,cid]=btn.dataset.approveAssign.split('|');
       openAssignConcernModal(vid,cid);
     };
