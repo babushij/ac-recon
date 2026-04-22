@@ -467,7 +467,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- heic2any loaded lazily when needed (iOS HEIC→JPEG conversion) -->
 </head>
 <body>
 
@@ -905,15 +905,60 @@ function extFromMime(mime){
 // correct, grayscale enhance, grayscale PDF output
 // ═══════════════════════════════════════════════
 
+// Lazy-load heic2any (iOS HEIC/HEIF → JPEG conversion). Cached after first load.
+let _heic2anyPromise = null;
+function loadHeic2Any(){
+  if(window.heic2any) return Promise.resolve(window.heic2any);
+  if(_heic2anyPromise) return _heic2anyPromise;
+  _heic2anyPromise = new Promise((resolve, reject)=>{
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    script.onload = ()=>{
+      if(window.heic2any) resolve(window.heic2any);
+      else reject(new Error('heic2any loaded but not on window'));
+    };
+    script.onerror = ()=>reject(new Error('Failed to load heic2any from CDN'));
+    document.head.appendChild(script);
+  });
+  return _heic2anyPromise;
+}
+
+// Detect if a File is HEIC/HEIF (iPhone default camera format)
+function isHeicFile(file){
+  if(!file) return false;
+  const name = (file.name||'').toLowerCase();
+  const type = (file.type||'').toLowerCase();
+  return type === 'image/heic' || type === 'image/heif' ||
+         name.endsWith('.heic') || name.endsWith('.heif');
+}
+
+// Convert HEIC file to a JPEG blob using heic2any
+async function heicToJpegBlob(file){
+  const heic2any = await loadHeic2Any();
+  const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+  // heic2any returns a Blob (single-image HEIC) or Blob[] (multi-image)
+  return Array.isArray(result) ? result[0] : result;
+}
+
 // Load an image file (Blob/File) into an HTMLImageElement-like object (has width/height,
 // drawable onto a canvas). Handles iOS HEIC, large files, and the fallback to <img>.
 async function loadFileAsImage(file){
-  // Strategy 1: createImageBitmap — fastest, best HEIC support on iOS 16+
+  // Pre-step: if HEIC, convert to JPEG first
+  let workingFile = file;
+  if(isHeicFile(file)){
+    try {
+      workingFile = await heicToJpegBlob(file);
+      console.log('[Scanner] HEIC converted to JPEG:', Math.round(workingFile.size/1024) + 'KB');
+    } catch(e){
+      console.error('HEIC conversion failed:', e);
+      throw new Error('HEIC conversion failed: ' + e.message);
+    }
+  }
+
+  // Strategy 1: createImageBitmap — fastest
   if(typeof createImageBitmap === 'function'){
     try {
-      const bitmap = await createImageBitmap(file);
-      // Return a canvas-wrapped ImageBitmap that behaves like an HTMLImageElement
-      // for the drawImage consumer
+      const bitmap = await createImageBitmap(workingFile);
       return bitmap;
     } catch(e){
       console.warn('createImageBitmap failed, falling back:', e.message);
@@ -923,7 +968,7 @@ async function loadFileAsImage(file){
   // Strategy 2: blob URL into <img>
   let objectUrl = null;
   try {
-    objectUrl = URL.createObjectURL(file);
+    objectUrl = URL.createObjectURL(workingFile);
     const img = new Image();
     await new Promise((res, rej)=>{
       const timer = setTimeout(()=>rej(new Error('Image decode timeout (10s)')), 10000);
@@ -938,276 +983,8 @@ async function loadFileAsImage(file){
   }
 }
 
-// Downscale to a working size for edge detection (faster + more robust)
-function toWorkingCanvas(img, maxDim){
-  const maxD = maxDim || 800;
-  const ratio = Math.min(1, maxD / Math.max(img.width, img.height));
-  const w = Math.round(img.width * ratio);
-  const h = Math.round(img.height * ratio);
-  const cvs = document.createElement('canvas');
-  cvs.width = w; cvs.height = h;
-  const ctx = cvs.getContext('2d');
-  ctx.drawImage(img, 0, 0, w, h);
-  return {canvas: cvs, ctx, scale: ratio};
-}
+// (scanner pipeline removed — replaced by direct-to-AI flow)
 
-// Simple grayscale buffer from canvas
-function grayFromCanvas(canvas){
-  const ctx = canvas.getContext('2d');
-  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = img.data;
-  const gray = new Uint8ClampedArray(canvas.width * canvas.height);
-  for(let i = 0, j = 0; i < data.length; i += 4, j++){
-    gray[j] = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114) | 0;
-  }
-  return {data: gray, w: canvas.width, h: canvas.height};
-}
-
-// Sobel edge magnitude
-function sobel(gray){
-  const {data, w, h} = gray;
-  const out = new Uint8ClampedArray(w * h);
-  for(let y = 1; y < h - 1; y++){
-    for(let x = 1; x < w - 1; x++){
-      const i = y * w + x;
-      const tl = data[i-w-1], t = data[i-w], tr = data[i-w+1];
-      const l  = data[i-1],               r  = data[i+1];
-      const bl = data[i+w-1], b = data[i+w], br = data[i+w+1];
-      const gx = -tl - 2*l - bl + tr + 2*r + br;
-      const gy = -tl - 2*t - tr + bl + 2*b + br;
-      const mag = Math.sqrt(gx*gx + gy*gy);
-      out[i] = mag > 255 ? 255 : mag;
-    }
-  }
-  return {data: out, w, h};
-}
-
-// Find the largest quadrilateral in the edge map.
-// Heuristic: find the outermost strong edges on each side of the image
-// and return 4 corner points. Returns null if detection is too weak.
-function detectQuadrilateral(edges, threshold){
-  const {data, w, h} = edges;
-  const t = threshold || 60;
-
-  // Find outermost edge pixels per column (top and bottom) and per row (left and right)
-  const topEdge = new Array(w).fill(-1);
-  const botEdge = new Array(w).fill(-1);
-  const leftEdge = new Array(h).fill(-1);
-  const rightEdge = new Array(h).fill(-1);
-
-  for(let x = 0; x < w; x++){
-    for(let y = 0; y < h; y++){
-      if(data[y*w + x] > t){ topEdge[x] = y; break; }
-    }
-    for(let y = h - 1; y >= 0; y--){
-      if(data[y*w + x] > t){ botEdge[x] = y; break; }
-    }
-  }
-  for(let y = 0; y < h; y++){
-    for(let x = 0; x < w; x++){
-      if(data[y*w + x] > t){ leftEdge[y] = x; break; }
-    }
-    for(let x = w - 1; x >= 0; x--){
-      if(data[y*w + x] > t){ rightEdge[y] = x; break; }
-    }
-  }
-
-  // Estimate corners as the intersection regions between adjacent side edges.
-  // Simple approach: median of the outermost points in each side's "near the corner" region.
-  const cornerFromSide = (side1, side2, range, getXFromSide1, getYFromSide1, getXFromSide2, getYFromSide2)=>{
-    // side1 is indexed by x (or y), side2 by the other; pick points near their endpoints
-    const pts = [];
-    for(let i = 0; i < range; i++){
-      if(side1[i] >= 0) pts.push([getXFromSide1(i, side1[i]), getYFromSide1(i, side1[i])]);
-    }
-    if(!pts.length) return null;
-    pts.sort((a,b)=>a[0]+a[1]-b[0]-b[1]);
-    return pts[0]; // topleft-most
-  };
-
-  // Simplified corner-finding: use min/max x,y of all edge points above threshold,
-  // then refine corners by scanning nearby.
-  // For a rectangle-ish paper, corners are approximately:
-  //   TL: min(x+y), TR: max(x-y), BR: max(x+y), BL: min(x-y)
-  let tlSum = Infinity, trDiff = -Infinity, brSum = -Infinity, blDiff = Infinity;
-  let tl = null, tr = null, br = null, bl = null;
-  let edgeCount = 0;
-  for(let y = 0; y < h; y++){
-    for(let x = 0; x < w; x++){
-      if(data[y*w + x] <= t) continue;
-      edgeCount++;
-      const sum = x + y, diff = x - y;
-      if(sum < tlSum){ tlSum = sum; tl = [x, y]; }
-      if(diff > trDiff){ trDiff = diff; tr = [x, y]; }
-      if(sum > brSum){ brSum = sum; br = [x, y]; }
-      if(diff < blDiff){ blDiff = diff; bl = [x, y]; }
-    }
-  }
-
-  if(!tl || !tr || !br || !bl || edgeCount < 100) return null;
-
-  // Sanity check: corners should span most of the image
-  const spanX = Math.max(tr[0], br[0]) - Math.min(tl[0], bl[0]);
-  const spanY = Math.max(bl[1], br[1]) - Math.min(tl[1], tr[1]);
-  if(spanX < w * 0.4 || spanY < h * 0.4) return null;
-
-  return { tl, tr, br, bl };
-}
-
-// Apply a perspective warp given 4 corners from the source image
-// Output is an axis-aligned rectangle of the given dimensions
-function perspectiveWarp(srcCanvas, corners, outW, outH){
-  const src = srcCanvas.getContext('2d').getImageData(0, 0, srcCanvas.width, srcCanvas.height);
-  const out = document.createElement('canvas');
-  out.width = outW; out.height = outH;
-  const outCtx = out.getContext('2d');
-  const outImg = outCtx.createImageData(outW, outH);
-
-  const {tl, tr, br, bl} = corners;
-
-  // Bilinear lerp of 4 corners using normalized (u,v) coords
-  for(let y = 0; y < outH; y++){
-    const v = y / (outH - 1);
-    // Interp top and bottom edges
-    const topX = tl[0] + (tr[0] - tl[0]) * 0; // filled per-x below
-    for(let x = 0; x < outW; x++){
-      const u = x / (outW - 1);
-      // Bilinear interp corners → source x,y
-      const sx = (1-u)*(1-v)*tl[0] + u*(1-v)*tr[0] + u*v*br[0] + (1-u)*v*bl[0];
-      const sy = (1-u)*(1-v)*tl[1] + u*(1-v)*tr[1] + u*v*br[1] + (1-u)*v*bl[1];
-      const sxi = Math.max(0, Math.min(src.width-1, Math.round(sx)));
-      const syi = Math.max(0, Math.min(src.height-1, Math.round(sy)));
-      const srcIdx = (syi * src.width + sxi) * 4;
-      const outIdx = (y * outW + x) * 4;
-      outImg.data[outIdx]   = src.data[srcIdx];
-      outImg.data[outIdx+1] = src.data[srcIdx+1];
-      outImg.data[outIdx+2] = src.data[srcIdx+2];
-      outImg.data[outIdx+3] = 255;
-    }
-  }
-  outCtx.putImageData(outImg, 0, 0);
-  return out;
-}
-
-// Convert a canvas to enhanced grayscale with contrast + mild local normalization
-function enhanceGrayscale(srcCanvas){
-  const w = srcCanvas.width, h = srcCanvas.height;
-  const ctx = srcCanvas.getContext('2d');
-  const img = ctx.getImageData(0, 0, w, h);
-  const data = img.data;
-  // 1) Convert to gray
-  const gray = new Uint8ClampedArray(w * h);
-  for(let i = 0, j = 0; i < data.length; i += 4, j++){
-    gray[j] = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114) | 0;
-  }
-  // 2) Estimate overall brightness (sample median via histogram)
-  const hist = new Uint32Array(256);
-  for(let i = 0; i < gray.length; i++) hist[gray[i]]++;
-  let acc = 0, median = 128;
-  for(let i = 0; i < 256; i++){ acc += hist[i]; if(acc >= gray.length / 2){ median = i; break; } }
-  // 3) Stretch contrast — paper should be bright, ink should be dark
-  const blackPt = Math.max(0, median - 80);
-  const whitePt = Math.min(255, median + 80);
-  const range = Math.max(1, whitePt - blackPt);
-  for(let i = 0, j = 0; i < data.length; i += 4, j++){
-    let v = ((gray[j] - blackPt) / range) * 255;
-    if(v < 0) v = 0; else if(v > 255) v = 255;
-    data[i] = data[i+1] = data[i+2] = v | 0;
-    data[i+3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
-  return srcCanvas;
-}
-
-// Main scanner pipeline — takes File or HTMLImageElement,
-// returns an object { processed, previewDataUrl, detected }
-async function processDocumentScan(fileOrImage, opts){
-  opts = opts || {};
-  const targetDpi = opts.dpi || 300;
-  const isDrawable = fileOrImage instanceof HTMLImageElement ||
-                     (typeof ImageBitmap !== 'undefined' && fileOrImage instanceof ImageBitmap);
-  const img = isDrawable
-    ? fileOrImage
-    : await loadFileAsImage(fileOrImage);
-
-  // 1) Work on a downscaled copy for edge detection
-  const {canvas: workCanvas, scale} = toWorkingCanvas(img, 800);
-  const gray = grayFromCanvas(workCanvas);
-  const edges = sobel(gray);
-  const detected = detectQuadrilateral(edges, 60);
-
-  // 2) Draw full-res source for perspective warp
-  const srcCanvas = document.createElement('canvas');
-  srcCanvas.width = img.width;
-  srcCanvas.height = img.height;
-  srcCanvas.getContext('2d').drawImage(img, 0, 0);
-
-  let outputCanvas;
-  if(detected){
-    // Scale corners back up to full-res image
-    const c = {
-      tl: [detected.tl[0]/scale, detected.tl[1]/scale],
-      tr: [detected.tr[0]/scale, detected.tr[1]/scale],
-      br: [detected.br[0]/scale, detected.br[1]/scale],
-      bl: [detected.bl[0]/scale, detected.bl[1]/scale]
-    };
-    // Compute output dims from detected quad (preserve aspect)
-    const widthTop = Math.hypot(c.tr[0]-c.tl[0], c.tr[1]-c.tl[1]);
-    const widthBot = Math.hypot(c.br[0]-c.bl[0], c.br[1]-c.bl[1]);
-    const heightL = Math.hypot(c.bl[0]-c.tl[0], c.bl[1]-c.tl[1]);
-    const heightR = Math.hypot(c.br[0]-c.tr[0], c.br[1]-c.tr[1]);
-    let outW = Math.round(Math.max(widthTop, widthBot));
-    let outH = Math.round(Math.max(heightL, heightR));
-    // Cap at 300 DPI letter-ish if way too big (prevent OOM on phones)
-    const maxSide = Math.max(2550, 3300);
-    if(Math.max(outW, outH) > maxSide * 1.5){
-      const s = (maxSide * 1.5) / Math.max(outW, outH);
-      outW = Math.round(outW * s);
-      outH = Math.round(outH * s);
-    }
-    outputCanvas = perspectiveWarp(srcCanvas, c, outW, outH);
-  } else {
-    // Fallback: use full image
-    outputCanvas = srcCanvas;
-  }
-
-  // 3) Enhance to grayscale
-  enhanceGrayscale(outputCanvas);
-
-  // 4) Build JPEG data URL + return
-  const jpegDataUrl = outputCanvas.toDataURL('image/jpeg', 0.85);
-
-  return {
-    canvas: outputCanvas,
-    dataUrl: jpegDataUrl,
-    detected: !!detected,
-    width: outputCanvas.width,
-    height: outputCanvas.height
-  };
-}
-
-// Build a PDF blob from a scanned canvas at the given DPI.
-// Aspect ratio is preserved (page size = canvas size / DPI inches).
-function buildScanPdf(canvas, dpi){
-  if(typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF){
-    throw new Error('jsPDF not loaded');
-  }
-  const {jsPDF} = window.jspdf;
-  const d = dpi || 300;
-  // Page dimensions in points (1 pt = 1/72 inch)
-  const pageW = (canvas.width / d) * 72;
-  const pageH = (canvas.height / d) * 72;
-  const orientation = pageW > pageH ? 'landscape' : 'portrait';
-  const pdf = new jsPDF({
-    orientation,
-    unit: 'pt',
-    format: [pageW, pageH],
-    compress: true
-  });
-  const imgData = canvas.toDataURL('image/jpeg', 0.8);
-  pdf.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
-  return pdf.output('blob');
-}
 
 async function blobToDataUrl(blob){
   return new Promise((res, rej)=>{
@@ -3158,9 +2935,11 @@ function renderDetail(c,v){
   // ══════════════════════════════════════════════
   // RECEIPT SCANNER (AI)
   // ══════════════════════════════════════════════
-  async function scanReceiptWithAI(imgB64){
-    const match=imgB64.match(/^data:([^;]+);base64,(.+)$/);
-    if(!match){console.error('Receipt AI: image not data URL');return null;}
+  // Extract auto parts from a receipt (image OR PDF) via the Worker.
+  // Accepts a data URL string — the function handles image/pdf detection.
+  async function scanReceiptWithAI(dataUrl){
+    const match=dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if(!match){console.error('Receipt AI: input not a data URL');return null;}
     const mimeType=match[1], b64data=match[2];
     // Prefer dedicated receipt worker if configured, else fall back to old /receipt
     const useNewWorker = AI_PROXY_RECEIPT && !AI_PROXY_RECEIPT.includes('__RECEIPT_WORKER_URL_HERE__');
@@ -3170,7 +2949,8 @@ function renderDetail(c,v){
       const resp=await fetch(endpoint,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({imageData:b64data,mediaType:mimeType})
+        // Send as documentData (v2 Worker) — legacy Worker accepts imageData too via the docData ?? fallback
+        body:JSON.stringify({documentData:b64data,imageData:b64data,mediaType:mimeType})
       });
       if(!resp.ok){
         const errText = await resp.text().catch(()=>'');
@@ -3917,265 +3697,96 @@ function renderDetail(c,v){
   }
 
   function buildReceiptsTab(el){
-    const camInput=document.createElement('input');
-    camInput.type='file';camInput.accept='image/*,application/pdf';camInput.capture='environment';camInput.multiple=true;camInput.style.display='none';
-    camInput.onchange=e=>{readReceipts(e.target.files)};
-    const libInput=document.createElement('input');
-    libInput.type='file';libInput.accept='image/*,application/pdf';libInput.multiple=true;libInput.style.display='none';
-    libInput.onchange=e=>{readReceipts(e.target.files)};
+    // Single hidden file input — accepts images and PDFs; no camera capture attribute
+    // so the native picker lets user choose camera OR library (iOS + Android default)
+    const fileInput=document.createElement('input');
+    fileInput.type='file';
+    fileInput.accept='image/*,application/pdf';
+    fileInput.multiple=false; // one at a time, because extraction modal blocks UI per-file
+    fileInput.style.display='none';
+    fileInput.onchange=e=>{
+      const f = e.target.files && e.target.files[0];
+      if(f) handleReceiptFile(f);
+      fileInput.value=''; // allow re-picking same file
+    };
+    el.appendChild(fileInput);
 
-    // Scanner inputs (image-only, one file at a time)
-    const scanCamInput=document.createElement('input');
-    scanCamInput.type='file';scanCamInput.accept='image/*';scanCamInput.capture='environment';scanCamInput.style.display='none';
-    scanCamInput.onchange=e=>{const f=e.target.files&&e.target.files[0]; if(f) startDocumentScan(f); scanCamInput.value='';};
-    const scanLibInput=document.createElement('input');
-    scanLibInput.type='file';scanLibInput.accept='image/*';scanLibInput.style.display='none';
-    scanLibInput.onchange=e=>{const f=e.target.files&&e.target.files[0]; if(f) startDocumentScan(f); scanLibInput.value='';};
+    // MAIN FLOW: upload to Storage → show modal → AI extract → confirm parts → done
+    async function handleReceiptFile(file){
+      const fileName = file.name || ('receipt.' + (file.type.includes('pdf') ? 'pdf' : 'jpg'));
+      const isPdf = file.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+      const isImage = !isPdf && (file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(fileName));
 
-    el.appendChild(camInput);el.appendChild(libInput);
-    el.appendChild(scanCamInput);el.appendChild(scanLibInput);
+      if(!isPdf && !isImage){
+        toast('Unsupported file type — use JPG, PNG, HEIC, or PDF','err');
+        return;
+      }
 
-    function readReceipts(files){
-      Array.from(files).forEach(async file=>{
-        try{
-          const isPdf = file.type==='application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
-          if(isPdf){
-            // Try upload to Storage first; fall back to inline data URL
-            if(storage){
-              try {
-                const path = `shops/automotive_connection/vehicles/${v.id}/receipts/${uid()}.pdf`;
-                const obj = await uploadToStorage(file, path);
-                addReceipt({...obj, name:file.name, date:Date.now()});
-                return;
-              } catch(upErr){
-                console.warn('Receipt PDF upload failed, using inline:', upErr);
-              }
-            }
-            const rd=new FileReader();
-            rd.onload=()=>addReceipt({name:file.name,data:rd.result,date:Date.now()});
-            rd.readAsDataURL(file);
-            return;
-          }
-          // For images, compress to 1200px wide JPEG at 80% quality
-          const compressedDataUrl=await compressImage(file,1200,0.8);
-          // Upload compressed JPEG to Storage if available
-          if(storage){
+      toast('Uploading receipt…');
+      try {
+        // 1) Get the bytes we'll save (handle HEIC conversion + image compression)
+        let uploadBlob;
+        let uploadMime;
+        let uploadExt;
+        let aiDataUrl; // data URL we'll send to AI extraction
+
+        if(isPdf){
+          uploadBlob = file;
+          uploadMime = 'application/pdf';
+          uploadExt = 'pdf';
+          aiDataUrl = await blobToDataUrl(file);
+        } else {
+          // Image path: convert HEIC if needed, then compress to <1600px JPEG
+          let workingFile = file;
+          if(isHeicFile(file)){
+            toast('Converting iPhone photo…');
             try {
-              const blob = dataUrlToBlob(compressedDataUrl);
-              const path = `shops/automotive_connection/vehicles/${v.id}/receipts/${uid()}.jpg`;
-              const obj = await uploadToStorage(blob, path);
-              addReceipt({...obj, name:file.name, date:Date.now()});
-              return;
-            } catch(upErr){
-              console.warn('Receipt image upload failed, using inline:', upErr);
+              workingFile = await heicToJpegBlob(file);
+            } catch(e){
+              throw new Error('HEIC conversion failed: ' + e.message);
             }
           }
-          addReceipt({name:file.name,data:compressedDataUrl,date:Date.now()});
-        }catch(e){
-          console.error('Receipt save error:',e);
-          toast('Could not save receipt: '+e.message,'err');
-        }
-      });
-    }
-
-    // SCANNER FLOW: photo → edge-detect → grayscale → preview → AI extract → confirm → PDF
-    async function startDocumentScan(file){
-      const overlay=document.createElement('div');
-      overlay.id='scan-overlay';
-      overlay.style.cssText='position:fixed;inset:0;background:#000;z-index:9990;display:flex;flex-direction:column;overflow-y:auto';
-      overlay.innerHTML=`
-        <div style="padding:14px 18px;display:flex;align-items:center;gap:14px;background:#0e1117;border-bottom:1px solid #1e2230;position:sticky;top:0;z-index:1">
-          <button id="scan-cancel" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:7px 13px;border-radius:7px;cursor:pointer">← Cancel</button>
-          <div style="flex:1">
-            <div style="font-size:14px;font-weight:700;color:#fff">Scanning receipt…</div>
-            <div id="scan-status" style="font-size:11px;color:#8896a8;margin-top:2px">Processing image</div>
-          </div>
-        </div>
-        <div style="flex:1;padding:18px;display:flex;flex-direction:column;align-items:center;gap:16px;min-height:0">
-          <div id="scan-preview" style="width:100%;max-width:420px;background:#0e1117;border:1px solid #1e2230;border-radius:10px;padding:10px;min-height:300px;display:flex;align-items:center;justify-content:center">
-            <div style="color:#8896a8;font-size:13px">⏳ Detecting edges…</div>
-          </div>
-          <div id="scan-info" style="width:100%;max-width:420px;font-size:11px;color:#555d73;text-align:center"></div>
-          <div id="scan-actions" style="width:100%;max-width:420px;display:none;flex-direction:column;gap:8px"></div>
-        </div>`;
-      document.body.appendChild(overlay);
-      const cleanup=()=>{overlay.remove();};
-      overlay.querySelector('#scan-cancel').onclick=cleanup;
-
-      const setStatus=t=>{const el=overlay.querySelector('#scan-status'); if(el) el.textContent=t;};
-      const setInfo=t=>{const el=overlay.querySelector('#scan-info'); if(el) el.textContent=t;};
-
-      try {
-        setStatus('Processing image');
-        const result = await processDocumentScan(file, {dpi: 300});
-        const preview = overlay.querySelector('#scan-preview');
-        preview.innerHTML='';
-        const previewImg=document.createElement('img');
-        previewImg.src=result.dataUrl;
-        previewImg.style.cssText='max-width:100%;max-height:50vh;border-radius:8px;display:block;margin:0 auto';
-        preview.appendChild(previewImg);
-
-        setInfo(`${result.detected ? '✅ Edges detected — perspective corrected' : '⚠ No clean edges found — using full image'} · ${result.width}×${result.height}px`);
-
-        const actions=overlay.querySelector('#scan-actions');
-        actions.style.display='flex';
-        actions.innerHTML=`
-          <button id="scan-confirm" style="background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">✓ Use this scan → extract parts</button>
-          <button id="scan-retake" style="background:#1e2230;border:1px solid #374151;color:#fff;font-size:13px;font-weight:500;padding:11px;border-radius:9px;cursor:pointer">📷 Retake</button>
-          <button id="scan-skip-extract" style="background:transparent;border:1px solid #1e2230;color:#8896a8;font-size:12px;padding:10px;border-radius:9px;cursor:pointer">Save PDF without AI extraction</button>`;
-
-        overlay.querySelector('#scan-retake').onclick=()=>{cleanup(); scanCamInput.click();};
-        overlay.querySelector('#scan-skip-extract').onclick=async()=>{
-          setStatus('Building PDF…');
-          actions.style.display='none';
-          await saveScanAsPdf(result.canvas, [], cleanup);
-        };
-        overlay.querySelector('#scan-confirm').onclick=async()=>{
-          setStatus('Asking AI to read parts from receipt…');
-          actions.style.display='none';
-          try {
-            const aiItems = await scanReceiptWithAI(result.dataUrl);
-            if(!aiItems || !Array.isArray(aiItems) || !aiItems.length){
-              setStatus('No items extracted — you can still save the scan as a PDF');
-              showExtractionResults(result, [], overlay, cleanup);
-            } else {
-              showExtractionResults(result, aiItems, overlay, cleanup);
-            }
-          } catch(e){
-            console.error('AI extraction failed:', e);
-            setStatus('AI extraction failed — save PDF only');
-            showExtractionResults(result, [], overlay, cleanup);
-          }
-        };
-      } catch(e){
-        console.error('Scan processing error:',e);
-        setStatus('Processing failed: '+e.message);
-        const actions=overlay.querySelector('#scan-actions');
-        actions.style.display='flex';
-        actions.innerHTML=`<button id="scan-close" style="background:#7f1d1d;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Close</button>`;
-        overlay.querySelector('#scan-close').onclick=cleanup;
-      }
-    }
-
-    // Show extracted items + let user tick which to add, then save everything
-    function showExtractionResults(scanResult, items, overlay, cleanup){
-      const actions=overlay.querySelector('#scan-actions');
-      actions.style.display='flex';
-      if(!items.length){
-        actions.innerHTML=`
-          <div style="padding:12px;background:#1a1200;border:1px solid #f59e0b44;border-radius:8px;color:#fbbf24;font-size:12px;text-align:center">No parts detected — save the scan as a PDF archive</div>
-          <button id="scan-save-pdf" style="background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">💾 Save as PDF receipt</button>
-          <button id="scan-cancel-2" style="background:transparent;border:1px solid #1e2230;color:#8896a8;font-size:12px;padding:10px;border-radius:9px;cursor:pointer">Cancel</button>`;
-      } else {
-        const rows=items.map((item,i)=>`
-          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0d0f14;border:1px solid #1e2230;border-radius:8px;cursor:pointer">
-            <input type="checkbox" id="sx-${i}" checked style="width:16px;height:16px;accent-color:#f59e0b">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(item.description||'').replace(/"/g,'&quot;')}</div>
-              <div style="font-size:11px;color:#8896a8">${item.cost?('$'+Number(item.cost).toFixed(2)):'—'}</div>
-            </div>
-          </label>`).join('');
-        actions.innerHTML=`
-          <div style="font-size:12px;color:#8896a8;letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:4px">Extracted parts (${items.length})</div>
-          <div style="display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow-y:auto">${rows}</div>
-          <button id="scan-save-with-parts" style="background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer;margin-top:8px">💾 Save PDF + add selected parts</button>
-          <button id="scan-save-pdf-only" style="background:#1e2230;border:1px solid #374151;color:#fff;font-size:13px;font-weight:500;padding:11px;border-radius:9px;cursor:pointer">Save PDF only (no parts)</button>
-          <button id="scan-cancel-2" style="background:transparent;border:1px solid #1e2230;color:#8896a8;font-size:12px;padding:10px;border-radius:9px;cursor:pointer">Cancel</button>`;
-      }
-
-      const cancelBtn=overlay.querySelector('#scan-cancel-2'); if(cancelBtn) cancelBtn.onclick=cleanup;
-      const pdfOnlyA=overlay.querySelector('#scan-save-pdf'); if(pdfOnlyA) pdfOnlyA.onclick=()=>saveScanAsPdf(scanResult.canvas, [], cleanup, overlay);
-      const pdfOnlyB=overlay.querySelector('#scan-save-pdf-only'); if(pdfOnlyB) pdfOnlyB.onclick=()=>saveScanAsPdf(scanResult.canvas, [], cleanup, overlay);
-      const saveBtn=overlay.querySelector('#scan-save-with-parts');
-      if(saveBtn) saveBtn.onclick=()=>{
-        const picked=items.filter((_,i)=>overlay.querySelector('#sx-'+i)?.checked);
-        saveScanAsPdf(scanResult.canvas, picked, cleanup, overlay);
-      };
-    }
-
-    // Finalise: add parts → build PDF → save as receipt → cleanup
-    async function saveScanAsPdf(canvas, partsToAdd, cleanup, overlay){
-      try {
-        if(overlay){
-          const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Building PDF…';
-          const ac=overlay.querySelector('#scan-actions'); if(ac) ac.style.display='none';
-        }
-        // Add picked parts first so even if PDF save fails, parts persist
-        if(partsToAdd && partsToAdd.length){
-          const newParts=[...(v.parts||[])];
-          partsToAdd.forEach(item=>{
-            newParts.push({name:item.description||'', partNum:'', cost:parseFloat(item.cost)||0, qty:1});
-          });
-          writeToCurrentVisit(v,'parts',newParts);
-          save({parts:newParts});
-          toast(`Added ${partsToAdd.length} part${partsToAdd.length!==1?'s':''}`);
+          // Compress (also gives us a data URL for AI)
+          aiDataUrl = await compressImage(workingFile, 1600, 0.85);
+          uploadBlob = dataUrlToBlob(aiDataUrl);
+          uploadMime = 'image/jpeg';
+          uploadExt = 'jpg';
         }
 
-        if(overlay){const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Building PDF…';}
-        const pdfBlob = buildScanPdf(canvas, 300);
-        const ts = new Date();
-        const stamp = ts.toISOString().slice(0,10).replace(/-/g,'')+'_'+ts.toTimeString().slice(0,5).replace(':','');
-        const name = `Scan_${stamp}.pdf`;
-
+        // 2) Upload to Firebase Storage (direct, no Firestore bloat)
         let receiptEntry;
-        // Prefer direct upload to Firebase Storage — keeps Firestore doc small
         if(storage){
           try {
-            if(overlay){const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Uploading to cloud storage…';}
-            const path = `shops/automotive_connection/vehicles/${v.id}/receipts/${uid()}.pdf`;
-            const obj = await uploadToStorage(pdfBlob, path);
-            receiptEntry = { ...obj, name, date: Date.now() };
-            console.log('Scan uploaded to Storage:', obj.url);
+            const path = `shops/automotive_connection/vehicles/${v.id}/receipts/${uid()}.${uploadExt}`;
+            const obj = await uploadToStorage(uploadBlob, path);
+            receiptEntry = {...obj, name:fileName, date:Date.now()};
           } catch(upErr){
-            console.warn('Storage upload failed, falling back to inline data URL:', upErr);
-            const pdfDataUrl = await blobToDataUrl(pdfBlob);
-            receiptEntry = { name, data: pdfDataUrl, date: Date.now() };
+            console.warn('Storage upload failed, using inline:', upErr);
+            receiptEntry = {name:fileName, data:aiDataUrl, date:Date.now()};
           }
         } else {
-          // No Storage available — inline (old behavior)
-          const pdfDataUrl = await blobToDataUrl(pdfBlob);
-          receiptEntry = { name, data: pdfDataUrl, date: Date.now() };
+          receiptEntry = {name:fileName, data:aiDataUrl, date:Date.now()};
         }
 
         addReceipt(receiptEntry);
         toast('Receipt saved ✓');
-        if(cleanup) cleanup();
+
+        // 3) Kick off AI extraction — pop modal over current view
+        openExtractionModal(v, fileName, aiDataUrl, isPdf);
       } catch(e){
-        console.error('Save scan error:',e);
-        toast('Save failed: '+e.message,'err');
-        if(overlay){
-          const st=overlay.querySelector('#scan-status'); if(st) st.textContent='Save failed: '+e.message;
-          const ac=overlay.querySelector('#scan-actions');
-          if(ac){
-            ac.style.display='flex';
-            ac.innerHTML=`<button id="scan-close-err" style="background:#7f1d1d;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Close</button>`;
-            overlay.querySelector('#scan-close-err').onclick=cleanup;
-          }
-        }
+        console.error('Receipt upload error:',e);
+        toast('Upload failed: '+e.message,'err');
       }
     }
 
+    // Add-receipt button (single CTA)
     const zone=document.createElement('div');zone.className='cam-zone';
     zone.innerHTML=`<div class="cam-icon" style="background:#1a1600"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="2" width="16" height="18" rx="2.5" stroke="#f59e0b" stroke-width="1.5" fill="none"/><line x1="6" y1="7" x2="16" y2="7" stroke="#f59e0b" stroke-width="1.2"/><line x1="6" y1="11" x2="16" y2="11" stroke="#f59e0b" stroke-width="1.2"/><line x1="6" y1="15" x2="11" y2="15" stroke="#f59e0b" stroke-width="1.2"/></svg></div>
-      <div class="cam-title" style="color:#fbbf24">Scan receipt</div><div class="cam-sub">Camera · image · PDF</div>`;
-    zone.onclick=()=>camInput.click();el.appendChild(zone);
+      <div class="cam-title" style="color:#fbbf24">+ Add receipt</div><div class="cam-sub">Photo, PDF, or image · AI reads parts automatically</div>`;
+    zone.onclick=()=>fileInput.click();
+    el.appendChild(zone);
 
-    const libBtn=document.createElement('button');
-    libBtn.className='btn-ghost';libBtn.textContent='📁 Upload PDF or image file';
-    libBtn.style.cssText='width:100%;padding:10px;margin-bottom:14px;border-radius:8px;font-size:13px';
-    libBtn.onclick=()=>libInput.click();
-    el.appendChild(libBtn);
-
-    // Scan (camera) + Scan (library) buttons — scanner-style output with edge detect + grayscale PDF
-    const scanRow=document.createElement('div');
-    scanRow.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px';
-    scanRow.innerHTML=`
-      <button id="scan-btn-cam" style="background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7;font-size:12px;font-weight:700;padding:11px 10px;border-radius:8px;cursor:pointer;line-height:1.3">📷 Scan (B&W PDF)<div style="font-size:10px;font-weight:500;opacity:.8;margin-top:2px">camera → auto crop</div></button>
-      <button id="scan-btn-lib" style="background:#1e2230;border:1px solid #374151;color:#cbd5e1;font-size:12px;font-weight:700;padding:11px 10px;border-radius:8px;cursor:pointer;line-height:1.3">📁 Scan from library<div style="font-size:10px;font-weight:500;opacity:.8;margin-top:2px">pick existing photo</div></button>`;
-    el.appendChild(scanRow);
-    scanRow.querySelector('#scan-btn-cam').onclick=()=>scanCamInput.click();
-    scanRow.querySelector('#scan-btn-lib').onclick=()=>scanLibInput.click();
-
+    // List existing receipts
     (v.receipts||[]).forEach((r,i)=>{
       const row=document.createElement('div');row.className='receipt-row';
       const rName=receiptName(r);const rUrl=receiptUrl(r);const rDate=receiptDate(r);const isPdf=receiptIsPdf(r);
@@ -4184,13 +3795,119 @@ function renderDetail(c,v){
         <a class="dl-link" href="${rUrl}" download="${rName}" target="_blank" rel="noopener">⬇ Download</a>`;
       if(ST.masterPinUnlocked){
         const del=document.createElement('button');del.className='del-btn';del.textContent='✕';
-        del.onclick=()=>{if(confirm('Delete this receipt?')) delReceipt(i);};
+        del.onclick=()=>{if(confirm(`Delete "${rName}"?`)) delReceipt(i);};
         row.appendChild(del);
       }
       el.appendChild(row);
     });
-    if(!v.receipts?.length){const ep=document.createElement('div');ep.style.cssText='color:#374151;font-size:13px;padding:14px 0;text-align:center';ep.textContent='No receipts uploaded yet';el.appendChild(ep);}
   }
+
+  // ═══════════════════════════════════════════════
+  // RECEIPT EXTRACTION MODAL — AI reads parts from the uploaded file
+  // ═══════════════════════════════════════════════
+  function openExtractionModal(vehicle, fileName, dataUrl, isPdf){
+    const overlay=document.createElement('div');
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.90);z-index:9990;display:flex;flex-direction:column;padding:18px;overflow-y:auto';
+    overlay.innerHTML=`
+      <div style="max-width:480px;width:100%;margin:0 auto;background:#111318;border:1px solid #1e2230;border-radius:14px;overflow:hidden">
+        <div style="padding:16px 18px;border-bottom:1px solid #1e2230;display:flex;align-items:center;gap:14px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🧾 ${fileName}</div>
+            <div id="ex-status" style="font-size:11px;color:#fbbf24;margin-top:3px">⏳ AI reading receipt…</div>
+          </div>
+          <button id="ex-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:7px 13px;border-radius:7px;cursor:pointer;flex-shrink:0">Close</button>
+        </div>
+        <div id="ex-body" style="padding:16px 18px;min-height:200px"></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const cleanup=()=>overlay.remove();
+    overlay.querySelector('#ex-close').onclick=cleanup;
+
+    // Click outside modal body to close
+    overlay.onclick=(e)=>{if(e.target===overlay) cleanup();};
+
+    const setStatus=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#fbbf24';}};
+    const setStatusOk=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#6ee7b7';}};
+    const setStatusErr=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#f87171';}};
+
+    // Call AI then render results
+    scanReceiptWithAI(dataUrl).then(items=>{
+      const body=overlay.querySelector('#ex-body');
+      if(!body) return; // modal already closed
+
+      if(!items){
+        setStatusErr('AI extraction failed');
+        body.innerHTML=`
+          <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6">
+            Could not reach the AI. The receipt file is saved, but you'll need to add parts manually.
+          </div>
+          <button id="ex-done" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">Done</button>`;
+        overlay.querySelector('#ex-done').onclick=cleanup;
+        return;
+      }
+
+      if(items.length===0){
+        setStatusOk('No parts detected — save blank or add manually');
+      } else {
+        setStatusOk(`Found ${items.length} part${items.length!==1?'s':''}`);
+      }
+
+      const rowsHtml = items.length
+        ? items.map((item,i)=>`
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0d0f14;border:1px solid #1e2230;border-radius:8px;cursor:pointer;margin-bottom:6px">
+            <input type="checkbox" id="ex-pick-${i}" checked style="width:16px;height:16px;accent-color:#f59e0b;flex-shrink:0">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(item.description||'').replace(/"/g,'&quot;')}</div>
+              <div style="font-size:11px;color:#8896a8">${item.partNumber?('#'+item.partNumber+' · '):''}${item.cost?('$'+Number(item.cost).toFixed(2)):'—'}</div>
+            </div>
+          </label>`).join('')
+        : '<div style="padding:18px;text-align:center;color:#8896a8;font-size:13px;line-height:1.5">No auto parts detected in this receipt.<br><span style="color:#555d73;font-size:11px">You can still confirm — the receipt file is saved.</span></div>';
+
+      body.innerHTML=`
+        ${items.length?`<div style="font-size:11px;font-weight:700;color:#555d73;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Pick parts to add</div>`:''}
+        <div style="max-height:50vh;overflow-y:auto">${rowsHtml}</div>
+        <button id="ex-add" style="width:100%;background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:12px;border-radius:9px;cursor:pointer;margin-top:12px">${items.length?'✓ Add selected parts':'✓ Done'}</button>`;
+
+      overlay.querySelector('#ex-add').onclick=()=>{
+        const picked=items.filter((_,i)=>overlay.querySelector('#ex-pick-'+i)?.checked);
+        if(picked.length>0){
+          // Re-fetch vehicle in case user has navigated
+          const freshV = ST.vehicles.find(x=>x.id===vehicle.id);
+          if(!freshV){
+            toast('Vehicle no longer exists','err');
+            cleanup();
+            return;
+          }
+          const newParts=[...(freshV.parts||[])];
+          picked.forEach(item=>{
+            newParts.push({
+              name:item.description||'',
+              partNum:item.partNumber||'',
+              cost:parseFloat(item.cost)||0,
+              qty:1
+            });
+          });
+          writeToCurrentVisit(freshV, 'parts', newParts);
+          window.save();
+          toast(`Added ${picked.length} part${picked.length!==1?'s':''} to ${freshV.year||''} ${freshV.make||''} ${freshV.model||''}`);
+        }
+        cleanup();
+      };
+    }).catch(e=>{
+      console.error('Extraction error:',e);
+      setStatusErr('Error: '+e.message);
+      const body=overlay.querySelector('#ex-body');
+      if(body){
+        body.innerHTML=`
+          <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6">
+            ${e.message}<br><br>The receipt file is saved, but no parts were extracted.
+          </div>
+          <button id="ex-done2" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">Done</button>`;
+        overlay.querySelector('#ex-done2').onclick=cleanup;
+      }
+    });
+  }
+
 
   function buildFrazerTab(el){
     const repairs=v.repairs||[];
