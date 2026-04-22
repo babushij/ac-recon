@@ -675,6 +675,28 @@ function currentVisit(v){
   return open || v.visits[v.visits.length-1];
 }
 
+// Write a field value to BOTH the vehicle's current visit AND the top-level
+// shim-mirrored property, so:
+//   1. Data persists (visit is the source of truth)
+//   2. UI reads work immediately (top-level stays in sync until next shim pass)
+//   3. Next applyVisitShim() won't clobber the write
+// Use this for any shimmed field: photos, receipts, repairs, concerns, comments,
+// statuses, parts, laborLines, timeSessions, notes, assignedTo, priority, apptDate.
+function writeToCurrentVisit(v, field, value){
+  if(!v) return;
+  // Make sure vehicle has visits[]
+  if(!Array.isArray(v.visits) || !v.visits.length){
+    migrateVehiclesToVisits();
+  }
+  const cv = currentVisit(v);
+  if(cv){
+    cv[field] = value;
+  }
+  // Mirror to top-level so existing UI reads keep working
+  v[field] = value;
+  v.updatedAt = Date.now();
+}
+
 function startNewVisit(v, overrides={}){
   const visit = {
     id: v.id + '-v' + ((v.visits||[]).length + 1),
@@ -3241,8 +3263,7 @@ function renderDetail(c,v){
       const allActive=ST.vehicles.filter(veh=>(veh.timeSessions||[]).some(s=>s.mechId===ST.role&&!s.end)).length;
       if(allActive>=4){toast('Max 4 cars at once','err');return;}
       const sess={id:uid(),mechId:ST.role,vehicleId:v.id,start:Date.now(),end:null};
-      v.timeSessions=[...(v.timeSessions||[]),sess];
-      Object.assign(v,{timeSessions:v.timeSessions,updatedAt:Date.now()});
+      writeToCurrentVisit(v,'timeSessions',[...(v.timeSessions||[]),sess]);
       ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x);window.save();toast('Clocked in!');refreshDetail();
     };
     window.clockInAs=function(mechId){
@@ -3250,26 +3271,25 @@ function renderDetail(c,v){
       const allActive=ST.vehicles.filter(veh=>(veh.timeSessions||[]).some(s=>s.mechId===mechId&&!s.end)).length;
       if(allActive>=4){toast(getMMAP()[mechId]?.name+' already on 4 cars','err');return;}
       const sess={id:uid(),mechId,vehicleId:v.id,start:Date.now(),end:null};
-      v.timeSessions=[...(v.timeSessions||[]),sess];
-      Object.assign(v,{timeSessions:v.timeSessions,updatedAt:Date.now()});
+      writeToCurrentVisit(v,'timeSessions',[...(v.timeSessions||[]),sess]);
       ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x);window.save();toast(getMMAP()[mechId]?.name+' clocked in!');refreshDetail();
     };
     window.clockOutSession=function(sessId){
-      const idx2=v.timeSessions.findIndex(s=>s.id===sessId);
+      const sessions=[...(v.timeSessions||[])];
+      const idx2=sessions.findIndex(s=>s.id===sessId);
       if(idx2<0)return;
-      v.timeSessions[idx2].end=Date.now();
-      const mins=Math.round((v.timeSessions[idx2].end-v.timeSessions[idx2].start)/60000);
-      Object.assign(v,{timeSessions:v.timeSessions,updatedAt:Date.now()});
+      sessions[idx2]={...sessions[idx2],end:Date.now()};
+      const mins=Math.round((sessions[idx2].end-sessions[idx2].start)/60000);
+      writeToCurrentVisit(v,'timeSessions',sessions);
       ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x);window.save();toast(`Clocked out — ${mins}m logged`);refreshDetail();
     };
     window.clockOut=function(){
-      const sess2=v.timeSessions.find(s=>s.mechId===ST.role&&!s.end);
+      const sess2=(v.timeSessions||[]).find(s=>s.mechId===ST.role&&!s.end);
       if(sess2)window.clockOutSession(sess2.id);
     };
     window.deleteSession=function(sid){
       if(!confirm('Delete this session?'))return;
-      v.timeSessions=(v.timeSessions||[]).filter(s=>s.id!==sid);
-      Object.assign(v,{timeSessions:v.timeSessions,updatedAt:Date.now()});
+      writeToCurrentVisit(v,'timeSessions',(v.timeSessions||[]).filter(s=>s.id!==sid));
       ST.vehicles=ST.vehicles.map(x=>x.id===v.id?v:x);window.save();refreshDetail();
     };
   }
@@ -3277,12 +3297,12 @@ function renderDetail(c,v){
 
 
 
-  const addRepair=r=>{const rep={...r,id:uid(),date:Date.now(),cost:parseFloat(r.cost)||0};v.repairs=[...(v.repairs||[]),rep];save({repairs:v.repairs});};
-  const delRepair=id=>{v.repairs=(v.repairs||[]).filter(r=>r.id!==id);save({repairs:v.repairs});};
-  const addPhoto=imgData=>{v.photos=[...(v.photos||[]),imgData];save({photos:v.photos});};
-  const delPhoto=i=>{v.photos=(v.photos||[]).filter((_,j)=>j!==i);save({photos:v.photos});};
-  const addReceipt=r=>{v.receipts=[...(v.receipts||[]),r];save({receipts:v.receipts});};
-  const delReceipt=i=>{v.receipts=(v.receipts||[]).filter((_,j)=>j!==i);save({receipts:v.receipts});};
+  const addRepair=r=>{const rep={...r,id:uid(),date:Date.now(),cost:parseFloat(r.cost)||0};writeToCurrentVisit(v,'repairs',[...(v.repairs||[]),rep]);save();};
+  const delRepair=id=>{writeToCurrentVisit(v,'repairs',(v.repairs||[]).filter(r=>r.id!==id));save();};
+  const addPhoto=imgData=>{writeToCurrentVisit(v,'photos',[...(v.photos||[]),imgData]);save();};
+  const delPhoto=i=>{writeToCurrentVisit(v,'photos',(v.photos||[]).filter((_,j)=>j!==i));save();};
+  const addReceipt=r=>{writeToCurrentVisit(v,'receipts',[...(v.receipts||[]),r]);save();};
+  const delReceipt=i=>{writeToCurrentVisit(v,'receipts',(v.receipts||[]).filter((_,j)=>j!==i));save();};
 
   const statuses=(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean);
   const mech=v.assignedTo?getMMAP()[v.assignedTo]:null;
@@ -3408,9 +3428,10 @@ function renderDetail(c,v){
       const text=document.getElementById('c-text')?.value.trim();
       if(!text)return;
       const author=document.getElementById('c-author')?.value||'Manager';
-      v.comments=[...(v.comments||[]),{id:uid(),author,text,date:Date.now()}];
-      save({comments:v.comments});
+      writeToCurrentVisit(v,'comments',[...(v.comments||[]),{id:uid(),author,text,date:Date.now()}]);
+      save();
       document.getElementById('c-text').value='';
+      render();
     }
     window.postComment=postComment;
     section.querySelector('#c-text')?.addEventListener('keydown',e=>{if(e.key==='Enter')postComment();});
@@ -4089,8 +4110,8 @@ function renderMechPipeline(c){
       e.stopPropagation();
       const v=ST.vehicles.find(x=>x.id===btn.dataset.vid);if(!v)return;
       const cur=v.statuses||[];
-      v.statuses=cur.includes(btn.dataset.sid)?cur.filter(s=>s!==btn.dataset.sid):[...cur,btn.dataset.sid];
-      v.updatedAt=Date.now();
+      const newStatuses=cur.includes(btn.dataset.sid)?cur.filter(s=>s!==btn.dataset.sid):[...cur,btn.dataset.sid];
+      writeToCurrentVisit(v,'statuses',newStatuses);
       save();toast('Status updated');renderMechPipeline(c);
     };
   });
@@ -4166,8 +4187,8 @@ function renderDetailerQueue(c){
     btn.onclick=()=>{
       const v=ST.vehicles.find(x=>x.id===btn.dataset.done);
       if(!v)return;
-      v.statuses=[...(v.statuses||[]).filter(s=>s!=='cleaning'),'sale'];
-      v.updatedAt=Date.now();
+      const newStatuses=[...(v.statuses||[]).filter(s=>s!=='cleaning'),'sale'];
+      writeToCurrentVisit(v,'statuses',newStatuses);
       save();toast(`${v.year} ${v.make} ${v.model} marked ready for sale`);
       renderDetailerQueue(c);
     };
@@ -4368,13 +4389,14 @@ window.submitAddToQueue=function(vehicleId, btn){
   if(!v) return;
   // Add repair job
   if(desc){
-    v.repairs=[...(v.repairs||[]),{id:uid(),description:desc,cost:'0',mechanic:getMMAP()[mechId]?.name||'',category:'sales request',date:Date.now()}];
+    writeToCurrentVisit(v,'repairs',[...(v.repairs||[]),{id:uid(),description:desc,cost:'0',mechanic:getMMAP()[mechId]?.name||'',category:'sales request',date:Date.now()}]);
   }
   // Set statuses and assignment
-  if(!(v.statuses||[]).includes('recon')) v.statuses=[...(v.statuses||[]),'recon'];
-  v.assignedTo=mechId;
-  v.priority='high';
-  v.updatedAt=Date.now();
+  if(!(v.statuses||[]).includes('recon')){
+    writeToCurrentVisit(v,'statuses',[...(v.statuses||[]),'recon']);
+  }
+  writeToCurrentVisit(v,'assignedTo',mechId);
+  writeToCurrentVisit(v,'priority','high');
   save();
   btn.closest('div[style*=fixed]').remove();
   toast(`Added to ${getMMAP()[mechId]?.name}'s queue`);
@@ -4455,11 +4477,11 @@ window.submitConcern=function(vehicleId, btn){
   if(!text){toast('Please describe the concern','err');return;}
   const v=ST.vehicles.find(x=>x.id===vehicleId);
   if(!v) return;
-  v.concerns=[...(v.concerns||[]),{
+  const newConcerns=[...(v.concerns||[]),{
     id:uid(), description:text, addedBy:'Sales',
     status:'pending', createdAt:Date.now()
   }];
-  v.updatedAt=Date.now();
+  writeToCurrentVisit(v, 'concerns', newConcerns);
   save();
   toast('Concern submitted — awaiting manager approval');
   btn.closest('div[style*=fixed]').remove();
@@ -4552,8 +4574,8 @@ function renderApprovals(c){
 function updateConcern(vehicleId, concernId, updates){
   const v=ST.vehicles.find(x=>x.id===vehicleId);
   if(!v) return;
-  v.concerns=(v.concerns||[]).map(c=>c.id===concernId?{...c,...updates,reviewedAt:Date.now()}:c);
-  v.updatedAt=Date.now();
+  const newConcerns=(v.concerns||[]).map(c=>c.id===concernId?{...c,...updates,reviewedAt:Date.now()}:c);
+  writeToCurrentVisit(v, 'concerns', newConcerns);
   save();
   toast(updates.status==='approved'?'Concern approved':'Concern rejected');
   render();
@@ -4582,22 +4604,29 @@ function openAssignConcernModal(vehicleId, concernId){
 window.approveConcernWithMech=function(vehicleId,concernId,mechId,btn){
   const v=ST.vehicles.find(x=>x.id===vehicleId);
   if(!v) return;
-  // Approve concern and add it as a repair job assigned to mechanic
-  v.concerns=(v.concerns||[]).map(c=>c.id===concernId?{...c,status:'approved',assignedTo:mechId,reviewedAt:Date.now()}:c);
+  // Approve concern
+  const newConcerns=(v.concerns||[]).map(c=>c.id===concernId?{...c,status:'approved',assignedTo:mechId,reviewedAt:Date.now()}:c);
+  writeToCurrentVisit(v, 'concerns', newConcerns);
+
   // Add to repairs queue
-  const concern=v.concerns.find(c=>c.id===concernId);
+  const concern=newConcerns.find(c=>c.id===concernId);
   if(concern){
-    v.repairs=[...(v.repairs||[]),{
+    const newRepairs=[...(v.repairs||[]),{
       id:uid(), description:concern.description,
       cost:'0', mechanic:getMMAP()[mechId]?.name||'',
       category:'customer concern', date:Date.now(),
       fromConcern:concernId
     }];
+    writeToCurrentVisit(v, 'repairs', newRepairs);
+
     // Make sure vehicle is in recon status
-    if(!(v.statuses||[]).includes('recon')) v.statuses=[...(v.statuses||[]),'recon'];
-    if(!v.assignedTo) v.assignedTo=mechId;
+    if(!(v.statuses||[]).includes('recon')){
+      writeToCurrentVisit(v, 'statuses', [...(v.statuses||[]),'recon']);
+    }
+    if(!v.assignedTo){
+      writeToCurrentVisit(v, 'assignedTo', mechId);
+    }
   }
-  v.updatedAt=Date.now();
   save();
   btn.closest('div[style*=fixed]').remove();
   toast('Approved — added to mechanic repair list');
@@ -4680,6 +4709,7 @@ function renderSettings(c){
     return`
     <div style="max-width:600px">
 
+    ${ST.masterPinUnlocked ? `
     <div class="panel">
       <div class="panel-title">ROLE PINS</div>
       <div style="font-size:12px;color:#555d73;margin-bottom:14px">Each role has a 4-digit PIN required at login.</div>
@@ -4699,6 +4729,15 @@ function renderSettings(c){
           onchange="SETTINGS.pins[this.dataset.pinRole]=this.value.padStart(4,'0');saveSettings();toast('PIN updated')">
       </div>`).join('')}
     </div>
+    ` : `
+    <div class="panel">
+      <div class="panel-title">🔒 ROLE PINS — LOCKED</div>
+      <div style="font-size:13px;color:#8896a8;line-height:1.6;padding:14px 12px;background:#0d0f14;border:1px dashed #2a2f3f;border-radius:9px;text-align:center">
+        Role PIN settings are protected.<br>
+        <span style="color:#555d73;font-size:12px">Scroll down and unlock with the Master PIN to view and edit.</span>
+      </div>
+    </div>
+    `}
 
     <div class="panel">
       <div class="panel-title">MECHANICS</div>
@@ -4713,11 +4752,15 @@ function renderSettings(c){
               style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:7px;padding:8px 11px;color:#fff;font-size:14px;margin-bottom:5px"
               onchange="updateMechName('${m.id}',this.value)">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
+              ${ST.masterPinUnlocked ? `
               <span style="font-size:11px;color:#555d73;flex-shrink:0">PIN:</span>
               <input type="tel" maxlength="4" value="${SETTINGS.pins[m.id]||'0000'}"
                 style="width:68px;text-align:center;font-size:15px;letter-spacing:4px;background:#0d0f14;border:1px solid #2a2f3f;border-radius:7px;padding:6px;color:#fff;font-family:'Courier New',monospace"
                 oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
                 onchange="SETTINGS.pins['${m.id}']=this.value.padStart(4,'0');saveSettings();toast('PIN updated')">
+              ` : `
+              <span style="font-size:11px;color:#555d73;flex-shrink:0;font-style:italic">🔒 PIN hidden</span>
+              `}
               <span style="font-size:11px;color:#555d73;flex-shrink:0;margin-left:6px">$/hr:</span>
               <input type="number" min="0" max="999" step="1" value="${m.laborRate||65}"
                 style="width:64px;background:#0d0f14;border:1px solid #2a2f3f;border-radius:7px;padding:6px 8px;color:#C8102E;font-size:14px;font-weight:600"
@@ -4728,11 +4771,11 @@ function renderSettings(c){
                 onchange="updateMechField('${m.id}','clockOut',this.value);toast('Clock-out time saved')">
             </div>
           </div>
-          ${mechs.length>1?`<button onclick="removeMech('${m.id}')" style="background:rgba(127,29,29,.4);border:none;color:#fca5a5;width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">✕</button>`:''}
+          ${ST.masterPinUnlocked && mechs.length>1?`<button onclick="removeMech('${m.id}')" style="background:rgba(127,29,29,.4);border:none;color:#fca5a5;width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">✕</button>`:''}
         </div>`).join('')}
       </div>
 
-      <button onclick="addMech()" style="width:100%;margin-top:14px;background:#1e2230;border:1px dashed #374151;color:#9ca3af;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer">+ Add mechanic</button>
+      ${ST.masterPinUnlocked ? `<button onclick="addMech()" style="width:100%;margin-top:14px;background:#1e2230;border:1px dashed #374151;color:#9ca3af;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer">+ Add mechanic</button>` : `<div style="width:100%;margin-top:14px;background:#0d0f14;border:1px dashed #2a2f3f;color:#555d73;border-radius:9px;padding:12px;font-size:12px;font-weight:500;text-align:center;font-style:italic">🔒 Unlock to add or remove mechanics</div>`}
     </div>
 
     <div class="panel">
