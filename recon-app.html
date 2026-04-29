@@ -299,6 +299,15 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
 .tab-btn:hover{color:var(--text2)}
 .tab-btn.active{color:var(--red);border-bottom-color:var(--red)}
 
+/* ═══ VENDOR TABS ═══ */
+.vtab-btn{
+  background:none;border:none;color:var(--text3);padding:10px 14px;cursor:pointer;
+  font-size:12px;font-weight:600;border-bottom:2px solid transparent;
+  white-space:nowrap;transition:all .1s;flex-shrink:0;
+}
+.vtab-btn:hover{color:var(--text2)}
+.vtab-btn.active{color:var(--red);border-bottom-color:var(--red)}
+
 /* ═══ COMMENTS ═══ */
 .comment{background:var(--surface2);border-radius:var(--r-md);padding:10px 12px;margin-bottom:6px;border-left:2px solid var(--border2)}
 .comment-meta{font-size:9px;color:var(--text3);margin-bottom:3px;letter-spacing:.5px;text-transform:uppercase;font-weight:600}
@@ -562,7 +571,8 @@ const DEFAULT_SETTINGS={
     {id:'mech1',name:'Mechanic 1',color:'#3b82f6',icon:'🔧',laborRate:65,clockOut:'17:30'},
     {id:'mech2',name:'Mechanic 2',color:'#10b981',icon:'🔩',laborRate:65,clockOut:'17:30'}
   ],
-  taxRate:0
+  taxRate:0,
+  vendors:{parts:[],sublet:[]}
 };
 let SETTINGS=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); // deep copy
 // Update a specific field on a mechanic — used by settings inputs
@@ -584,7 +594,7 @@ function migrateVehiclesToVisits(){
   // Fields that move INTO each visit
   const VISIT_FIELDS = ['stockNumber','statuses','assignedTo','priority',
     'apptDate','parts','laborLines','repairs','receipts','photos','notes',
-    'concerns','comments','timeSessions'];
+    'concerns','comments','timeSessions','obdScans'];
 
   let migrated = 0;
   ST.vehicles = ST.vehicles.map(v => {
@@ -601,7 +611,7 @@ function migrateVehiclesToVisits(){
       if(v[f] !== undefined) visit[f] = v[f];
     });
     // Defaults for empty arrays
-    ['statuses','parts','laborLines','repairs','receipts','photos','concerns','comments','timeSessions'].forEach(f=>{
+    ['statuses','parts','laborLines','repairs','receipts','photos','concerns','comments','timeSessions','obdScans'].forEach(f=>{
       if(!Array.isArray(visit[f])) visit[f] = [];
     });
 
@@ -713,7 +723,8 @@ function startNewVisit(v, overrides={}){
     apptDate: overrides.apptDate || '',
     parts: [], laborLines: [], repairs: [],
     receipts: [], photos: [], notes: '',
-    concerns: [], comments: [], timeSessions: []
+    concerns: [], comments: [], timeSessions: [],
+    obdScans: []
   };
   v.visits = [...(v.visits||[]), visit];
   v.updatedAt = Date.now();
@@ -723,6 +734,9 @@ function startNewVisit(v, overrides={}){
 function ensureSettingsDefaults(){
   if(!SETTINGS.pins) SETTINGS.pins={...DEFAULT_SETTINGS.pins};
   if(!SETTINGS.mechanics) SETTINGS.mechanics=[...DEFAULT_SETTINGS.mechanics];
+  if(!SETTINGS.vendors) SETTINGS.vendors={parts:[],sublet:[]};
+  if(!Array.isArray(SETTINGS.vendors.parts)) SETTINGS.vendors.parts=[];
+  if(!Array.isArray(SETTINGS.vendors.sublet)) SETTINGS.vendors.sublet=[];
   ['manager','sales','detailer','mech1','mech2'].forEach(k=>{
     if(!SETTINGS.pins[k]) SETTINGS.pins[k]=DEFAULT_SETTINGS.pins[k]||'0000';
   });
@@ -764,6 +778,77 @@ function subscribeToSettings(){
 }
 function getMechs(){return SETTINGS.mechanics;}
 function getMMAP(){return Object.fromEntries(getMechs().map(m=>[m.id,m]));}
+
+// ── VENDORS ──
+function getVendors(kind){
+  // kind = 'parts' | 'sublet'
+  if(!SETTINGS.vendors) SETTINGS.vendors={parts:[],sublet:[]};
+  return Array.isArray(SETTINGS.vendors[kind]) ? SETTINGS.vendors[kind] : [];
+}
+function getAllVendors(){
+  return [
+    ...getVendors('parts').map(x=>({...x, kind:'parts'})),
+    ...getVendors('sublet').map(x=>({...x, kind:'sublet'}))
+  ];
+}
+function getVendorById(id){
+  return getAllVendors().find(x=>x.id===id) || null;
+}
+function addVendor(kind, vendor){
+  if(!SETTINGS.vendors) SETTINGS.vendors={parts:[],sublet:[]};
+  if(!Array.isArray(SETTINGS.vendors[kind])) SETTINGS.vendors[kind]=[];
+  const v={
+    id: vendor.id || ('vnd_'+uid()),
+    name: (vendor.name||'').trim(),
+    contact: (vendor.contact||'').trim(),
+    phone: (vendor.phone||'').trim(),
+    email: (vendor.email||'').trim(),
+    address: (vendor.address||'').trim(),
+    notes: (vendor.notes||'').trim(),
+    createdAt: vendor.createdAt || Date.now()
+  };
+  if(!v.name) return null;
+  SETTINGS.vendors[kind].push(v);
+  saveSettings();
+  return v;
+}
+function updateVendor(kind, id, patch){
+  const list=getVendors(kind);
+  const idx=list.findIndex(x=>x.id===id);
+  if(idx<0) return false;
+  list[idx]={...list[idx], ...patch};
+  saveSettings();
+  return true;
+}
+function deleteVendor(kind, id){
+  if(!SETTINGS.vendors || !Array.isArray(SETTINGS.vendors[kind])) return false;
+  SETTINGS.vendors[kind] = SETTINGS.vendors[kind].filter(x=>x.id!==id);
+  saveSettings();
+  return true;
+}
+// Compute vendor spend across all vehicles+visits
+// kind: 'parts' or 'sublet' — parts vendor is referenced by parts[].vendor,
+// sublet vendor is referenced by laborLines[].vendor on outsourced jobs.
+function vendorSpend(vendorId){
+  let total=0, count=0;
+  (ST.vehicles||[]).forEach(v=>{
+    (v.visits||[]).forEach(visit=>{
+      (visit.parts||[]).forEach(p=>{
+        if(p.vendor===vendorId){
+          total += (parseFloat(p.cost)||0) * (parseInt(p.qty)||1);
+          count++;
+        }
+      });
+      (visit.laborLines||[]).forEach(l=>{
+        if(l.vendor===vendorId){
+          total += (parseFloat(l.hours)||0) * (parseFloat(l.rate)||0);
+          count++;
+        }
+      });
+    });
+  });
+  return {total, count};
+}
 function getRoles(){
   const mechs=getMechs();
   return[
@@ -1113,7 +1198,7 @@ function renderRoleScreen(){
   const el=document.getElementById('role-list');
   el.innerHTML='';
   // Show manager only on /admin URL
-  const isAdminPage=window.location.pathname.includes('admin')||new URLSearchParams(window.location.search).get('admin')==='1';
+  const isAdminPage=window.location.pathname.includes("admin")||new URLSearchParams(window.location.search).get("admin")==="1";
   getRoles().filter(r=>isAdminPage||r.id!=='manager').forEach(r=>{
     const btn=document.createElement('button');
     btn.className='role-btn';
@@ -1226,6 +1311,9 @@ function buildSidebar(){
     {section:'RECORDS'},
     {id:'history',label:'History search',icon:searchIcon()},
     {id:'completed',label:'Completed vehicles',icon:checkIcon()},
+    {section:'OPERATIONS'},
+    {id:'vendors',label:'Vendors',icon:vendorIcon()},
+    {id:'analytics',label:'Recon analytics',icon:chartIcon()},
     {section:'ROLES'},
     {id:'mypipeline',label:'Mechanic view',icon:wrenchIcon()},
     {id:'detailer',label:'Detailer queue',icon:broom()},
@@ -1314,6 +1402,9 @@ function renderContent(){
     case 'invoice':      renderInvoice(c,getV(ST.selectedId));break;
     case 'salespipeline':renderSalesPipeline(c);break;
     case 'approvals':    renderApprovals(c);break;
+    case 'completed':    renderCompleted(c);break;
+    case 'vendors':      renderVendors(c);break;
+    case 'analytics':    renderAnalytics(c);break;
     case 'settings':     renderSettings(c);break;
     default:             renderDashboard(c);
   }
@@ -2991,25 +3082,110 @@ function renderDetail(c,v){
     <div id="receipt-preview-items" style="margin-top:8px"></div>`;
     wrapper.appendChild(scanPanel);
 
+    // ── OBDII SCAN PDF UPLOAD ──
+    const obdPanel=document.createElement('div');obdPanel.className='panel';
+    const obdRows=(v.obdScans||[]).map((s,i)=>{
+      const sName=receiptName(s);const sUrl=receiptUrl(s);const sDate=receiptDate(s);
+      const delBtn = ST.masterPinUnlocked
+        ? `<button class="del-btn" onclick="if(confirm('Delete this OBDII scan?'))window.delObdScan(${i})">✕</button>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #1e2230">
+        <span style="font-size:20px">📋</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sName}</div>
+          <div style="font-size:11px;color:#555d73">${fmtD(sDate)}</div>
+        </div>
+        <a class="dl-link" href="${sUrl}" download="${sName}" target="_blank" rel="noopener" style="font-size:12px">⬇ View</a>
+        ${delBtn}
+      </div>`;
+    }).join('');
+    obdPanel.innerHTML=`
+      <div class="panel-title" style="display:flex;align-items:center;gap:8px"><span>📋</span> OBDII scan reports</div>
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:12px">Diagnostic scan PDFs · stored on this vehicle, not parsed by AI</div>
+      <div id="obd-scan-zone" style="border:1.5px dashed #2a2f3f;border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:border-color .15s"
+        onclick="document.getElementById('obd-file-input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='#06b6d4'"
+        ondragleave="this.style.borderColor='#2a2f3f'"
+        ondrop="event.preventDefault();this.style.borderColor='#2a2f3f';window.handleObdScanDrop(event)">
+        <div style="font-size:26px;margin-bottom:5px">📋</div>
+        <div style="font-size:13px;color:#9ca3af">Tap to upload OBDII scan PDF</div>
+      </div>
+      <input id="obd-file-input" type="file" accept="application/pdf" style="display:none" onchange="window.processObdScanFile(this)">
+      <div id="obd-scan-status" style="margin-top:10px;font-size:13px;color:#9ca3af;text-align:center;min-height:18px"></div>
+      <div id="obd-scan-list" style="margin-top:8px">${obdRows}</div>`;
+    wrapper.appendChild(obdPanel);
+
+    // OBDII upload handlers (fresh closure each time tab builds, captures v + addObdScan)
+    window.handleObdScanDrop=function(e){
+      const f=e.dataTransfer?.files?.[0];
+      if(f) window.processObdScanFileObj(f);
+    };
+    window.processObdScanFile=function(input){
+      if(input.files[0]) window.processObdScanFileObj(input.files[0]);
+      input.value='';
+    };
+    window.processObdScanFileObj=async function(file){
+      const st=document.getElementById('obd-scan-status');
+      if(!st) return;
+      const fileName = file.name || 'obd-scan.pdf';
+      const isPdf = file.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+      if(!isPdf){st.textContent='Only PDF files supported for OBDII scans.';st.style.color='#f87171';return;}
+      st.textContent='Uploading...';st.style.color='#f59e0b';
+      try {
+        let entry;
+        if(typeof storage !== 'undefined' && storage){
+          try {
+            const path = `shops/automotive_connection/vehicles/${v.id}/obd/${uid()}.pdf`;
+            const obj = await uploadToStorage(file, path);
+            entry = {...obj, name:fileName, date:Date.now()};
+          } catch(upErr){
+            console.warn('OBD upload to storage failed, using inline:', upErr);
+            const dataUrl = await blobToDataUrl(file);
+            entry = {name:fileName, data:dataUrl, date:Date.now()};
+          }
+        } else {
+          const dataUrl = await blobToDataUrl(file);
+          entry = {name:fileName, data:dataUrl, date:Date.now()};
+        }
+        addObdScan(entry);
+        st.textContent='OBDII scan saved ✓';st.style.color='#34d399';
+        toast('OBDII scan saved');
+        setTimeout(()=>{ if(typeof refreshDetail==='function') refreshDetail(); }, 100);
+      } catch(e){
+        console.error('OBD upload error:', e);
+        st.textContent='Upload failed: '+e.message;
+        st.style.color='#f87171';
+      }
+    };
+    window.delObdScan=delObdScan;
+
     // ── PARTS SECTION ──
     const partsTotal=(v.parts||[]).reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
     const partsPanel=document.createElement('div');partsPanel.className='panel';
-    const partsRows=(v.parts||[]).map((p,i)=>`
+    const partsVendors=getVendors('parts');
+    const partsRows=(v.parts||[]).map((p,i)=>{
+      const vName = p.vendor ? (getVendorById(p.vendor)?.name || '') : '';
+      return `
       <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;padding:9px 0;border-bottom:1px solid #1e2230">
         <div>
           <div style="font-size:13px;color:#e2e4ea">${p.name}</div>
-          ${p.partNum?`<div style="font-size:10px;color:#555d73">#${p.partNum}</div>`:''}
+          <div style="font-size:10px;color:#555d73">${p.partNum?`#${p.partNum}`:''}${p.partNum&&vName?' · ':''}${vName?`<span style="color:#818cf8">${vName}</span>`:''}</div>
         </div>
         <span style="font-size:11px;color:#555d73">×${p.qty||1}</span>
         <span style="font-size:13px;font-weight:600;color:#C8102E">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}</span>
         <button class="del-btn" onclick="deletePart(${i})">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+    const partsVendorOptions = partsVendors.length
+      ? `<option value="">— No vendor —</option>` + partsVendors.map(vn=>`<option value="${vn.id}">${vn.name}</option>`).join('')
+      : `<option value="">No parts vendors yet — add in Vendors</option>`;
     partsPanel.innerHTML=`
       <div class="panel-title">Parts & Materials <span style="float:right;color:#C8102E">${fmt$(partsTotal)}</span></div>
       <div id="parts-list">${partsRows||'<div style="color:#374151;font-size:13px;padding:12px 0;text-align:center">No parts yet — scan a receipt or add below</div>'}</div>
       <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="field" style="grid-column:1/-1"><label>Part name *</label><input id="p-name" placeholder="e.g. Front brake pads"></div>
         <div class="field"><label>Part # (optional)</label><input id="p-num" placeholder="e.g. D1060"></div>
+        <div class="field"><label>Vendor (optional)</label><select id="p-vendor" style="width:100%;background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:9px 10px;border-radius:8px;font-size:13px">${partsVendorOptions}</select></div>
         <div class="field"><label>Unit cost *</label><input id="p-cost" type="number" step="0.01" min="0" placeholder="0.00"></div>
         <div class="field"><label>Qty</label><input id="p-qty" type="number" min="1" value="1"></div>
       </div>
@@ -3020,13 +3196,23 @@ function renderDetail(c,v){
     const mechRate=getMMAP()[v.assignedTo]?.laborRate||65;
     const laborTotal=(v.laborLines||[]).reduce((a,l)=>a+((parseFloat(l.hours)||0)*(parseFloat(l.rate)||0)),0);
     const laborPanel=document.createElement('div');laborPanel.className='panel';
-    const laborRows=(v.laborLines||[]).map((l,i)=>`
+    const subletVendors=getVendors('sublet');
+    const laborRows=(v.laborLines||[]).map((l,i)=>{
+      const vName = l.vendor ? (getVendorById(l.vendor)?.name || '') : '';
+      return `
       <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;padding:9px 0;border-bottom:1px solid #1e2230">
-        <span style="font-size:13px;color:#e2e4ea">${l.desc}</span>
-        <span style="font-size:11px;color:#555d73">${l.hours}h @ $${parseFloat(l.rate||0).toFixed(0)}/hr</span>
+        <div style="min-width:0">
+          <div style="font-size:13px;color:#e2e4ea">${l.desc}</div>
+          ${vName?`<div style="font-size:10px;color:#f97316">↗ ${vName}</div>`:''}
+        </div>
+        <span style="font-size:11px;color:#555d73;white-space:nowrap">${l.hours}h @ $${parseFloat(l.rate||0).toFixed(0)}/hr</span>
         <span style="font-size:13px;font-weight:600;color:#C8102E">${fmt$((parseFloat(l.hours)||0)*(parseFloat(l.rate)||0))}</span>
         <button class="del-btn" onclick="deleteLaborLine(${i})">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+    const subletVendorOptions = subletVendors.length
+      ? `<option value="">— In-house —</option>` + subletVendors.map(vn=>`<option value="${vn.id}">${vn.name}</option>`).join('')
+      : `<option value="">No sublet shops yet — add in Vendors</option>`;
     laborPanel.innerHTML=`
       <div class="panel-title">Labor <span style="float:right;color:#C8102E">${fmt$(laborTotal)}</span></div>
       <div id="labor-list">${laborRows||'<div style="color:#374151;font-size:13px;padding:12px 0;text-align:center">No labor logged yet</div>'}</div>
@@ -3034,6 +3220,7 @@ function renderDetail(c,v){
         <div class="field" style="grid-column:1/-1"><label>Description *</label><input id="l-desc" placeholder="e.g. Replace brake pads & rotors"></div>
         <div class="field"><label>Hours *</label><input id="l-hrs" type="number" step="0.25" min="0.25" placeholder="1.5"></div>
         <div class="field"><label>Rate ($/hr)</label><input id="l-rate" type="number" step="1" value="${mechRate}"></div>
+        <div class="field" style="grid-column:1/-1"><label>Sublet shop (optional)</label><select id="l-vendor" style="width:100%;background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:9px 10px;border-radius:8px;font-size:13px">${subletVendorOptions}</select></div>
       </div>
       <button class="btn-red" style="padding:10px 18px;border-radius:8px;font-size:13px;margin-top:8px" onclick="addLaborLine()">+ Add labor</button>`;
     wrapper.appendChild(laborPanel);
@@ -3070,7 +3257,8 @@ function renderDetail(c,v){
       const name=document.getElementById('p-name').value.trim();
       const cost=parseFloat(document.getElementById('p-cost').value)||0;
       if(!name||!cost){toast('Part name and cost required','err');return;}
-      v.parts=[...(v.parts||[]),{name,partNum:document.getElementById('p-num').value.trim(),cost,qty:parseInt(document.getElementById('p-qty').value)||1}];
+      const vendor=document.getElementById('p-vendor')?.value||'';
+      v.parts=[...(v.parts||[]),{name,partNum:document.getElementById('p-num').value.trim(),cost,qty:parseInt(document.getElementById('p-qty').value)||1,vendor}];
       save({parts:v.parts});
     };
     window.deletePart=function(i){v.parts=(v.parts||[]).filter((_,j)=>j!==i);save({parts:v.parts});};
@@ -3081,7 +3269,8 @@ function renderDetail(c,v){
       const hours=parseFloat(document.getElementById('l-hrs').value)||0;
       const rate=parseFloat(document.getElementById('l-rate').value)||mechRate;
       if(!desc||!hours){toast('Description and hours required','err');return;}
-      v.laborLines=[...(v.laborLines||[]),{desc,hours,rate}];
+      const vendor=document.getElementById('l-vendor')?.value||'';
+      v.laborLines=[...(v.laborLines||[]),{desc,hours,rate,vendor}];
       save({laborLines:v.laborLines});
     };
     window.deleteLaborLine=function(i){v.laborLines=(v.laborLines||[]).filter((_,j)=>j!==i);save({laborLines:v.laborLines});};
@@ -3095,23 +3284,30 @@ function renderDetail(c,v){
       if(!st||!pv)return;
       st.textContent='Reading receipt...';st.style.color='#f59e0b';pv.innerHTML='';
       try{
-        let imgB64;
-        if(file.type==='application/pdf'||file.name?.toLowerCase().endsWith('.pdf')){
-          st.textContent='Converting PDF...';
-          imgB64=await pdfToImageB64(file);
-          if(!imgB64){st.textContent='Could not read PDF.';st.style.color='#f87171';return;}
+        const fileName = file.name || ('receipt.' + (file.type.includes('pdf') ? 'pdf' : 'jpg'));
+        const isPdf = file.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+        const isImage = !isPdf && (file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(fileName));
+        if(!isPdf && !isImage){st.textContent='Unsupported file type — use JPG, PNG, HEIC, or PDF.';st.style.color='#f87171';return;}
+
+        // Build data URL — PDFs go to AI as-is (worker handles them natively),
+        // images get HEIC-converted (if needed) and compressed to <=1600px JPEG.
+        let aiDataUrl;
+        if(isPdf){
+          st.textContent='Reading PDF...';
+          aiDataUrl = await blobToDataUrl(file);
         } else {
+          let workingFile = file;
+          if(isHeicFile(file)){
+            st.textContent='Converting iPhone photo...';
+            workingFile = await heicToJpegBlob(file);
+          }
           st.textContent='Processing image...';
-          imgB64=await autoRotateImage(file);
+          aiDataUrl = await compressImage(workingFile, 1600, 0.85);
         }
+
         st.textContent='Scanning with AI...';
-        let result=await scanReceiptWithAI(imgB64);
-        let items = result && result.items ? result.items : null;
-        if(!items||!items.length){
-          st.textContent='Retrying with enhanced scan...';
-          result=await scanReceiptWithAI(await enhanceReceiptImage(imgB64));
-          items = result && result.items ? result.items : null;
-        }
+        const result = await scanReceiptWithAI(aiDataUrl);
+        const items = result && result.items ? result.items : null;
         if(!items||!items.length){st.textContent='Could not read receipt — fill the frame with the receipt.';st.style.color='#f87171';return;}
         st.textContent=`Found ${items.length} item${items.length!==1?'s':''}. Review and confirm:`;
         st.style.color='#34d399';
@@ -3446,6 +3642,14 @@ function renderDetail(c,v){
     const path=storagePath(entry);
     if(path) deleteFromStorage(path); // fire-and-forget
     writeToCurrentVisit(v,'receipts',(v.receipts||[]).filter((_,j)=>j!==i));
+    save();
+  };
+  const addObdScan=r=>{writeToCurrentVisit(v,'obdScans',[...(v.obdScans||[]),r]);save();};
+  const delObdScan=i=>{
+    const entry=(v.obdScans||[])[i];
+    const path=storagePath(entry);
+    if(path) deleteFromStorage(path);
+    writeToCurrentVisit(v,'obdScans',(v.obdScans||[]).filter((_,j)=>j!==i));
     save();
   };
 
@@ -3827,17 +4031,17 @@ function renderDetail(c,v){
   // ═══════════════════════════════════════════════
   function openExtractionModal(vehicle, fileName, dataUrl, isPdf){
     const overlay=document.createElement('div');
-    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.90);z-index:9990;display:flex;flex-direction:column;padding:18px;overflow-y:auto';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.90);z-index:9990;display:flex;align-items:center;justify-content:center;padding:18px';
     overlay.innerHTML=`
-      <div style="max-width:560px;width:100%;margin:0 auto;background:#111318;border:1px solid #1e2230;border-radius:14px;overflow:hidden">
-        <div style="padding:16px 18px;border-bottom:1px solid #1e2230;display:flex;align-items:center;gap:14px">
+      <div style="max-width:560px;width:100%;max-height:calc(100vh - 36px);background:#111318;border:1px solid #1e2230;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:16px 18px;border-bottom:1px solid #1e2230;display:flex;align-items:center;gap:14px;flex-shrink:0">
           <div style="flex:1;min-width:0">
             <div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🧾 ${fileName}</div>
             <div id="ex-status" style="font-size:11px;color:#fbbf24;margin-top:3px">⏳ AI reading receipt…</div>
           </div>
           <button id="ex-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:7px 13px;border-radius:7px;cursor:pointer;flex-shrink:0">Close</button>
         </div>
-        <div id="ex-body" style="padding:14px 16px;min-height:200px"></div>
+        <div id="ex-body" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden"></div>
       </div>`;
     document.body.appendChild(overlay);
     const cleanup=()=>overlay.remove();
@@ -3848,6 +4052,12 @@ function renderDetail(c,v){
     const setStatusOk=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#6ee7b7';}};
     const setStatusErr=t=>{const s=overlay.querySelector('#ex-status'); if(s){s.textContent=t; s.style.color='#f87171';}};
 
+    // Initial loading placeholder
+    overlay.querySelector('#ex-body').innerHTML=`
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px;color:#555d73;font-size:13px;text-align:center">
+        ⏳ Reading receipt with AI…
+      </div>`;
+
     scanReceiptWithAI(dataUrl).then(result=>{
       const body=overlay.querySelector('#ex-body');
       if(!body) return;
@@ -3855,10 +4065,12 @@ function renderDetail(c,v){
       if(!result){
         setStatusErr('AI extraction failed');
         body.innerHTML=`
-          <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6">
+          <div style="flex:1;padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6;display:flex;align-items:center;justify-content:center">
             Could not reach the AI. The receipt file is saved, but you'll need to add parts manually.
           </div>
-          <button id="ex-done" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">Done</button>`;
+          <div style="flex-shrink:0;padding:14px 16px;border-top:1px solid #1e2230;background:#0d0f14">
+            <button id="ex-done" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">Done</button>
+          </div>`;
         overlay.querySelector('#ex-done').onclick=cleanup;
         return;
       }
@@ -3966,21 +4178,27 @@ function renderDetail(c,v){
       };
 
       body.innerHTML = items.length ? `
-        <div style="font-size:11px;color:#8896a8;letter-spacing:.4px;line-height:1.5;margin-bottom:10px">
-          Each part's cost includes its share of tax. Edit any field below.
+        <div style="padding:14px 16px 8px;flex-shrink:0">
+          <div style="font-size:11px;color:#8896a8;letter-spacing:.4px;line-height:1.5">
+            Each part's cost includes its share of tax. Edit any field below.
+          </div>
         </div>
-        <div id="ex-rows"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;margin-top:4px">
-          <div style="font-size:11px;color:#555d73;text-transform:uppercase;letter-spacing:.6px">Selected total</div>
-          <div id="ex-total" style="font-size:15px;font-weight:700;color:#fbbf24;font-family:ui-monospace,monospace">—</div>
+        <div id="ex-rows" style="flex:1;min-height:0;overflow-y:auto;padding:0 16px;-webkit-overflow-scrolling:touch"></div>
+        <div style="flex-shrink:0;padding:10px 16px 14px;border-top:1px solid #1e2230;background:#0d0f14">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px 10px">
+            <div style="font-size:11px;color:#555d73;text-transform:uppercase;letter-spacing:.6px">Selected total</div>
+            <div id="ex-total" style="font-size:15px;font-weight:700;color:#fbbf24;font-family:ui-monospace,monospace">—</div>
+          </div>
+          <button id="ex-add" style="width:100%;background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">✓ Add selected parts</button>
         </div>
-        <button id="ex-add" style="width:100%;background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer;margin-top:10px">✓ Add selected parts</button>
       ` : `
-        <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.5">
+        <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.5;flex:1">
           No auto parts detected in this receipt.<br>
           <span style="color:#555d73;font-size:11px">You can still confirm — the receipt file is saved.</span>
         </div>
-        <button id="ex-add" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">✓ Done</button>
+        <div style="flex-shrink:0;padding:14px 16px;border-top:1px solid #1e2230;background:#0d0f14">
+          <button id="ex-add" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">✓ Done</button>
+        </div>
       `;
 
       if(items.length){ renderRows(); updateTotal(); }
@@ -4015,10 +4233,12 @@ function renderDetail(c,v){
       const body=overlay.querySelector('#ex-body');
       if(body){
         body.innerHTML=`
-          <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6">
-            ${e.message}<br><br>The receipt file is saved, but no parts were extracted.
+          <div style="flex:1;padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6;display:flex;align-items:center;justify-content:center">
+            <div>${e.message}<br><br>The receipt file is saved, but no parts were extracted.</div>
           </div>
-          <button id="ex-done2" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">Done</button>`;
+          <div style="flex-shrink:0;padding:14px 16px;border-top:1px solid #1e2230;background:#0d0f14">
+            <button id="ex-done2" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">Done</button>
+          </div>`;
         overlay.querySelector('#ex-done2').onclick=cleanup;
       }
     });
@@ -5192,6 +5412,397 @@ function buildConcernsTab(el, v, save){
 }
 
 // ═══════════════════════════════════════════════
+// VENDORS — parts suppliers + sublet shops
+// ═══════════════════════════════════════════════
+let _vendorTab = 'parts'; // module-scope to persist tab choice across re-renders
+
+function renderVendors(c){
+  setTopbar('Vendors', '');
+  const kind = _vendorTab;
+  const vendors = getVendors(kind);
+
+  // Compute spend rollup once for the active list
+  const spendByVendor = {};
+  vendors.forEach(vn => { spendByVendor[vn.id] = vendorSpend(vn.id); });
+
+  c.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Track parts suppliers and sublet shops · view historical spend per vendor</div>
+      <div style="display:flex;gap:8px;border-bottom:1px solid #1e2230;margin-bottom:18px">
+        <button class="vtab-btn ${kind==='parts'?'active':''}" data-kind="parts">🔩 Parts suppliers (${getVendors('parts').length})</button>
+        <button class="vtab-btn ${kind==='sublet'?'active':''}" data-kind="sublet">🏭 Sublet shops (${getVendors('sublet').length})</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-title">${kind==='parts'?'Add parts supplier':'Add sublet shop'}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="field" style="grid-column:1/-1"><label>Vendor name *</label><input id="vn-name" placeholder="${kind==='parts'?'e.g. NAPA Auto Parts — Fairfield':'e.g. Cincinnati Glass & Tint'}"></div>
+        <div class="field"><label>Contact person</label><input id="vn-contact" placeholder="e.g. Mike"></div>
+        <div class="field"><label>Phone</label><input id="vn-phone" placeholder="513-..."></div>
+        <div class="field"><label>Email</label><input id="vn-email" placeholder="orders@..."></div>
+        <div class="field"><label>Address</label><input id="vn-address" placeholder="Optional"></div>
+        <div class="field" style="grid-column:1/-1"><label>Notes</label><input id="vn-notes" placeholder="${kind==='parts'?'Account #, terms, delivery notes...':'Specialty, lead time, alignment / glass / upholstery...'}"></div>
+      </div>
+      <button class="btn-red" id="vn-add-btn" style="padding:10px 18px;border-radius:8px;font-size:13px;margin-top:10px">+ Add ${kind==='parts'?'supplier':'sublet shop'}</button>
+    </div>
+
+    <div id="vendor-list-host"></div>
+  `;
+
+  // Tab switching
+  c.querySelectorAll('.vtab-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      _vendorTab = btn.dataset.kind;
+      render();
+    };
+  });
+
+  // Build list
+  const host = c.querySelector('#vendor-list-host');
+  if(!vendors.length){
+    host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#555d73">
+      <div style="font-size:36px;margin-bottom:8px;opacity:.5">${kind==='parts'?'🔩':'🏭'}</div>
+      <div style="font-size:13px">No ${kind==='parts'?'parts suppliers':'sublet shops'} yet</div>
+      <div style="font-size:11px;margin-top:4px;color:#374151">Add one above to start tracking spend</div>
+    </div>`;
+  } else {
+    // Sort by total spend desc
+    const sorted = [...vendors].sort((a,b)=>(spendByVendor[b.id]?.total||0) - (spendByVendor[a.id]?.total||0));
+    let html = '';
+    sorted.forEach(vn=>{
+      const sp = spendByVendor[vn.id] || {total:0,count:0};
+      html += `
+      <div class="panel" style="margin-bottom:10px">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">${vn.name}</div>
+            <div style="font-size:11px;color:#555d73;display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+              ${vn.contact?`<span>👤 ${vn.contact}</span>`:''}
+              ${vn.phone?`<span>📞 <a href="tel:${vn.phone}" style="color:#9ca3af;text-decoration:none">${vn.phone}</a></span>`:''}
+              ${vn.email?`<span>✉ <a href="mailto:${vn.email}" style="color:#9ca3af;text-decoration:none">${vn.email}</a></span>`:''}
+              ${vn.address?`<span>📍 ${vn.address}</span>`:''}
+            </div>
+            ${vn.notes?`<div style="font-size:12px;color:#9ca3af;background:#0c0e13;border:1px solid #1e2230;border-radius:6px;padding:7px 10px;margin-top:6px">${vn.notes}</div>`:''}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:10px;color:#555d73;margin-bottom:2px">HISTORICAL SPEND</div>
+            <div style="font-size:20px;font-weight:700;color:#C8102E">${fmt$(sp.total)}</div>
+            <div style="font-size:10px;color:#555d73">${sp.count} line item${sp.count!==1?'s':''}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2230;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn-ghost vn-edit" data-id="${vn.id}" style="font-size:12px;padding:7px 12px;border-radius:7px;background:#1e2230;border:1px solid #2a2f3f;color:#9ca3af;cursor:pointer">Edit</button>
+          <button class="vn-del" data-id="${vn.id}" data-name="${vn.name.replace(/"/g,'&quot;')}" style="font-size:12px;padding:7px 12px;border-radius:7px;background:#7f1d1d22;border:1px solid #7f1d1d66;color:#fca5a5;cursor:pointer">Delete</button>
+        </div>
+      </div>`;
+    });
+    host.innerHTML = html;
+  }
+
+  // Wire add button
+  c.querySelector('#vn-add-btn').onclick = ()=>{
+    const name = c.querySelector('#vn-name').value.trim();
+    if(!name){ toast('Vendor name required','err'); return; }
+    addVendor(kind, {
+      name,
+      contact: c.querySelector('#vn-contact').value,
+      phone: c.querySelector('#vn-phone').value,
+      email: c.querySelector('#vn-email').value,
+      address: c.querySelector('#vn-address').value,
+      notes: c.querySelector('#vn-notes').value
+    });
+    toast('Vendor added');
+    render();
+  };
+
+  // Wire delete buttons
+  c.querySelectorAll('.vn-del').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.id;
+      const name = btn.dataset.name;
+      const sp = vendorSpend(id);
+      const msg = sp.count > 0
+        ? `Delete "${name}"?\n\nThis vendor is linked to ${sp.count} line item${sp.count!==1?'s':''} totaling ${fmt$(sp.total)}. Those parts/labor entries will remain on their vehicles but lose their vendor tag.`
+        : `Delete "${name}"?`;
+      if(confirm(msg)){
+        deleteVendor(kind, id);
+        toast('Vendor deleted');
+        render();
+      }
+    };
+  });
+
+  // Wire edit buttons (inline modal-like form)
+  c.querySelectorAll('.vn-edit').forEach(btn=>{
+    btn.onclick = ()=>openVendorEditModal(kind, btn.dataset.id);
+  });
+}
+
+function openVendorEditModal(kind, id){
+  const vn = getVendors(kind).find(x=>x.id===id);
+  if(!vn) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9990;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="max-width:480px;width:100%;background:#111318;border:1px solid #2a2f3f;border-radius:14px;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid #1e2230;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:700;color:#fff">Edit vendor</div>
+        <button id="vne-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:6px 12px;border-radius:6px;cursor:pointer">Close</button>
+      </div>
+      <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="field" style="grid-column:1/-1"><label>Vendor name *</label><input id="vne-name" value="${(vn.name||'').replace(/"/g,'&quot;')}"></div>
+        <div class="field"><label>Contact person</label><input id="vne-contact" value="${(vn.contact||'').replace(/"/g,'&quot;')}"></div>
+        <div class="field"><label>Phone</label><input id="vne-phone" value="${(vn.phone||'').replace(/"/g,'&quot;')}"></div>
+        <div class="field"><label>Email</label><input id="vne-email" value="${(vn.email||'').replace(/"/g,'&quot;')}"></div>
+        <div class="field"><label>Address</label><input id="vne-address" value="${(vn.address||'').replace(/"/g,'&quot;')}"></div>
+        <div class="field" style="grid-column:1/-1"><label>Notes</label><input id="vne-notes" value="${(vn.notes||'').replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid #1e2230;text-align:right">
+        <button class="btn-red" id="vne-save" style="padding:9px 18px;border-radius:8px;font-size:13px">Save changes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const cleanup = ()=>overlay.remove();
+  overlay.querySelector('#vne-close').onclick = cleanup;
+  overlay.onclick = (e)=>{ if(e.target===overlay) cleanup(); };
+  overlay.querySelector('#vne-save').onclick = ()=>{
+    const name = overlay.querySelector('#vne-name').value.trim();
+    if(!name){ toast('Vendor name required','err'); return; }
+    updateVendor(kind, id, {
+      name,
+      contact: overlay.querySelector('#vne-contact').value,
+      phone: overlay.querySelector('#vne-phone').value,
+      email: overlay.querySelector('#vne-email').value,
+      address: overlay.querySelector('#vne-address').value,
+      notes: overlay.querySelector('#vne-notes').value
+    });
+    toast('Vendor updated');
+    cleanup();
+    render();
+  };
+}
+
+// ═══════════════════════════════════════════════
+// RECON ANALYTICS — avg cost/time per status, mechanic, vehicle class
+// ═══════════════════════════════════════════════
+let _analyticsRange = 'all'; // 'all' | '30d' | '90d' | 'ytd'
+
+function renderAnalytics(c){
+  setTopbar('Recon analytics', '');
+
+  const now = Date.now();
+  const cutoffs = {
+    'all': 0,
+    '30d': now - 30*86400000,
+    '90d': now - 90*86400000,
+    'ytd': new Date(new Date().getFullYear(),0,1).getTime()
+  };
+  const cutoff = cutoffs[_analyticsRange] || 0;
+
+  // Walk all vehicles + all visits, collecting completed visits
+  // A visit is "completed" if it has work_complete, cleaning, sale, sold, OR receipts_in
+  const COMPLETE = new Set(['work_complete','cleaning','sale','sold','receipts_in','booked']);
+
+  const visitsList = [];
+  (ST.vehicles||[]).forEach(veh=>{
+    (veh.visits||[]).forEach(visit=>{
+      const sts = visit.statuses||[];
+      const isComplete = sts.some(s=>COMPLETE.has(s));
+      if(!isComplete) return;
+      const tIn = visit.dateIn || veh.createdAt || 0;
+      const tOut = visit.dateOut || veh.updatedAt || now;
+      if(tOut < cutoff) return;
+      const partsTotal=(visit.parts||[]).reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+      const laborTotal=(visit.laborLines||[]).reduce((a,l)=>a+((parseFloat(l.hours)||0)*(parseFloat(l.rate)||0)),0);
+      const legacyTotal=(visit.repairs||[]).reduce((a,r)=>a+Number(r.cost||0),0);
+      const totalCost = partsTotal+laborTotal+legacyTotal;
+      const cycleDays = Math.max(1, Math.round((tOut - tIn)/86400000));
+      // Total clocked hours for this visit
+      const clockedMs = (visit.timeSessions||[]).reduce((a,s)=>{
+        if(!s.start||!s.end) return a;
+        return a + (s.end - s.start);
+      }, 0);
+      const clockedHrs = clockedMs / 3600000;
+      visitsList.push({
+        veh, visit, sts, totalCost, cycleDays, clockedHrs,
+        mechId: visit.assignedTo || '',
+        // Vehicle class proxies — make-based grouping for simplicity
+        make: (veh.make||'Unknown').trim(),
+        year: parseInt(veh.year)||0
+      });
+    });
+  });
+
+  // Aggregate helper
+  function agg(items, keyFn, labelFn){
+    const buckets = {};
+    items.forEach(it=>{
+      const keys = keyFn(it);
+      (Array.isArray(keys)?keys:[keys]).forEach(k=>{
+        if(!k) return;
+        if(!buckets[k]) buckets[k] = {key:k, label:labelFn?labelFn(k,it):k, count:0, costSum:0, daysSum:0, hoursSum:0};
+        buckets[k].count++;
+        buckets[k].costSum += it.totalCost;
+        buckets[k].daysSum += it.cycleDays;
+        buckets[k].hoursSum += it.clockedHrs;
+      });
+    });
+    return Object.values(buckets).map(b=>({
+      ...b,
+      avgCost: b.count ? b.costSum/b.count : 0,
+      avgDays: b.count ? b.daysSum/b.count : 0,
+      avgHours: b.count ? b.hoursSum/b.count : 0
+    })).sort((a,b)=>b.costSum-a.costSum);
+  }
+
+  const totalCount = visitsList.length;
+  const totalCost = visitsList.reduce((a,it)=>a+it.totalCost,0);
+  const avgCycle = totalCount ? visitsList.reduce((a,it)=>a+it.cycleDays,0)/totalCount : 0;
+  const avgCost = totalCount ? totalCost/totalCount : 0;
+  const totalHours = visitsList.reduce((a,it)=>a+it.clockedHrs,0);
+
+  const byStatus = agg(
+    visitsList,
+    it=>it.sts.filter(s=>COMPLETE.has(s)),
+    k=>(SMAP[k]?SMAP[k].icon+' '+SMAP[k].label:k)
+  );
+  const byMech = agg(
+    visitsList,
+    it=>it.mechId,
+    k=>{const m=getMMAP()[k];return m?(m.icon+' '+m.name):k;}
+  );
+  const byMake = agg(
+    visitsList,
+    it=>it.make,
+    k=>k
+  );
+
+  // Cost-per-month trend (last 12 months or fewer if range is shorter)
+  const monthBuckets = {};
+  visitsList.forEach(it=>{
+    const d = new Date(it.visit.dateOut || it.visit.dateIn || now);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if(!monthBuckets[key]) monthBuckets[key]={key,count:0,cost:0};
+    monthBuckets[key].count++;
+    monthBuckets[key].cost += it.totalCost;
+  });
+  const months = Object.values(monthBuckets).sort((a,b)=>a.key.localeCompare(b.key)).slice(-12);
+  const monthMaxCost = Math.max(1, ...months.map(m=>m.cost));
+
+  // Build the page
+  const rangeBtns = [
+    {id:'30d', label:'30 days'},
+    {id:'90d', label:'90 days'},
+    {id:'ytd', label:'YTD'},
+    {id:'all', label:'All time'}
+  ];
+
+  function tableHtml(rows, label){
+    if(!rows.length) return `<div style="color:#374151;font-size:13px;padding:14px 0;text-align:center">No data in this range</div>`;
+    return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:1px solid #2a2f3f;color:#9ca3af;text-align:left">
+        <th style="padding:8px 10px;font-weight:600;font-size:11px;letter-spacing:.5px">${label.toUpperCase()}</th>
+        <th style="padding:8px 10px;font-weight:600;font-size:11px;text-align:right">VISITS</th>
+        <th style="padding:8px 10px;font-weight:600;font-size:11px;text-align:right">AVG COST</th>
+        <th style="padding:8px 10px;font-weight:600;font-size:11px;text-align:right">AVG DAYS</th>
+        <th style="padding:8px 10px;font-weight:600;font-size:11px;text-align:right">AVG HRS</th>
+        <th style="padding:8px 10px;font-weight:600;font-size:11px;text-align:right">TOTAL</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>`
+        <tr style="border-bottom:1px solid #1e2230">
+          <td style="padding:9px 10px;color:#e2e4ea">${r.label}</td>
+          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${r.count}</td>
+          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${fmt$(r.avgCost)}</td>
+          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${r.avgDays.toFixed(1)}</td>
+          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${r.avgHours.toFixed(1)}</td>
+          <td style="padding:9px 10px;text-align:right;color:#C8102E;font-weight:600">${fmt$(r.costSum)}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  c.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Recon spend, cycle time, and labor across completed visits</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${rangeBtns.map(b=>`<button class="an-range ${_analyticsRange===b.id?'active':''}" data-range="${b.id}" style="font-size:12px;padding:7px 14px;border-radius:7px;background:${_analyticsRange===b.id?'#C8102E':'#1e2230'};border:1px solid ${_analyticsRange===b.id?'#C8102E':'#2a2f3f'};color:#fff;cursor:pointer">${b.label}</button>`).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px">
+      <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">COMPLETED VISITS</div>
+        <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${totalCount}</div>
+      </div>
+      <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">TOTAL RECON SPEND</div>
+        <div class="ov-val" style="font-size:22px;font-weight:700;color:#C8102E;margin-top:4px">${fmt$(totalCost)}</div>
+      </div>
+      <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">AVG PER VEHICLE</div>
+        <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${fmt$(avgCost)}</div>
+      </div>
+      <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">AVG CYCLE TIME</div>
+        <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${avgCycle.toFixed(1)}d</div>
+      </div>
+      <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">TOTAL LABOR HRS</div>
+        <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${totalHours.toFixed(1)}</div>
+      </div>
+    </div>
+
+    ${months.length ? `
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-title">Monthly recon spend trend</div>
+      <div style="display:flex;align-items:flex-end;gap:6px;height:140px;padding:10px 4px 0">
+        ${months.map(m=>{
+          const h = Math.max(4, Math.round(120*m.cost/monthMaxCost));
+          const monthLabel = (() => {
+            const [y, mo] = m.key.split('-');
+            return new Date(parseInt(y), parseInt(mo)-1, 1).toLocaleDateString('en-US',{month:'short'});
+          })();
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
+            <div style="font-size:9px;color:#9ca3af;white-space:nowrap">${fmt$(m.cost)}</div>
+            <div title="${monthLabel} · ${m.count} visits · ${fmt$(m.cost)}" style="width:100%;max-width:40px;height:${h}px;background:linear-gradient(to top,#C8102E,#C8102E66);border-radius:4px 4px 0 0"></div>
+            <div style="font-size:10px;color:#555d73">${monthLabel}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-title">By status</div>
+      ${tableHtml(byStatus, 'Status')}
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-title">By mechanic</div>
+      ${tableHtml(byMech, 'Mechanic')}
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-title">By vehicle make</div>
+      ${tableHtml(byMake, 'Make')}
+    </div>
+
+    ${totalCount===0 ? `
+    <div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#555d73">
+      <div style="font-size:36px;margin-bottom:8px;opacity:.5">📊</div>
+      <div style="font-size:13px">No completed visits in this range</div>
+      <div style="font-size:11px;margin-top:4px;color:#374151">Vehicles marked work complete, ready for sale, or sold will appear here</div>
+    </div>` : ''}
+  `;
+
+  c.querySelectorAll('.an-range').forEach(btn=>{
+    btn.onclick = ()=>{
+      _analyticsRange = btn.dataset.range;
+      render();
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════
 // SVG ICONS
 // ═══════════════════════════════════════════════
 function gridIcon(){return`<rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor"/><rect x="9" y="1" width="6" height="6" rx="1" fill="currentColor" opacity=".5"/><rect x="1" y="9" width="6" height="6" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity=".3"/>`}
@@ -5204,6 +5815,8 @@ function broom(){return`<line x1="2" y1="14" x2="10" y2="6" stroke="currentColor
 function checkIcon(){return`<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`}
 function saleIcon(){return`<path d="M2 4h4l6 6-4 4L2 8V4z" stroke="currentColor" stroke-width="1.3" fill="none"/><circle cx="5" cy="7" r="1" fill="currentColor"/><line x1="10" y1="2" x2="14" y2="6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>`}
 function gearIcon(){return`<circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>`}
+function vendorIcon(){return`<path d="M2 6h12l-1 7H3L2 6z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M5 6V4a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" fill="none"/>`}
+function chartIcon(){return`<line x1="2" y1="14" x2="14" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><rect x="3" y="9" width="2.5" height="5" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="6.75" y="6" width="2.5" height="8" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="10.5" y="3" width="2.5" height="11" stroke="currentColor" stroke-width="1.2" fill="none"/>`}
 function checkIcon(){return`<path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`}
 function saleIcon(){return`<path d="M2 4h5l7 7-5 5-7-7V4z" stroke="currentColor" stroke-width="1.3" fill="none"/><circle cx="5.5" cy="7.5" r="1" fill="currentColor"/>`}
 
@@ -5951,7 +6564,7 @@ function applyVisitShim(v){
   // Copy visit fields onto top-level of v so existing reads work
   const SHIM_FIELDS = ['stockNumber','statuses','assignedTo','priority',
     'apptDate','parts','laborLines','repairs','receipts','photos','notes',
-    'concerns','comments','timeSessions'];
+    'concerns','comments','timeSessions','obdScans'];
   SHIM_FIELDS.forEach(f => {
     if(cur[f] !== undefined) v[f] = cur[f];
   });
