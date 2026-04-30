@@ -266,6 +266,31 @@ a{text-decoration:none;color:inherit}
 .receipt-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .receipt-date{font-size:10px;color:var(--text3);margin-top:1px}
 .dl-link{color:#60a5fa;font-size:11px;text-decoration:none;padding:4px 9px;background:rgba(30,58,95,.4);border-radius:var(--r-md);flex-shrink:0}
+/* ═══ FILE THUMBNAIL (receipts + OBDII previews) ═══ */
+.file-thumb{
+  width:56px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;
+  background:#0a0c10;border:1px solid #1e2230;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;position:relative;
+  transition:border-color .12s, transform .12s;
+}
+.file-thumb:hover{border-color:#374151;transform:scale(1.04)}
+.file-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.file-thumb.pdf{
+  background:linear-gradient(135deg,#1a1d27 0%,#0d0f14 100%);
+}
+.file-thumb.pdf::before{
+  content:'';position:absolute;top:0;right:0;width:14px;height:14px;
+  background:#0d0f14;
+  clip-path:polygon(100% 0, 0 0, 100% 100%);
+  border-left:1px solid #2a2f3f;border-bottom:1px solid #2a2f3f;
+}
+.file-thumb-pdf-label{
+  font-size:10px;font-weight:800;color:#C8102E;letter-spacing:1px;
+  font-family:ui-monospace,monospace;
+}
+.file-thumb-pdf-icon{
+  position:absolute;bottom:4px;left:4px;font-size:11px;color:#9ca3af;
+}
 
 /* ═══ FRAZER ═══ */
 .frazer-row{display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border)}
@@ -929,6 +954,29 @@ function receiptDate(r){
 // True if receipt is a PDF (based on name)
 function receiptIsPdf(r){
   return receiptName(r).toLowerCase().endsWith('.pdf');
+}
+
+// Render a 56x56 clickable thumbnail for a file entry.
+// Images show the actual photo; PDFs show a styled "PDF" badge thumbnail.
+// Clicking opens the file in a new tab.
+function fileThumbHtml(entry, opts){
+  opts = opts || {};
+  const url = receiptUrl(entry);
+  const name = receiptName(entry);
+  const isPdf = receiptIsPdf(entry);
+  const safeUrl = (url||'').replace(/"/g,'&quot;');
+  const safeName = name.replace(/"/g,'&quot;');
+  const onclick = url ? `onclick="window.open('${safeUrl}','_blank','noopener')"` : '';
+  if(isPdf){
+    return `<div class="file-thumb pdf" title="${safeName}" ${onclick}>
+      <span class="file-thumb-pdf-label">PDF</span>
+      <span class="file-thumb-pdf-icon">${opts.icon||'📄'}</span>
+    </div>`;
+  }
+  // Image
+  return `<div class="file-thumb" title="${safeName}" ${onclick}>
+    <img src="${safeUrl}" alt="${safeName}" loading="lazy" onerror="this.style.display='none';this.parentElement.innerHTML='<span style=\\'font-size:22px\\'>🖼</span>'">
+  </div>`;
 }
 
 // Return storage path on a photo/receipt entry (for deletion), if any
@@ -3090,7 +3138,7 @@ function renderDetail(c,v){
         ? `<button class="del-btn" onclick="if(confirm('Delete this OBDII scan?'))window.delObdScan(${i})">✕</button>`
         : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #1e2230">
-        <span style="font-size:20px">📋</span>
+        ${fileThumbHtml(s,{icon:'📋'})}
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sName}</div>
           <div style="font-size:11px;color:#555d73">${fmtD(sDate)}</div>
@@ -4014,7 +4062,7 @@ function renderDetail(c,v){
     (v.receipts||[]).forEach((r,i)=>{
       const row=document.createElement('div');row.className='receipt-row';
       const rName=receiptName(r);const rUrl=receiptUrl(r);const rDate=receiptDate(r);const isPdf=receiptIsPdf(r);
-      row.innerHTML=`<span style="font-size:22px">${isPdf?'📄':'🖼'}</span>
+      row.innerHTML=`${fileThumbHtml(r,{icon:'🧾'})}
         <div class="receipt-info"><div class="receipt-name">${rName}</div><div class="receipt-date">${fmtD(rDate)}</div></div>
         <a class="dl-link" href="${rUrl}" download="${rName}" target="_blank" rel="noopener">⬇ Download</a>`;
       if(ST.masterPinUnlocked){
