@@ -260,6 +260,18 @@ a{text-decoration:none;color:inherit}
 .del-btn{background:rgba(127,29,29,.35);border:none;color:#f87171;width:24px;height:24px;border-radius:var(--r);font-size:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .1s}
 .del-btn:hover{background:rgba(127,29,29,.6)}
 
+/* ═══ PARTS PIPELINE BUTTONS ═══ */
+.ppl-btn{
+  font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;
+  border:1px solid #2a2f3f;background:#1e2230;color:#9ca3af;
+  cursor:pointer;transition:all .1s;font-family:inherit
+}
+.ppl-btn:hover{border-color:#374151;color:#fff}
+.ppl-btn.ppl-receive{background:#14532d33;border-color:#16653488;color:#bbf7d0}
+.ppl-btn.ppl-receive:hover{background:#14532d66;border-color:#16a34a}
+.ppl-btn.ppl-order{background:#1e3a8a33;border-color:#1e40af88;color:#bfdbfe}
+.ppl-btn.ppl-order:hover{background:#1e3a8a66;border-color:#3b82f6}
+
 /* ═══ RECEIPT ROWS ═══ */
 .receipt-row{display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--surface2);border-radius:var(--r-md);margin-bottom:5px}
 .receipt-info{flex:1;min-width:0}
@@ -874,6 +886,295 @@ function vendorSpend(vendorId){
   });
   return {total, count};
 }
+
+// ═══════════════════════════════════════════════
+// PARTS PIPELINE — needed → ordered → received
+// ═══════════════════════════════════════════════
+// Default state for legacy parts (no state field) is 'received'
+function partState(p){
+  if(!p) return 'received';
+  return p.state || 'received';
+}
+// Parts that block work — anything in 'needed' or 'ordered'
+function pendingPartsCount(visit){
+  if(!visit || !Array.isArray(visit.parts)) return 0;
+  return visit.parts.filter(p=>{
+    const s = partState(p);
+    return s==='needed' || s==='ordered';
+  }).length;
+}
+// Vehicle is "waiting on parts" if any part on its current visit is needed/ordered
+function vehicleHasPendingParts(v){
+  if(!v) return false;
+  const cur = currentVisit(v);
+  return pendingPartsCount(cur) > 0;
+}
+// Auto-manage the 'parts' (Waiting on parts) status based on parts pipeline
+// Adds the status when there are pending parts, removes when all received.
+// Returns true if the status array was changed.
+function syncPartsStatus(v){
+  if(!v) return false;
+  const cur = currentVisit(v);
+  if(!cur) return false;
+  const hasPending = pendingPartsCount(cur) > 0;
+  const statuses = Array.isArray(cur.statuses) ? [...cur.statuses] : [];
+  const hasStatus = statuses.includes('parts');
+  if(hasPending && !hasStatus){
+    statuses.push('parts');
+    writeToCurrentVisit(v, 'statuses', statuses);
+    return true;
+  }
+  if(!hasPending && hasStatus){
+    writeToCurrentVisit(v, 'statuses', statuses.filter(s=>s!=='parts'));
+    return true;
+  }
+  return false;
+}
+// Collect all pending parts across all vehicles for the dashboard panel
+// Returns array of {vehicle, visit, part, partIdx, vendorName, daysSinceOrdered}
+function getAllPendingParts(){
+  const out = [];
+  (ST.vehicles||[]).forEach(v=>{
+    const cur = currentVisit(v);
+    if(!cur || !Array.isArray(cur.parts)) return;
+    cur.parts.forEach((p, idx)=>{
+      const s = partState(p);
+      if(s !== 'needed' && s !== 'ordered') return;
+      const vendor = p.vendor ? getVendorById(p.vendor) : null;
+      const orderedDate = p.orderedDate || null;
+      const daysSinceOrdered = orderedDate ? Math.floor((Date.now() - orderedDate) / 86400000) : null;
+      out.push({
+        vehicle: v,
+        visit: cur,
+        part: p,
+        partIdx: idx,
+        vendorName: vendor ? vendor.name : '',
+        daysSinceOrdered,
+        state: s
+      });
+    });
+  });
+  // Sort: ordered first (by ETA asc, no-ETA last), then needed (by added date)
+  out.sort((a,b)=>{
+    if(a.state !== b.state) return a.state === 'ordered' ? -1 : 1;
+    if(a.state === 'ordered'){
+      const ea = a.part.eta || Infinity;
+      const eb = b.part.eta || Infinity;
+      return ea - eb;
+    }
+    return 0;
+  });
+  return out;
+}
+
+// Finalize add-parts-from-receipt. picked = [{description, partNumber, eachCost, quantity, ...}]
+// matches = array of {receiptIdx (into picked), orderedIdx (into freshV.parts)} — closes those orders out
+function finalizeReceiptParts(freshV, picked, matches){
+  matches = matches || [];
+  const matchedPickedIdx = new Set(matches.map(m=>m.receiptIdx));
+  const newParts = [...(freshV.parts||[])];
+  // First, mark matched ordered parts as received and update their cost from receipt
+  matches.forEach(m=>{
+    const receiptItem = picked[m.receiptIdx];
+    if(!receiptItem) return;
+    const orig = newParts[m.orderedIdx];
+    if(!orig) return;
+    newParts[m.orderedIdx] = {
+      ...orig,
+      state: 'received',
+      receivedDate: Date.now(),
+      // Update cost from receipt if reasonable; keep original name/partNum
+      cost: parseFloat(receiptItem.eachCost) || orig.cost,
+      qty: parseInt(receiptItem.quantity) || orig.qty
+    };
+  });
+  // Then add unmatched picked items as new 'received' parts
+  picked.forEach((row, idx)=>{
+    if(matchedPickedIdx.has(idx)) return;
+    newParts.push({
+      name: row.description || '',
+      partNum: row.partNumber || '',
+      cost: parseFloat(row.eachCost) || 0,
+      qty: parseInt(row.quantity) || 1,
+      state: 'received',
+      receivedDate: Date.now()
+    });
+  });
+  writeToCurrentVisit(freshV, 'parts', newParts);
+  syncPartsStatus(freshV);
+  window.save();
+  const closedCount = matches.length;
+  const newCount = picked.length - closedCount;
+  let msg = '';
+  if(closedCount && newCount){
+    msg = `${closedCount} order${closedCount!==1?'s':''} closed · ${newCount} new part${newCount!==1?'s':''} added`;
+  } else if(closedCount){
+    msg = `${closedCount} order${closedCount!==1?'s':''} closed out`;
+  } else {
+    msg = `Added ${newCount} part${newCount!==1?'s':''} to ${freshV.year||''} ${freshV.make||''} ${freshV.model||''}`;
+  }
+  toast(msg);
+}
+
+// Modal asking: are these new parts, or are they the parts you ordered?
+function openReceiptIntent(freshV, picked, orderedPending, onDone){
+  // matches: array of {receiptIdx, orderedIdx}
+  let matches = [];
+  // Pre-suggest matches by name similarity (simple lowercase contains)
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+  picked.forEach((row, ri)=>{
+    const rN = norm(row.description);
+    if(!rN) return;
+    const oi = orderedPending.findIndex((op, oIdx)=>{
+      const oN = norm(op.name);
+      if(!oN) return false;
+      // Match if either contains the other (handle truncation both ways)
+      return (rN.includes(oN) || oN.includes(rN));
+    });
+    if(oi >= 0){
+      // Find the original index in freshV.parts
+      const origIdx = freshV.parts.indexOf(orderedPending[oi]);
+      // Don't double-match the same ordered part
+      if(!matches.some(m=>m.orderedIdx===origIdx)){
+        matches.push({receiptIdx: ri, orderedIdx: origIdx});
+      }
+    }
+  });
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.90);z-index:9995;display:flex;align-items:center;justify-content:center;padding:18px';
+
+  function rebuild(){
+    const matchByR = Object.fromEntries(matches.map(m=>[m.receiptIdx, m.orderedIdx]));
+    const orderedRowHtml = orderedPending.map((op, oi)=>{
+      const origIdx = freshV.parts.indexOf(op);
+      const eta = op.eta ? new Date(op.eta).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'no ETA';
+      const matchedR = matches.find(m=>m.orderedIdx === origIdx);
+      const matchedReceipt = matchedR ? picked[matchedR.receiptIdx] : null;
+      return `<div style="padding:10px 12px;border:1px solid ${matchedR?'#16a34a':'#1e2230'};border-radius:8px;margin-bottom:6px;background:${matchedR?'#14532d22':'#0d0f14'}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase">🚚 Ordered · ${eta}</span>
+          <span style="font-size:13px;color:#e2e4ea;flex:1;min-width:0">${op.name}</span>
+          <span style="font-size:11px;color:#9ca3af">${fmt$((parseFloat(op.cost)||0)*(parseInt(op.qty)||1))}</span>
+        </div>
+        ${matchedR ? `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#bbf7d0;padding-top:6px;border-top:1px solid #16a34a44;margin-top:6px">
+          ✓ matched to "${matchedReceipt.description||'?'}" — <button data-unmatch-o="${origIdx}" style="background:transparent;border:1px solid #16a34a55;color:#bbf7d0;font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer">Undo</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+
+    const matchedRSet = new Set(matches.map(m=>m.receiptIdx));
+    const receiptRowHtml = picked.map((row, ri)=>{
+      const matchedO = matchByR[ri];
+      const isMatched = matchedO !== undefined;
+      const orderedName = isMatched ? freshV.parts[matchedO]?.name : '';
+      // Show available ordered parts to match against
+      const availableOrders = orderedPending
+        .map((op, oi)=>{
+          const origIdx = freshV.parts.indexOf(op);
+          const taken = matches.some(m=>m.orderedIdx===origIdx && m.receiptIdx !== ri);
+          return {origIdx, name: op.name, taken};
+        })
+        .filter(x=>!x.taken);
+      return `<div style="padding:10px 12px;border:1px solid ${isMatched?'#16a34a':'#1e2230'};border-radius:8px;margin-bottom:6px;background:${isMatched?'#14532d22':'#0d0f14'}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          ${isMatched ? '<span style="font-size:14px">✓</span>' : '<span style="font-size:14px">📦</span>'}
+          <span style="font-size:13px;color:#e2e4ea;flex:1;min-width:0">${row.description}</span>
+          <span style="font-size:11px;color:#C8102E;font-weight:600">${fmt$((Number(row.eachCost)||0)*(Number(row.quantity)||1))}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          ${isMatched
+            ? `<span style="font-size:11px;color:#bbf7d0">Closes order: ${orderedName}</span>
+               <button data-unmatch-r="${ri}" style="background:transparent;border:1px solid #16a34a55;color:#bbf7d0;font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer">Undo · treat as new</button>`
+            : `<select data-match-r="${ri}" style="font-size:11px;background:#0a0c10;border:1px solid #1e2230;border-radius:5px;padding:4px 6px;color:#9ca3af">
+                 <option value="">+ New part</option>
+                 ${availableOrders.map(o=>`<option value="${o.origIdx}">↩ Closes: ${o.name.slice(0,40)}${o.name.length>40?'...':''}</option>`).join('')}
+               </select>`
+          }
+        </div>
+      </div>`;
+    }).join('');
+
+    const totalMatched = matches.length;
+    const totalNew = picked.length - totalMatched;
+
+    overlay.innerHTML = `
+      <div style="max-width:560px;width:100%;max-height:calc(100vh - 36px);background:#111318;border:1px solid #2a2f3f;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid #1e2230;flex-shrink:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:14px;font-weight:700;color:#fff">Match receipt to pending orders?</div>
+            <button id="ri-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:12px;padding:6px 11px;border-radius:6px;cursor:pointer">Cancel</button>
+          </div>
+          <div style="font-size:12px;color:#9ca3af">This vehicle has <strong style="color:#bfdbfe">${orderedPending.length} ordered part${orderedPending.length!==1?'s':''}</strong> waiting. Match each receipt item to an order it closes — or treat them as new.</div>
+        </div>
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:14px 16px">
+          <div style="font-size:10px;color:#bfdbfe;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px">⏳ Pending orders on this vehicle</div>
+          ${orderedRowHtml}
+          <div style="font-size:10px;color:#fed7aa;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin:14px 0 6px">📦 Receipt items</div>
+          ${receiptRowHtml}
+        </div>
+        <div style="flex-shrink:0;padding:12px 16px;border-top:1px solid #1e2230;background:#0d0f14">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#9ca3af;margin-bottom:8px">
+            <span>${totalMatched} order${totalMatched!==1?'s':''} closing · ${totalNew} new part${totalNew!==1?'s':''}</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button id="ri-all-new" style="flex:1;background:#1e2230;border:1px solid #374151;color:#fff;font-size:12px;font-weight:600;padding:11px;border-radius:8px;cursor:pointer">All new parts</button>
+            <button id="ri-confirm" class="btn-red" style="flex:2;font-size:13px;font-weight:700;padding:11px;border-radius:8px">✓ Confirm</button>
+          </div>
+        </div>
+      </div>`;
+
+    overlay.querySelector('#ri-close').onclick = ()=>{ overlay.remove(); if(onDone) onDone(); };
+    overlay.querySelector('#ri-all-new').onclick = ()=>{
+      matches = [];
+      finalizeReceiptParts(freshV, picked, matches);
+      overlay.remove();
+      if(onDone) onDone();
+    };
+    overlay.querySelector('#ri-confirm').onclick = ()=>{
+      finalizeReceiptParts(freshV, picked, matches);
+      overlay.remove();
+      if(onDone) onDone();
+    };
+    overlay.onclick = (e)=>{ if(e.target===overlay){ overlay.remove(); if(onDone) onDone(); } };
+
+    // Match dropdowns
+    overlay.querySelectorAll('[data-match-r]').forEach(sel=>{
+      sel.onchange = (e)=>{
+        const ri = parseInt(sel.dataset.matchR);
+        const oi = sel.value === '' ? null : parseInt(sel.value);
+        // Remove any prior match for this receipt item
+        matches = matches.filter(m=>m.receiptIdx !== ri);
+        if(oi !== null){
+          // Remove any prior match for this ordered part too
+          matches = matches.filter(m=>m.orderedIdx !== oi);
+          matches.push({receiptIdx: ri, orderedIdx: oi});
+        }
+        rebuild();
+      };
+    });
+    // Unmatch by ordered idx
+    overlay.querySelectorAll('[data-unmatch-o]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const oi = parseInt(btn.dataset.unmatchO);
+        matches = matches.filter(m=>m.orderedIdx !== oi);
+        rebuild();
+      };
+    });
+    // Unmatch by receipt idx
+    overlay.querySelectorAll('[data-unmatch-r]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const ri = parseInt(btn.dataset.unmatchR);
+        matches = matches.filter(m=>m.receiptIdx !== ri);
+        rebuild();
+      };
+    });
+  }
+
+  document.body.appendChild(overlay);
+  rebuild();
+}
+
 function getRoles(){
   const mechs=getMechs();
   return[
@@ -1656,6 +1957,71 @@ function renderDashboard(c){
   html+=`<div style="margin-bottom:14px"></div>`;
 
   // ══════════════════════════════════════════
+  // 3.5 PARTS PIPELINE — pending parts shop-wide
+  // ══════════════════════════════════════════
+  const pendingParts = getAllPendingParts();
+  if(pendingParts.length){
+    const orderedItems = pendingParts.filter(x=>x.state==='ordered');
+    const neededItems = pendingParts.filter(x=>x.state==='needed');
+    html += `<div class="sec-hdr">PARTS PIPELINE</div>
+      <div style="background:#111318;border:1px solid #1e2230;border-radius:12px;overflow:hidden;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #1e2230;background:#0c0e13">
+          <span style="font-size:18px">⏳</span>
+          <span style="font-size:13px;font-weight:600;color:#fff">${pendingParts.length} part${pendingParts.length!==1?'s':''} pending</span>
+          ${orderedItems.length?`<span style="font-size:10px;color:#bfdbfe;background:#1e3a8a55;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${orderedItems.length} ordered</span>`:''}
+          ${neededItems.length?`<span style="font-size:10px;color:#fed7aa;background:#7c2d1255;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${neededItems.length} needed</span>`:''}
+        </div>
+        <div style="max-height:320px;overflow-y:auto">`;
+    pendingParts.forEach(item=>{
+      const v = item.vehicle;
+      const p = item.part;
+      const yMM = `${v.year||''} ${v.make||''} ${v.model||''}`.trim();
+      const stockStr = v.stockNumber ? ` · #${v.stockNumber}` : '';
+      const stateBadge = item.state === 'ordered'
+        ? `<span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">🚚 Ordered</span>`
+        : `<span style="font-size:9px;color:#fed7aa;background:#7c2d1255;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">📋 Needed</span>`;
+      // ETA display
+      let etaStr = '';
+      if(item.state === 'ordered'){
+        if(p.eta){
+          const etaDate = new Date(p.eta);
+          const days = Math.ceil((p.eta - Date.now()) / 86400000);
+          const dateLabel = etaDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+          if(days < 0){
+            etaStr = `<span style="color:#f87171;font-weight:600">⚠ Late · ${Math.abs(days)}d ago</span>`;
+          } else if(days === 0){
+            etaStr = `<span style="color:#fbbf24;font-weight:600">📦 Today</span>`;
+          } else if(days === 1){
+            etaStr = `<span style="color:#34d399;font-weight:600">📦 Tomorrow</span>`;
+          } else {
+            etaStr = `<span style="color:#9ca3af">📦 ${dateLabel} (${days}d)</span>`;
+          }
+        } else if(item.daysSinceOrdered != null){
+          etaStr = `<span style="color:#555d73">Ordered ${item.daysSinceOrdered}d ago · No ETA</span>`;
+        }
+      }
+      const trackingBtn = (item.state === 'ordered' && p.trackingNum)
+        ? `<button onclick="event.stopPropagation();window.openTrackingSearch('${(p.trackingNum||'').replace(/'/g,'')}')" style="font-size:10px;color:#60a5fa;background:rgba(30,58,95,.4);border:none;border-radius:5px;padding:3px 8px;cursor:pointer;flex-shrink:0">🔗 Track</button>`
+        : '';
+      html += `
+        <div onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='repairs';render()" style="padding:11px 14px;border-bottom:1px solid #1e2230;cursor:pointer;transition:background .1s" onmouseover="this.style.background='#161921'" onmouseout="this.style.background='transparent'">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            ${stateBadge}
+            <span style="font-size:13px;font-weight:600;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
+            <span style="font-size:12px;font-weight:700;color:#C8102E;flex-shrink:0">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}</span>
+            ${trackingBtn}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#9ca3af">
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1">🚗 ${yMM}${stockStr}</span>
+            ${item.vendorName?`<span style="color:#818cf8;flex-shrink:0">↗ ${item.vendorName}</span>`:''}
+            <span style="flex-shrink:0">${etaStr}</span>
+          </div>
+        </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // ══════════════════════════════════════════
   
   // ══════════════════════════════════════════
   // 4. VEHICLES BY STATUS (ordered groups)
@@ -1881,13 +2247,35 @@ function vRowHTML(v){
   const borderColor=isSalePending?'#f59e0b55':isSold?'#10b98133':'#1e2230';
   const concerns=v.concerns||[];
   const pendingC=concerns.filter(c=>c.status==='pending').length;
+  // Parts pipeline counts
+  const partsPending = (v.parts||[]).filter(p=>{
+    const s = p.state || 'received';
+    return s === 'needed' || s === 'ordered';
+  });
+  const orderedCount = partsPending.filter(p=>(p.state||'received')==='ordered').length;
+  const neededCount = partsPending.filter(p=>(p.state||'received')==='needed').length;
+  // Use a single chip showing both counts; clicking jumps to repairs tab
+  let partsBadge = '';
+  if(partsPending.length){
+    // Find soonest ETA among ordered parts
+    const etas = partsPending.filter(p=>p.state==='ordered' && p.eta).map(p=>p.eta).sort();
+    let etaSuffix = '';
+    if(etas.length){
+      const days = Math.ceil((etas[0] - Date.now()) / 86400000);
+      if(days < 0) etaSuffix = ` · ⚠ late`;
+      else if(days === 0) etaSuffix = ` · today`;
+      else if(days === 1) etaSuffix = ` · tmrw`;
+      else if(days <= 7) etaSuffix = ` · ${days}d`;
+    }
+    partsBadge = `<span class="v-tag" style="background:#1e3a8a22;color:#bfdbfe;border-color:#1e3a8a55">🚚 ${partsPending.length} part${partsPending.length!==1?'s':''} pending${etaSuffix}</span>`;
+  }
   return`<div class="v-row" data-vid="${v.id}" style="border-color:${borderColor}${isSalePending?';background:#1a120044':''}">
     ${photo?`<div class="v-row-photo"><img src="${photo}" loading="lazy"></div>`:`<div class="v-row-photo-empty"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M2 10L4 5h8l2 5H2z" stroke="#374151" stroke-width="1.2" fill="none"/></svg></div>`}
     <div style="min-width:0">
       <div class="v-name">${v.year||''} ${v.make||''} ${v.model||''}</div>
       <div class="v-meta">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${mech?` · ${mech.icon} ${mech.name}`:''}</div>
       ${v.apptDate?`<div style="font-size:11px;color:#06b6d4;font-weight:600;margin-top:2px">📅 ${new Date(v.apptDate).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>`:''}
-      <div class="v-tags">${sts.map(s=>`<span class="v-tag" style="background:${s.color}18;color:${s.color};border-color:${s.color}30">${s.icon} ${s.label}</span>`).join('')}${pendingC?`<span class="v-tag" style="background:#C8102E22;color:#C8102E;border-color:#C8102E33">⚠️ ${pendingC} concern${pendingC!==1?'s':''}</span>`:''}</div>
+      <div class="v-tags">${sts.map(s=>`<span class="v-tag" style="background:${s.color}18;color:${s.color};border-color:${s.color}30">${s.icon} ${s.label}</span>`).join('')}${pendingC?`<span class="v-tag" style="background:#C8102E22;color:#C8102E;border-color:#C8102E33">⚠️ ${pendingC} concern${pendingC!==1?'s':''}</span>`:''}${partsBadge}</div>
     </div>
     ${pri?`<div><div class="v-pri" style="background:${pri.color}18;color:${pri.color}">${pri.icon} ${pri.label}</div><div class="v-cost" style="margin-top:6px">${fmt$(cost)}</div></div>`:
           `<div class="v-cost">${fmt$(cost)}</div>`}
@@ -3043,7 +3431,7 @@ function renderDetail(c,v){
     if(cur){
       const VISIT_FIELDS = ['stockNumber','statuses','assignedTo','priority',
         'apptDate','parts','laborLines','repairs','receipts','photos','notes',
-        'concerns','comments','timeSessions'];
+        'concerns','comments','timeSessions','obdScans'];
       VISIT_FIELDS.forEach(f => { if(v[f] !== undefined) cur[f] = v[f]; });
       // If booked just set, mark dateOut
       if((v.statuses||[]).includes('booked') && !cur.dateOut){
@@ -3207,38 +3595,135 @@ function renderDetail(c,v){
     };
     window.delObdScan=delObdScan;
 
-    // ── PARTS SECTION ──
-    const partsTotal=(v.parts||[]).reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+    // ── PARTS SECTION (pipeline: needed → ordered → received) ──
+    const allParts = v.parts || [];
+    const partsTotal = allParts.reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+    const receivedTotal = allParts.filter(p=>partState(p)==='received').reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+    const pendingTotal = allParts.filter(p=>partState(p)!=='received').reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
     const partsPanel=document.createElement('div');partsPanel.className='panel';
     const partsVendors=getVendors('parts');
-    const partsRows=(v.parts||[]).map((p,i)=>{
+
+    // Render a single part row, varying the layout/badges by state
+    const renderPartRow = (p, i)=>{
+      const state = partState(p);
       const vName = p.vendor ? (getVendorById(p.vendor)?.name || '') : '';
+      const lineCost = (parseFloat(p.cost)||0) * (parseInt(p.qty)||1);
+      // Badge
+      let badge = '';
+      if(state === 'needed'){
+        badge = `<span style="display:inline-block;background:#7c2d12;color:#fed7aa;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase">📋 Needed</span>`;
+      } else if(state === 'ordered'){
+        const etaStr = p.eta ? new Date(p.eta).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+        const etaLabel = etaStr ? `ETA ${etaStr}` : 'ETA —';
+        badge = `<span style="display:inline-block;background:#1e3a8a;color:#bfdbfe;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase">🚚 Ordered · ${etaLabel}</span>`;
+      } else {
+        badge = `<span style="display:inline-block;background:#14532d;color:#bbf7d0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase">✓ Received</span>`;
+      }
+      // Action buttons by state
+      let actionBtns = '';
+      if(state === 'needed'){
+        actionBtns = `<button class="ppl-btn ppl-order" data-i="${i}" title="Mark as ordered">🚚 Order</button>
+          <button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">✓ Received</button>`;
+      } else if(state === 'ordered'){
+        actionBtns = `<button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">✓ Received</button>
+          <button class="ppl-btn ppl-edit-order" data-i="${i}" title="Edit order details">✎ ETA</button>`;
+      }
+      // Tracking line for ordered
+      const trackingLine = (state==='ordered' && p.trackingNum)
+        ? `<div style="font-size:10px;color:#9ca3af;margin-top:2px"><span style="color:#555d73">Tracking:</span> <a href="#" onclick="window.openTrackingSearch('${(p.trackingNum||'').replace(/'/g,'')}');return false;" style="color:#60a5fa;text-decoration:none">${p.trackingNum}</a></div>`
+        : '';
+      const noteLine = p.note
+        ? `<div style="font-size:10px;color:#fbbf24;margin-top:2px;font-style:italic">📝 ${p.note}</div>`
+        : '';
       return `
-      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;padding:9px 0;border-bottom:1px solid #1e2230">
-        <div>
-          <div style="font-size:13px;color:#e2e4ea">${p.name}</div>
-          <div style="font-size:10px;color:#555d73">${p.partNum?`#${p.partNum}`:''}${p.partNum&&vName?' · ':''}${vName?`<span style="color:#818cf8">${vName}</span>`:''}</div>
+      <div class="part-row" data-state="${state}" style="padding:9px 0;border-bottom:1px solid #1e2230">
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+              ${badge}
+            </div>
+            <div style="font-size:13px;color:#e2e4ea">${p.name}</div>
+            <div style="font-size:10px;color:#555d73">${p.partNum?`#${p.partNum}`:''}${p.partNum&&vName?' · ':''}${vName?`<span style="color:#818cf8">${vName}</span>`:''}</div>
+            ${trackingLine}
+            ${noteLine}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:600;color:#C8102E">${fmt$(lineCost)}</span>
+            <span style="font-size:10px;color:#555d73">×${p.qty||1}</span>
+          </div>
+          <button class="del-btn" onclick="deletePart(${i})" style="align-self:flex-start">✕</button>
         </div>
-        <span style="font-size:11px;color:#555d73">×${p.qty||1}</span>
-        <span style="font-size:13px;font-weight:600;color:#C8102E">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}</span>
-        <button class="del-btn" onclick="deletePart(${i})">✕</button>
+        ${actionBtns ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${actionBtns}</div>` : ''}
       </div>`;
-    }).join('');
+    };
+
+    // Group rows by state, preserving original index for action handlers
+    const groupedRows = {needed: [], ordered: [], received: []};
+    allParts.forEach((p, i)=>{
+      const s = partState(p);
+      groupedRows[s] = groupedRows[s] || [];
+      groupedRows[s].push(renderPartRow(p, i));
+    });
+
+    let partsListHtml = '';
+    if(groupedRows.needed.length){
+      partsListHtml += `<div style="font-size:10px;color:#fed7aa;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:6px 0 2px">📋 Needed (${groupedRows.needed.length})</div>`;
+      partsListHtml += groupedRows.needed.join('');
+    }
+    if(groupedRows.ordered.length){
+      partsListHtml += `<div style="font-size:10px;color:#bfdbfe;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:8px 0 2px">🚚 Ordered (${groupedRows.ordered.length})</div>`;
+      partsListHtml += groupedRows.ordered.join('');
+    }
+    if(groupedRows.received.length){
+      partsListHtml += `<div style="font-size:10px;color:#bbf7d0;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:8px 0 2px">✓ Received (${groupedRows.received.length})</div>`;
+      partsListHtml += groupedRows.received.join('');
+    }
+    if(!partsListHtml){
+      partsListHtml = '<div style="color:#374151;font-size:13px;padding:12px 0;text-align:center">No parts yet — scan a receipt or add below</div>';
+    }
+
     const partsVendorOptions = partsVendors.length
       ? `<option value="">— No vendor —</option>` + partsVendors.map(vn=>`<option value="${vn.id}">${vn.name}</option>`).join('')
       : `<option value="">No parts vendors yet — add in Vendors</option>`;
+
+    // Pending parts banner
+    const pendingBanner = pendingTotal > 0
+      ? `<div style="background:#1e3a8a33;border:1px solid #1e3a8a;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#bfdbfe;display:flex;align-items:center;gap:8px"><span style="font-size:16px">⏳</span><span><strong>${groupedRows.needed.length+groupedRows.ordered.length} part${(groupedRows.needed.length+groupedRows.ordered.length)!==1?'s':''} pending</strong> · ${fmt$(pendingTotal)} not yet received</span></div>`
+      : '';
+
     partsPanel.innerHTML=`
       <div class="panel-title">Parts & Materials <span style="float:right;color:#C8102E">${fmt$(partsTotal)}</span></div>
-      <div id="parts-list">${partsRows||'<div style="color:#374151;font-size:13px;padding:12px 0;text-align:center">No parts yet — scan a receipt or add below</div>'}</div>
+      ${pendingBanner}
+      <div id="parts-list">${partsListHtml}</div>
       <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="field" style="grid-column:1/-1"><label>Part name *</label><input id="p-name" placeholder="e.g. Front brake pads"></div>
         <div class="field"><label>Part # (optional)</label><input id="p-num" placeholder="e.g. D1060"></div>
         <div class="field"><label>Vendor (optional)</label><select id="p-vendor" style="width:100%;background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:9px 10px;border-radius:8px;font-size:13px">${partsVendorOptions}</select></div>
         <div class="field"><label>Unit cost *</label><input id="p-cost" type="number" step="0.01" min="0" placeholder="0.00"></div>
         <div class="field"><label>Qty</label><input id="p-qty" type="number" min="1" value="1"></div>
+        <div class="field" style="grid-column:1/-1"><label>State</label>
+          <select id="p-state" style="width:100%;background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:9px 10px;border-radius:8px;font-size:13px">
+            <option value="received" selected>✓ Received (have it now)</option>
+            <option value="ordered">🚚 Ordered (on the way)</option>
+            <option value="needed">📋 Needed (not yet ordered)</option>
+          </select>
+        </div>
       </div>
       <button class="btn-red" style="padding:10px 18px;border-radius:8px;font-size:13px;margin-top:8px" onclick="addPart()">+ Add part</button>`;
     wrapper.appendChild(partsPanel);
+
+    // Wire pipeline action buttons (delegated)
+    setTimeout(()=>{
+      partsPanel.querySelectorAll('.ppl-order').forEach(btn=>{
+        btn.onclick=()=>window.openOrderDialog(parseInt(btn.dataset.i));
+      });
+      partsPanel.querySelectorAll('.ppl-edit-order').forEach(btn=>{
+        btn.onclick=()=>window.openOrderDialog(parseInt(btn.dataset.i));
+      });
+      partsPanel.querySelectorAll('.ppl-receive').forEach(btn=>{
+        btn.onclick=()=>window.markPartReceived(parseInt(btn.dataset.i));
+      });
+    }, 0);
 
     // ── LABOR SECTION ──
     const mechRate=getMMAP()[v.assignedTo]?.laborRate||65;
@@ -3306,10 +3791,111 @@ function renderDetail(c,v){
       const cost=parseFloat(document.getElementById('p-cost').value)||0;
       if(!name||!cost){toast('Part name and cost required','err');return;}
       const vendor=document.getElementById('p-vendor')?.value||'';
-      v.parts=[...(v.parts||[]),{name,partNum:document.getElementById('p-num').value.trim(),cost,qty:parseInt(document.getElementById('p-qty').value)||1,vendor}];
-      save({parts:v.parts});
+      const state=document.getElementById('p-state')?.value||'received';
+      const newPart={
+        name,
+        partNum:document.getElementById('p-num').value.trim(),
+        cost,
+        qty:parseInt(document.getElementById('p-qty').value)||1,
+        vendor,
+        state
+      };
+      // Stamp dates by state
+      if(state === 'ordered') newPart.orderedDate = Date.now();
+      if(state === 'received') newPart.receivedDate = Date.now();
+      v.parts=[...(v.parts||[]),newPart];
+      writeToCurrentVisit(v,'parts',v.parts);
+      // If this part puts the vehicle into "waiting on parts" or out of it, sync status
+      syncPartsStatus(v);
+      save();
+      // If state was 'ordered', open the order dialog to fill ETA/tracking
+      if(state === 'ordered'){
+        const newIdx = v.parts.length - 1;
+        setTimeout(()=>window.openOrderDialog(newIdx), 50);
+      }
     };
-    window.deletePart=function(i){v.parts=(v.parts||[]).filter((_,j)=>j!==i);save({parts:v.parts});};
+    window.deletePart=function(i){
+      v.parts=(v.parts||[]).filter((_,j)=>j!==i);
+      writeToCurrentVisit(v,'parts',v.parts);
+      syncPartsStatus(v);
+      save();
+    };
+
+    // Mark a part as received (via the ✓ Received button on row)
+    window.markPartReceived=function(i){
+      const p = (v.parts||[])[i];
+      if(!p) return;
+      const updated = [...v.parts];
+      updated[i] = {...p, state:'received', receivedDate:Date.now()};
+      v.parts = updated;
+      writeToCurrentVisit(v,'parts',v.parts);
+      syncPartsStatus(v);
+      save();
+      toast(`✓ "${p.name}" marked as received`);
+    };
+
+    // Open dialog to edit ETA/tracking/note (used when transitioning needed→ordered, or editing an order)
+    window.openOrderDialog=function(i){
+      const p = (v.parts||[])[i];
+      if(!p) return;
+      const overlay = document.createElement('div');
+      overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9990;display:flex;align-items:center;justify-content:center;padding:18px';
+      const etaVal = p.eta ? new Date(p.eta).toISOString().slice(0,10) : '';
+      const trackingVal = (p.trackingNum||'').replace(/"/g,'&quot;');
+      const noteVal = (p.note||'').replace(/"/g,'&quot;');
+      const isOrdering = p.state !== 'ordered'; // transitioning vs. editing
+      overlay.innerHTML = `
+        <div style="max-width:440px;width:100%;background:#111318;border:1px solid #2a2f3f;border-radius:14px;overflow:hidden">
+          <div style="padding:14px 18px;border-bottom:1px solid #1e2230;display:flex;align-items:center;justify-content:space-between">
+            <div style="font-size:14px;font-weight:700;color:#fff">${isOrdering ? '🚚 Mark as ordered' : '✎ Edit order details'}</div>
+            <button id="po-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:6px 12px;border-radius:6px;cursor:pointer">Close</button>
+          </div>
+          <div style="padding:16px">
+            <div style="font-size:13px;color:#e2e4ea;margin-bottom:14px;padding:8px 12px;background:#0c0e13;border-radius:8px;border-left:3px solid #C8102E">
+              <strong>${p.name}</strong>${p.partNum?` <span style="color:#555d73">#${p.partNum}</span>`:''}
+            </div>
+            <div class="field"><label>Expected arrival (optional)</label><input id="po-eta" type="date" value="${etaVal}" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px"></div>
+            <div class="field"><label>Tracking # (optional)</label><input id="po-tracking" value="${trackingVal}" placeholder="e.g. 1Z999AA10123456784" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px;font-family:ui-monospace,monospace"></div>
+            <div class="field"><label>Note (optional)</label><input id="po-note" value="${noteVal}" placeholder="e.g. Backorder, drop-shipping from Atlanta" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px"></div>
+          </div>
+          <div style="padding:12px 16px;border-top:1px solid #1e2230;display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn-red" id="po-save" style="padding:9px 18px;border-radius:8px;font-size:13px">${isOrdering ? '🚚 Mark as ordered' : 'Save changes'}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const cleanup=()=>overlay.remove();
+      overlay.querySelector('#po-close').onclick=cleanup;
+      overlay.onclick=(e)=>{if(e.target===overlay) cleanup();};
+      overlay.querySelector('#po-save').onclick=()=>{
+        const etaInput = overlay.querySelector('#po-eta').value;
+        const eta = etaInput ? new Date(etaInput+'T12:00:00').getTime() : null;
+        const trackingNum = overlay.querySelector('#po-tracking').value.trim();
+        const note = overlay.querySelector('#po-note').value.trim();
+        const updated = [...v.parts];
+        updated[i] = {
+          ...p,
+          state: 'ordered',
+          orderedDate: p.orderedDate || Date.now(),
+          eta: eta || null,
+          trackingNum: trackingNum || '',
+          note: note || ''
+        };
+        v.parts = updated;
+        writeToCurrentVisit(v,'parts',v.parts);
+        syncPartsStatus(v);
+        save();
+        cleanup();
+        toast(isOrdering ? `🚚 "${p.name}" marked as ordered` : `Order details saved`);
+      };
+    };
+
+    // Helper for tracking-link click — opens common carriers' search by tracking #
+    window.openTrackingSearch = function(tnum){
+      if(!tnum) return;
+      // Open Google search with tracking number — works for UPS/FedEx/USPS/etc.
+      const url = 'https://www.google.com/search?q=' + encodeURIComponent('track ' + tnum);
+      window.open(url, '_blank', 'noopener');
+    };
 
     // ── LABOR HANDLERS ──
     window.addLaborLine=function(){
@@ -3372,21 +3958,29 @@ function renderDetail(c,v){
     window.confirmReceiptItems=function(itemsJson){
       const items=typeof itemsJson==='string'?JSON.parse(itemsJson.replace(/&quot;/g,'"')):itemsJson;
       let added=0;
+      const newParts = [...(v.parts||[])];
       items.forEach((item,i)=>{
         const cb=document.getElementById(`ri-${i}`);
         if(cb&&cb.checked){
           const qty = item.quantity || 1;
           const each = item.eachCost != null ? item.eachCost : (item.cost || 0);
-          v.parts=[...(v.parts||[]),{
+          newParts.push({
             name:item.description,
             partNum:item.partNumber||'',
             cost:parseFloat(each)||0,
-            qty:parseInt(qty)||1
-          }];
+            qty:parseInt(qty)||1,
+            state:'received',
+            receivedDate:Date.now()
+          });
           added++;
         }
       });
-      if(added>0)save({parts:v.parts});
+      if(added>0){
+        v.parts = newParts;
+        writeToCurrentVisit(v,'parts',v.parts);
+        syncPartsStatus(v);
+        save();
+      }
       toast(`Added ${added} part${added!==1?'s':''}!`);
       const st=document.getElementById('receipt-scan-status');const pv=document.getElementById('receipt-preview-items');
       if(st)st.textContent='';if(pv)pv.innerHTML='';
@@ -4253,27 +4847,22 @@ function renderDetail(c,v){
 
       overlay.querySelector('#ex-add').onclick=()=>{
         const picked = working.filter(r=>r.pick);
-        if(picked.length > 0){
-          const freshV = ST.vehicles.find(x=>x.id===vehicle.id);
-          if(!freshV){
-            toast('Vehicle no longer exists','err');
-            cleanup();
-            return;
-          }
-          const newParts=[...(freshV.parts||[])];
-          picked.forEach(row=>{
-            newParts.push({
-              name: row.description || '',
-              partNum: row.partNumber || '',
-              cost: parseFloat(row.eachCost) || 0,
-              qty: parseInt(row.quantity) || 1
-            });
-          });
-          writeToCurrentVisit(freshV, 'parts', newParts);
-          window.save();
-          toast(`Added ${picked.length} part${picked.length!==1?'s':''} to ${freshV.year||''} ${freshV.make||''} ${freshV.model||''}`);
+        if(picked.length === 0){ cleanup(); return; }
+        const freshV = ST.vehicles.find(x=>x.id===vehicle.id);
+        if(!freshV){
+          toast('Vehicle no longer exists','err');
+          cleanup();
+          return;
         }
-        cleanup();
+        // Check if this vehicle has any 'ordered' parts pending — if so, ask user
+        const orderedPending = (freshV.parts||[]).filter(p=>(p.state||'received')==='ordered');
+        if(orderedPending.length > 0){
+          openReceiptIntent(freshV, picked, orderedPending, cleanup);
+        } else {
+          // No pending orders → add as 'received'
+          finalizeReceiptParts(freshV, picked, []);
+          cleanup();
+        }
       };
     }).catch(e=>{
       console.error('Extraction error:',e);
