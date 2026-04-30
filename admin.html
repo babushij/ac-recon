@@ -4016,33 +4016,39 @@ function renderDetail(c,v){
     };
     window.confirmReceiptItems=function(itemsJson){
       const items=typeof itemsJson==='string'?JSON.parse(itemsJson.replace(/&quot;/g,'"')):itemsJson;
-      let added=0;
-      const newParts = [...(v.parts||[])];
+      // Convert checked items into the same shape openReceiptIntent expects
+      const picked = [];
       items.forEach((item,i)=>{
         const cb=document.getElementById(`ri-${i}`);
         if(cb&&cb.checked){
           const qty = item.quantity || 1;
           const each = item.eachCost != null ? item.eachCost : (item.cost || 0);
-          newParts.push({
-            name:item.description,
-            partNum:item.partNumber||'',
-            cost:parseFloat(each)||0,
-            qty:parseInt(qty)||1,
-            state:'received',
-            receivedDate:Date.now()
+          picked.push({
+            description: item.description || '',
+            partNumber: item.partNumber || '',
+            eachCost: parseFloat(each) || 0,
+            quantity: parseInt(qty) || 1
           });
-          added++;
         }
       });
-      if(added>0){
-        v.parts = newParts;
-        writeToCurrentVisit(v,'parts',v.parts);
-        syncPartsStatus(v);
-        save();
-      }
-      toast(`Added ${added} part${added!==1?'s':''}!`);
+      // Clear the inline preview right away
       const st=document.getElementById('receipt-scan-status');const pv=document.getElementById('receipt-preview-items');
       if(st)st.textContent='';if(pv)pv.innerHTML='';
+      if(picked.length === 0){ return; }
+      // Look up the live vehicle from ST so we have the freshest copy
+      const freshV = ST.vehicles.find(x=>x.id===v.id) || v;
+      // If this vehicle has ordered parts pending, route through match dialog
+      const orderedPending = (freshV.parts||[]).filter(p=>(p.state||'received')==='ordered');
+      if(orderedPending.length > 0){
+        openReceiptIntent(freshV, picked, orderedPending, ()=>{
+          // After dialog closes, refresh detail tab
+          if(typeof refreshDetail === 'function') refreshDetail();
+        });
+      } else {
+        // No pending orders — add directly as received parts
+        finalizeReceiptParts(freshV, picked, []);
+        if(typeof refreshDetail === 'function') refreshDetail();
+      }
     };
   }
 
