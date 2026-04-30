@@ -973,20 +973,26 @@ function finalizeReceiptParts(freshV, picked, matches){
   matches = matches || [];
   const matchedPickedIdx = new Set(matches.map(m=>m.receiptIdx));
   const newParts = [...(freshV.parts||[])];
-  // First, mark matched ordered parts as received and update their cost from receipt
+  // First, update matched ordered parts: cost from receipt, optionally flip to received
   matches.forEach(m=>{
     const receiptItem = picked[m.receiptIdx];
     if(!receiptItem) return;
     const orig = newParts[m.orderedIdx];
     if(!orig) return;
-    newParts[m.orderedIdx] = {
+    const updated = {
       ...orig,
-      state: 'received',
-      receivedDate: Date.now(),
-      // Update cost from receipt if reasonable; keep original name/partNum
+      // Update cost/qty from receipt
       cost: parseFloat(receiptItem.eachCost) || orig.cost,
       qty: parseInt(receiptItem.quantity) || orig.qty
     };
+    // Honor markReceived flag (default true if not specified for backward compat)
+    const shouldMarkReceived = m.markReceived !== false;
+    if(shouldMarkReceived){
+      updated.state = 'received';
+      updated.receivedDate = Date.now();
+    }
+    // If not marking received, leave state as 'ordered' so it stays in the pipeline
+    newParts[m.orderedIdx] = updated;
   });
   // Then add unmatched picked items as new 'received' parts
   picked.forEach((row, idx)=>{
@@ -1003,22 +1009,19 @@ function finalizeReceiptParts(freshV, picked, matches){
   writeToCurrentVisit(freshV, 'parts', newParts);
   syncPartsStatus(freshV);
   window.save();
-  const closedCount = matches.length;
-  const newCount = picked.length - closedCount;
-  let msg = '';
-  if(closedCount && newCount){
-    msg = `${closedCount} order${closedCount!==1?'s':''} closed · ${newCount} new part${newCount!==1?'s':''} added`;
-  } else if(closedCount){
-    msg = `${closedCount} order${closedCount!==1?'s':''} closed out`;
-  } else {
-    msg = `Added ${newCount} part${newCount!==1?'s':''} to ${freshV.year||''} ${freshV.make||''} ${freshV.model||''}`;
-  }
-  toast(msg);
+  const closedCount = matches.filter(m=>m.markReceived !== false).length;
+  const updatedOnlyCount = matches.length - closedCount;
+  const newCount = picked.length - matches.length;
+  const parts = [];
+  if(closedCount) parts.push(`${closedCount} order${closedCount!==1?'s':''} closed`);
+  if(updatedOnlyCount) parts.push(`${updatedOnlyCount} order${updatedOnlyCount!==1?'s':''} updated`);
+  if(newCount) parts.push(`${newCount} new part${newCount!==1?'s':''} added`);
+  toast(parts.length ? parts.join(' · ') : 'Receipt processed');
 }
 
 // Modal asking: are these new parts, or are they the parts you ordered?
 function openReceiptIntent(freshV, picked, orderedPending, onDone){
-  // matches: array of {receiptIdx, orderedIdx}
+  // matches: array of {receiptIdx, orderedIdx, markReceived}
   let matches = [];
   // Pre-suggest matches by name similarity (simple lowercase contains)
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
@@ -1036,7 +1039,7 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
       const origIdx = freshV.parts.indexOf(orderedPending[oi]);
       // Don't double-match the same ordered part
       if(!matches.some(m=>m.orderedIdx===origIdx)){
-        matches.push({receiptIdx: ri, orderedIdx: origIdx});
+        matches.push({receiptIdx: ri, orderedIdx: origIdx, markReceived: true});
       }
     }
   });
@@ -1045,58 +1048,105 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.90);z-index:9995;display:flex;align-items:center;justify-content:center;padding:18px';
 
   function rebuild(){
-    const matchByR = Object.fromEntries(matches.map(m=>[m.receiptIdx, m.orderedIdx]));
-    const orderedRowHtml = orderedPending.map((op, oi)=>{
+    const matchByR = Object.fromEntries(matches.map(m=>[m.receiptIdx, m]));
+    const matchByO = Object.fromEntries(matches.map(m=>[m.orderedIdx, m]));
+
+    // ── Top section: Pending orders ──
+    const orderedRowHtml = orderedPending.map((op)=>{
       const origIdx = freshV.parts.indexOf(op);
       const eta = op.eta ? new Date(op.eta).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'no ETA';
-      const matchedR = matches.find(m=>m.orderedIdx === origIdx);
-      const matchedReceipt = matchedR ? picked[matchedR.receiptIdx] : null;
-      return `<div style="padding:10px 12px;border:1px solid ${matchedR?'#16a34a':'#1e2230'};border-radius:8px;margin-bottom:6px;background:${matchedR?'#14532d22':'#0d0f14'}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase">🚚 Ordered · ${eta}</span>
-          <span style="font-size:13px;color:#e2e4ea;flex:1;min-width:0">${op.name}</span>
-          <span style="font-size:11px;color:#9ca3af">${fmt$((parseFloat(op.cost)||0)*(parseInt(op.qty)||1))}</span>
+      const m = matchByO[origIdx];
+      const isMatched = !!m;
+      const matchedReceipt = isMatched ? picked[m.receiptIdx] : null;
+      const orderedCost = (parseFloat(op.cost)||0) * (parseInt(op.qty)||1);
+      // Calm matched style: thin left accent + tag badge, no fills/dim
+      const leftAccent = isMatched
+        ? 'border-left:3px solid #6366f1;'
+        : 'border-left:3px solid transparent;';
+      let matchedFooter = '';
+      if(isMatched){
+        const receiptCost = (Number(matchedReceipt.eachCost)||0) * (Number(matchedReceipt.quantity)||1);
+        const diff = receiptCost - orderedCost;
+        const diffStr = Math.abs(diff) < 0.01
+          ? ''
+          : (diff > 0
+              ? `<span style="color:#f87171;font-size:11px">▲ ${fmt$(diff)} over order</span>`
+              : `<span style="color:#34d399;font-size:11px">▼ ${fmt$(-diff)} under order</span>`);
+        matchedFooter = `<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:#9ca3af;padding-top:7px;border-top:1px solid #1e2230;margin-top:7px">
+          <span>↩ Matched to <span style="color:#c7d2fe">"${(matchedReceipt.description||'?').slice(0,40)}${(matchedReceipt.description||'').length>40?'…':''}"</span></span>
+          ${diffStr}
+          <button data-unmatch-o="${origIdx}" style="background:transparent;border:1px solid #374151;color:#9ca3af;font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;margin-left:auto">Unmatch</button>
+        </div>`;
+      }
+      return `<div style="padding:10px 12px;border:1px solid #1e2230;${leftAccent}border-radius:8px;margin-bottom:6px;background:#0d0f14">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">🚚 Ordered · ${eta}</span>
+          <span style="font-size:13px;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${op.name}</span>
+          <span style="font-size:11px;color:#9ca3af;flex-shrink:0">${fmt$(orderedCost)}</span>
         </div>
-        ${matchedR ? `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#bbf7d0;padding-top:6px;border-top:1px solid #16a34a44;margin-top:6px">
-          ✓ matched to "${matchedReceipt.description||'?'}" — <button data-unmatch-o="${origIdx}" style="background:transparent;border:1px solid #16a34a55;color:#bbf7d0;font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer">Undo</button>
-        </div>` : ''}
+        ${matchedFooter}
       </div>`;
     }).join('');
 
-    const matchedRSet = new Set(matches.map(m=>m.receiptIdx));
+    // ── Bottom section: Receipt items ──
     const receiptRowHtml = picked.map((row, ri)=>{
-      const matchedO = matchByR[ri];
-      const isMatched = matchedO !== undefined;
-      const orderedName = isMatched ? freshV.parts[matchedO]?.name : '';
-      // Show available ordered parts to match against
+      const m = matchByR[ri];
+      const isMatched = !!m;
+      const orderedName = isMatched ? freshV.parts[m.orderedIdx]?.name : '';
+      // Show available ordered parts to match against (excluding ones already matched to other receipts)
       const availableOrders = orderedPending
-        .map((op, oi)=>{
+        .map((op)=>{
           const origIdx = freshV.parts.indexOf(op);
-          const taken = matches.some(m=>m.orderedIdx===origIdx && m.receiptIdx !== ri);
+          const taken = matches.some(mm=>mm.orderedIdx===origIdx && mm.receiptIdx !== ri);
           return {origIdx, name: op.name, taken};
         })
         .filter(x=>!x.taken);
-      return `<div style="padding:10px 12px;border:1px solid ${isMatched?'#16a34a':'#1e2230'};border-radius:8px;margin-bottom:6px;background:${isMatched?'#14532d22':'#0d0f14'}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          ${isMatched ? '<span style="font-size:14px">✓</span>' : '<span style="font-size:14px">📦</span>'}
-          <span style="font-size:13px;color:#e2e4ea;flex:1;min-width:0">${row.description}</span>
-          <span style="font-size:11px;color:#C8102E;font-weight:600">${fmt$((Number(row.eachCost)||0)*(Number(row.quantity)||1))}</span>
+      const leftAccent = isMatched
+        ? 'border-left:3px solid #6366f1;'
+        : 'border-left:3px solid transparent;';
+      const lineCost = (Number(row.eachCost)||0) * (Number(row.quantity)||1);
+
+      // Matched: show "closes order: X" + Mark received toggle + unmatch
+      // Unmatched: show match dropdown
+      let body = '';
+      if(isMatched){
+        body = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px solid #1e2230">
+          <span style="font-size:11px;color:#9ca3af;flex:1;min-width:0">Closes order: <span style="color:#c7d2fe">${(orderedName||'').slice(0,50)}${(orderedName||'').length>50?'…':''}</span></span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:#555d73;letter-spacing:.4px;text-transform:uppercase">Mark received</span>
+            <button data-toggle-recv="${ri}" data-on="${m.markReceived?'1':'0'}"
+              style="font-size:11px;font-weight:700;padding:5px 11px;border-radius:6px;cursor:pointer;border:1px solid ${m.markReceived?'#16a34a':'#374151'};background:${m.markReceived?'#14532d33':'#1e2230'};color:${m.markReceived?'#bbf7d0':'#9ca3af'};font-family:inherit">${m.markReceived?'✓ Yes':'✗ No'}</button>
+          </div>
+          <button data-unmatch-r="${ri}" style="font-size:10px;padding:5px 9px;border-radius:5px;background:transparent;border:1px solid #374151;color:#9ca3af;cursor:pointer">Unmatch</button>
+        </div>`;
+      } else {
+        body = availableOrders.length ? `<div style="margin-top:7px;padding-top:7px;border-top:1px solid #1e2230;display:flex;align-items:center;gap:8px">
+          <span style="font-size:10px;color:#555d73;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">Match to</span>
+          <select data-match-r="${ri}" style="flex:1;font-size:11px;background:#0a0c10;border:1px solid #1e2230;border-radius:5px;padding:5px 7px;color:#9ca3af;font-family:inherit">
+            <option value="">+ Add as new part</option>
+            ${availableOrders.map(o=>`<option value="${o.origIdx}">↩ Closes: ${o.name.slice(0,50)}${o.name.length>50?'…':''}</option>`).join('')}
+          </select>
+        </div>` : '';
+      }
+
+      return `<div style="padding:10px 12px;border:1px solid #1e2230;${leftAccent}border-radius:8px;margin-bottom:6px;background:#0d0f14">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:9px;color:#fed7aa;background:#7c2d1255;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">📦 On receipt</span>
+          <span style="font-size:13px;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${row.description}</span>
+          <span style="font-size:11px;color:#C8102E;font-weight:600;flex-shrink:0">${fmt$(lineCost)}</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          ${isMatched
-            ? `<span style="font-size:11px;color:#bbf7d0">Closes order: ${orderedName}</span>
-               <button data-unmatch-r="${ri}" style="background:transparent;border:1px solid #16a34a55;color:#bbf7d0;font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer">Undo · treat as new</button>`
-            : `<select data-match-r="${ri}" style="font-size:11px;background:#0a0c10;border:1px solid #1e2230;border-radius:5px;padding:4px 6px;color:#9ca3af">
-                 <option value="">+ New part</option>
-                 ${availableOrders.map(o=>`<option value="${o.origIdx}">↩ Closes: ${o.name.slice(0,40)}${o.name.length>40?'...':''}</option>`).join('')}
-               </select>`
-          }
-        </div>
+        ${body}
       </div>`;
     }).join('');
 
-    const totalMatched = matches.length;
-    const totalNew = picked.length - totalMatched;
+    // ── Footer summary ──
+    const closingCount = matches.filter(m=>m.markReceived).length;
+    const updatedOnlyCount = matches.length - closingCount;
+    const newCount = picked.length - matches.length;
+    const summaryParts = [];
+    if(closingCount) summaryParts.push(`<span style="color:#bbf7d0">${closingCount} closing</span>`);
+    if(updatedOnlyCount) summaryParts.push(`<span style="color:#bfdbfe">${updatedOnlyCount} updating</span>`);
+    if(newCount) summaryParts.push(`<span style="color:#fed7aa">${newCount} new</span>`);
 
     overlay.innerHTML = `
       <div style="max-width:560px;width:100%;max-height:calc(100vh - 36px);background:#111318;border:1px solid #2a2f3f;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
@@ -1105,7 +1155,7 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
             <div style="font-size:14px;font-weight:700;color:#fff">Match receipt to pending orders?</div>
             <button id="ri-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:12px;padding:6px 11px;border-radius:6px;cursor:pointer">Cancel</button>
           </div>
-          <div style="font-size:12px;color:#9ca3af">This vehicle has <strong style="color:#bfdbfe">${orderedPending.length} ordered part${orderedPending.length!==1?'s':''}</strong> waiting. Match each receipt item to an order it closes — or treat them as new.</div>
+          <div style="font-size:12px;color:#9ca3af">This vehicle has <strong style="color:#bfdbfe">${orderedPending.length} ordered part${orderedPending.length!==1?'s':''}</strong> waiting. Match each receipt item — toggle ✓ Yes to mark received now.</div>
         </div>
         <div style="flex:1;min-height:0;overflow-y:auto;padding:14px 16px">
           <div style="font-size:10px;color:#bfdbfe;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px">⏳ Pending orders on this vehicle</div>
@@ -1114,8 +1164,8 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
           ${receiptRowHtml}
         </div>
         <div style="flex-shrink:0;padding:12px 16px;border-top:1px solid #1e2230;background:#0d0f14">
-          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#9ca3af;margin-bottom:8px">
-            <span>${totalMatched} order${totalMatched!==1?'s':''} closing · ${totalNew} new part${totalNew!==1?'s':''}</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#9ca3af;margin-bottom:8px;gap:8px">
+            <span style="display:flex;gap:10px;flex-wrap:wrap">${summaryParts.join('<span style="color:#374151">·</span>') || '<span style="color:#555d73">No matches yet</span>'}</span>
           </div>
           <div style="display:flex;gap:8px">
             <button id="ri-all-new" style="flex:1;background:#1e2230;border:1px solid #374151;color:#fff;font-size:12px;font-weight:600;padding:11px;border-radius:8px;cursor:pointer">All new parts</button>
@@ -1140,7 +1190,7 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
 
     // Match dropdowns
     overlay.querySelectorAll('[data-match-r]').forEach(sel=>{
-      sel.onchange = (e)=>{
+      sel.onchange = ()=>{
         const ri = parseInt(sel.dataset.matchR);
         const oi = sel.value === '' ? null : parseInt(sel.value);
         // Remove any prior match for this receipt item
@@ -1148,12 +1198,21 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
         if(oi !== null){
           // Remove any prior match for this ordered part too
           matches = matches.filter(m=>m.orderedIdx !== oi);
-          matches.push({receiptIdx: ri, orderedIdx: oi});
+          matches.push({receiptIdx: ri, orderedIdx: oi, markReceived: true});
         }
         rebuild();
       };
     });
-    // Unmatch by ordered idx
+    // Mark received toggle
+    overlay.querySelectorAll('[data-toggle-recv]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const ri = parseInt(btn.dataset.toggleRecv);
+        const m = matches.find(mm=>mm.receiptIdx === ri);
+        if(m) m.markReceived = !m.markReceived;
+        rebuild();
+      };
+    });
+    // Unmatch by ordered idx (from top section)
     overlay.querySelectorAll('[data-unmatch-o]').forEach(btn=>{
       btn.onclick = ()=>{
         const oi = parseInt(btn.dataset.unmatchO);
@@ -1161,7 +1220,7 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
         rebuild();
       };
     });
-    // Unmatch by receipt idx
+    // Unmatch by receipt idx (from bottom section)
     overlay.querySelectorAll('[data-unmatch-r]').forEach(btn=>{
       btn.onclick = ()=>{
         const ri = parseInt(btn.dataset.unmatchR);
