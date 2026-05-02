@@ -267,10 +267,10 @@ a{text-decoration:none;color:inherit}
   cursor:pointer;transition:all .1s;font-family:inherit
 }
 .ppl-btn:hover{border-color:#374151;color:#fff}
-.ppl-btn.ppl-receive{background:#14532d33;border-color:#16653488;color:#bbf7d0}
-.ppl-btn.ppl-receive:hover{background:#14532d66;border-color:#16a34a}
+.ppl-btn.ppl-receive{background:#78350f33;border-color:#9a341688;color:#fdba74}
+.ppl-btn.ppl-receive:hover{background:#78350f66;border-color:#f59e0b;color:#fff}
 .ppl-btn.ppl-order{background:#1e3a8a33;border-color:#1e40af88;color:#bfdbfe}
-.ppl-btn.ppl-order:hover{background:#1e3a8a66;border-color:#3b82f6}
+.ppl-btn.ppl-order:hover{background:#1e3a8a66;border-color:#3b82f6;color:#fff}
 
 /* ═══ RECEIPT ROWS ═══ */
 .receipt-row{display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--surface2);border-radius:var(--r-md);margin-bottom:5px}
@@ -3690,11 +3690,11 @@ function renderDetail(c,v){
       // Action buttons by state
       let actionBtns = '';
       if(state === 'needed'){
-        actionBtns = `<button class="ppl-btn ppl-order" data-i="${i}" title="Mark as ordered">🚚 Order</button>
-          <button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">✓ Received</button>`;
+        actionBtns = `<button class="ppl-btn ppl-order" data-i="${i}" title="Mark as ordered">🚚 Order this</button>
+          <button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">📦 Mark received</button>`;
       } else if(state === 'ordered'){
-        actionBtns = `<button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">✓ Received</button>
-          <button class="ppl-btn ppl-edit-order" data-i="${i}" title="Edit order details">✎ ETA</button>`;
+        actionBtns = `<button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">📦 Mark received</button>
+          <button class="ppl-btn ppl-edit-order" data-i="${i}" title="Edit order details">✎ Edit ETA / Tracking</button>`;
       }
       // Tracking line for ordered
       const trackingLine = (state==='ordered' && p.trackingNum)
@@ -5425,6 +5425,49 @@ function renderMechPipeline(c){
     if(!mine.length){
       c.innerHTML=html+`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">No vehicles assigned</div><div class="empty-sub">Manager will assign vehicles</div></div>`;
       return;
+    }
+
+    // ── Parts pipeline mini-panel for THIS mechanic's vehicles ──
+    const myVehicleIds = new Set(mine.map(v=>v.id));
+    const myPendingParts = getAllPendingParts().filter(item=>myVehicleIds.has(item.vehicle.id));
+    if(myPendingParts.length){
+      const orderedItems = myPendingParts.filter(x=>x.state==='ordered');
+      const neededItems = myPendingParts.filter(x=>x.state==='needed');
+      html += `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;overflow:hidden;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #1e2230;background:#0c0e13">
+          <span style="font-size:16px">⏳</span>
+          <span style="font-size:12px;font-weight:600;color:#fff">${myPendingParts.length} part${myPendingParts.length!==1?'s':''} pending on your vehicles</span>
+          ${orderedItems.length?`<span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${orderedItems.length} ordered</span>`:''}
+          ${neededItems.length?`<span style="font-size:9px;color:#fed7aa;background:#7c2d1255;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${neededItems.length} needed</span>`:''}
+        </div>
+        <div style="max-height:240px;overflow-y:auto">`;
+      myPendingParts.forEach(item=>{
+        const veh = item.vehicle;
+        const p = item.part;
+        const yMM = `${veh.year||''} ${veh.make||''} ${veh.model||''}`.trim();
+        const stateBadge = item.state === 'ordered'
+          ? `<span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 5px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">🚚</span>`
+          : `<span style="font-size:9px;color:#fed7aa;background:#7c2d1255;padding:2px 5px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">📋</span>`;
+        let etaStr = '';
+        if(item.state === 'ordered' && p.eta){
+          const days = Math.ceil((p.eta - Date.now()) / 86400000);
+          if(days < 0) etaStr = `<span style="color:#f87171;font-weight:600">⚠ Late ${Math.abs(days)}d</span>`;
+          else if(days === 0) etaStr = `<span style="color:#fbbf24;font-weight:600">📦 Today</span>`;
+          else if(days === 1) etaStr = `<span style="color:#34d399;font-weight:600">📦 Tomorrow</span>`;
+          else etaStr = `<span style="color:#9ca3af">📦 ${days}d</span>`;
+        } else if(item.state === 'ordered'){
+          etaStr = `<span style="color:#555d73">No ETA</span>`;
+        }
+        html += `<div onclick="ST.selectedId='${veh.id}';ST.view='detail';ST.activeTab='repairs';render()" style="padding:9px 12px;border-bottom:1px solid #1e2230;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+            ${stateBadge}
+            <span style="font-size:12px;font-weight:600;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
+            <span style="font-size:11px;color:#9ca3af;flex-shrink:0">${etaStr}</span>
+          </div>
+          <div style="font-size:10px;color:#555d73">🚗 ${yMM}</div>
+        </div>`;
+      });
+      html += `</div></div>`;
     }
 
     // ── Priority group (active work) ──
