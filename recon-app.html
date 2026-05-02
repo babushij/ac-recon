@@ -1723,8 +1723,8 @@ function buildSidebar(){
     {section:'SALES'},
     {id:'approvals',label:'Concern approvals',icon:checkIcon(),badge:pendingConcernCount()},
     {id:'salespipeline',label:'Sale pending / Sold',icon:saleIcon()},
-    {section:'MEDIA'},
-    {id:'camera',label:'Camera & photos',icon:camIcon()},
+    {section:'WORKFLOW'},
+    {id:'partspipeline',label:'Parts pipeline',icon:partsIcon(),badge:getAllPendingParts().length},
     {section:'RECORDS'},
     {id:'history',label:'History search',icon:searchIcon()},
     {id:'completed',label:'Completed vehicles',icon:checkIcon()},
@@ -1822,6 +1822,7 @@ function renderContent(){
     case 'completed':    renderCompleted(c);break;
     case 'vendors':      renderVendors(c);break;
     case 'analytics':    renderAnalytics(c);break;
+    case 'partspipeline':renderPartsPipeline(c);break;
     case 'settings':     renderSettings(c);break;
     default:             renderDashboard(c);
   }
@@ -2023,71 +2024,6 @@ function renderDashboard(c){
     </div>`;
   });
   html+=`<div style="margin-bottom:14px"></div>`;
-
-  // ══════════════════════════════════════════
-  // 3.5 PARTS PIPELINE — pending parts shop-wide
-  // ══════════════════════════════════════════
-  const pendingParts = getAllPendingParts();
-  if(pendingParts.length){
-    const orderedItems = pendingParts.filter(x=>x.state==='ordered');
-    const neededItems = pendingParts.filter(x=>x.state==='needed');
-    html += `<div class="sec-hdr">PARTS PIPELINE</div>
-      <div style="background:#111318;border:1px solid #1e2230;border-radius:12px;overflow:hidden;margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #1e2230;background:#0c0e13">
-          <span style="font-size:18px">⏳</span>
-          <span style="font-size:13px;font-weight:600;color:#fff">${pendingParts.length} part${pendingParts.length!==1?'s':''} pending</span>
-          ${orderedItems.length?`<span style="font-size:10px;color:#bfdbfe;background:#1e3a8a55;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${orderedItems.length} ordered</span>`:''}
-          ${neededItems.length?`<span style="font-size:10px;color:#fed7aa;background:#7c2d1255;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${neededItems.length} needed</span>`:''}
-        </div>
-        <div style="max-height:320px;overflow-y:auto">`;
-    pendingParts.forEach(item=>{
-      const v = item.vehicle;
-      const p = item.part;
-      const yMM = `${v.year||''} ${v.make||''} ${v.model||''}`.trim();
-      const stockStr = v.stockNumber ? ` · #${v.stockNumber}` : '';
-      const stateBadge = item.state === 'ordered'
-        ? `<span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">🚚 Ordered</span>`
-        : `<span style="font-size:9px;color:#fed7aa;background:#7c2d1255;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">📋 Needed</span>`;
-      // ETA display
-      let etaStr = '';
-      if(item.state === 'ordered'){
-        if(p.eta){
-          const etaDate = new Date(p.eta);
-          const days = Math.ceil((p.eta - Date.now()) / 86400000);
-          const dateLabel = etaDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-          if(days < 0){
-            etaStr = `<span style="color:#f87171;font-weight:600">⚠ Late · ${Math.abs(days)}d ago</span>`;
-          } else if(days === 0){
-            etaStr = `<span style="color:#fbbf24;font-weight:600">📦 Today</span>`;
-          } else if(days === 1){
-            etaStr = `<span style="color:#34d399;font-weight:600">📦 Tomorrow</span>`;
-          } else {
-            etaStr = `<span style="color:#9ca3af">📦 ${dateLabel} (${days}d)</span>`;
-          }
-        } else if(item.daysSinceOrdered != null){
-          etaStr = `<span style="color:#555d73">Ordered ${item.daysSinceOrdered}d ago · No ETA</span>`;
-        }
-      }
-      const trackingBtn = (item.state === 'ordered' && p.trackingNum)
-        ? `<button onclick="event.stopPropagation();window.openTrackingSearch('${(p.trackingNum||'').replace(/'/g,'')}')" style="font-size:10px;color:#60a5fa;background:rgba(30,58,95,.4);border:none;border-radius:5px;padding:3px 8px;cursor:pointer;flex-shrink:0">🔗 Track</button>`
-        : '';
-      html += `
-        <div onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='repairs';render()" style="padding:11px 14px;border-bottom:1px solid #1e2230;cursor:pointer;transition:background .1s" onmouseover="this.style.background='#161921'" onmouseout="this.style.background='transparent'">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            ${stateBadge}
-            <span style="font-size:13px;font-weight:600;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
-            <span style="font-size:12px;font-weight:700;color:#C8102E;flex-shrink:0">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}</span>
-            ${trackingBtn}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#9ca3af">
-            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1">🚗 ${yMM}${stockStr}</span>
-            ${item.vendorName?`<span style="color:#818cf8;flex-shrink:0">↗ ${item.vendorName}</span>`:''}
-            <span style="flex-shrink:0">${etaStr}</span>
-          </div>
-        </div>`;
-    });
-    html += `</div></div>`;
-  }
 
   // ══════════════════════════════════════════
   
@@ -6276,6 +6212,256 @@ function buildConcernsTab(el, v, save){
 // ═══════════════════════════════════════════════
 let _vendorTab = 'parts'; // module-scope to persist tab choice across re-renders
 
+// ═══════════════════════════════════════════════
+// PARTS PIPELINE — full-page view of pending parts shop-wide
+// ═══════════════════════════════════════════════
+let _ppFilter = 'all'; // 'all' | 'ordered' | 'needed' | 'late'
+
+function renderPartsPipeline(c){
+  setTopbar('Parts pipeline', '');
+
+  const all = getAllPendingParts();
+
+  // Compute "late" set
+  const now = Date.now();
+  const isLate = (item) => item.state === 'ordered' && item.part.eta && item.part.eta < now;
+
+  let filtered = all;
+  if(_ppFilter === 'ordered') filtered = all.filter(x=>x.state==='ordered');
+  else if(_ppFilter === 'needed') filtered = all.filter(x=>x.state==='needed');
+  else if(_ppFilter === 'late') filtered = all.filter(isLate);
+
+  const orderedCount = all.filter(x=>x.state==='ordered').length;
+  const neededCount = all.filter(x=>x.state==='needed').length;
+  const lateCount = all.filter(isLate).length;
+  const totalValue = all.reduce((a,it)=> a + ((parseFloat(it.part.cost)||0) * (parseInt(it.part.qty)||1)), 0);
+
+  // Filter chip
+  const chip = (id, label, count, color) => {
+    const active = _ppFilter === id;
+    const bg = active ? color : 'transparent';
+    const txtColor = active ? '#fff' : '#9ca3af';
+    return `<button class="pp-filter" data-filter="${id}" style="font-size:11px;font-weight:600;padding:7px 13px;border-radius:7px;background:${bg};border:1px solid ${active?color:'#2a2f3f'};color:${txtColor};cursor:pointer;letter-spacing:.3px;font-family:inherit">${label}${count !== null ? ` <span style="opacity:.75">${count}</span>` : ''}</button>`;
+  };
+
+  c.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Track parts that aren't yet received \u00b7 ETAs, vendor, tracking, and overdue alerts</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${chip('all','All', all.length, '#C8102E')}
+        ${chip('ordered','🚚 Ordered', orderedCount, '#1e40af')}
+        ${chip('needed','📋 Needed', neededCount, '#7c2d12')}
+        ${lateCount ? chip('late','⚠ Late', lateCount, '#7f1d1d') : ''}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
+      <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div style="font-size:10px;color:#555d73;letter-spacing:.5px">PENDING TOTAL</div>
+        <div style="font-size:22px;font-weight:700;color:#C8102E;margin-top:4px">${fmt$(totalValue)}</div>
+      </div>
+      <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div style="font-size:10px;color:#555d73;letter-spacing:.5px">🚚 ORDERED</div>
+        <div style="font-size:22px;font-weight:700;color:#bfdbfe;margin-top:4px">${orderedCount}</div>
+      </div>
+      <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
+        <div style="font-size:10px;color:#555d73;letter-spacing:.5px">📋 NEEDED</div>
+        <div style="font-size:22px;font-weight:700;color:#fed7aa;margin-top:4px">${neededCount}</div>
+      </div>
+      ${lateCount ? `<div style="background:#7f1d1d22;border:1px solid #7f1d1d66;border-radius:10px;padding:14px">
+        <div style="font-size:10px;color:#fca5a5;letter-spacing:.5px">⚠ LATE</div>
+        <div style="font-size:22px;font-weight:700;color:#f87171;margin-top:4px">${lateCount}</div>
+      </div>` : ''}
+    </div>
+
+    <div id="pp-list-host"></div>
+  `;
+
+  // Wire filter chips
+  c.querySelectorAll('.pp-filter').forEach(btn=>{
+    btn.onclick = ()=>{ _ppFilter = btn.dataset.filter; render(); };
+  });
+
+  // Build list
+  const host = c.querySelector('#pp-list-host');
+  if(!filtered.length){
+    if(!all.length){
+      host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:40px 20px;text-align:center;color:#555d73">
+        <div style="font-size:36px;margin-bottom:8px;opacity:.4">✅</div>
+        <div style="font-size:13px;color:#9ca3af">No parts pending</div>
+        <div style="font-size:11px;margin-top:4px;color:#374151">Parts in 'Needed' or 'Ordered' state will appear here</div>
+      </div>`;
+    } else {
+      host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#555d73;font-size:13px">No parts match this filter.</div>`;
+    }
+    return;
+  }
+
+  // Group by vehicle
+  const byVehicle = {};
+  filtered.forEach(item=>{
+    const vid = item.vehicle.id;
+    if(!byVehicle[vid]) byVehicle[vid] = {vehicle: item.vehicle, items: []};
+    byVehicle[vid].items.push(item);
+  });
+
+  let listHtml = '';
+  Object.values(byVehicle).forEach(grp=>{
+    const veh = grp.vehicle;
+    const yMM = `${veh.year||''} ${veh.make||''} ${veh.model||''}`.trim();
+    const stockStr = veh.stockNumber ? `#${veh.stockNumber}` : '—';
+    const grpTotal = grp.items.reduce((a,it)=>a + ((parseFloat(it.part.cost)||0) * (parseInt(it.part.qty)||1)), 0);
+    listHtml += `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;overflow:hidden;margin-bottom:10px">
+      <div onclick="ST.selectedId='${veh.id}';ST.view='detail';ST.activeTab='repairs';render()" style="padding:11px 14px;border-bottom:1px solid #1e2230;background:#0c0e13;cursor:pointer;display:flex;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚗 ${yMM}</div>
+          <div style="font-size:11px;color:#555d73">${stockStr} · ${grp.items.length} part${grp.items.length!==1?'s':''} pending</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:700;color:#C8102E">${fmt$(grpTotal)}</div>
+          <div style="font-size:10px;color:#555d73">value pending</div>
+        </div>
+        <span style="font-size:14px;color:#374151;flex-shrink:0">›</span>
+      </div>
+      <div>`;
+    grp.items.forEach(item=>{
+      const p = item.part;
+      const stateBadge = item.state === 'ordered'
+        ? `<span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">🚚 Ordered</span>`
+        : `<span style="font-size:9px;color:#fed7aa;background:#7c2d1255;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">📋 Needed</span>`;
+      let etaStr = '';
+      if(item.state === 'ordered'){
+        if(p.eta){
+          const etaDate = new Date(p.eta);
+          const days = Math.ceil((p.eta - now) / 86400000);
+          const dateLabel = etaDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+          if(days < 0) etaStr = `<span style="color:#f87171;font-weight:600">⚠ Late · ${Math.abs(days)}d ago</span>`;
+          else if(days === 0) etaStr = `<span style="color:#fbbf24;font-weight:600">📦 Today</span>`;
+          else if(days === 1) etaStr = `<span style="color:#34d399;font-weight:600">📦 Tomorrow</span>`;
+          else etaStr = `<span style="color:#9ca3af">📦 ${dateLabel} (${days}d)</span>`;
+        } else if(item.daysSinceOrdered != null){
+          etaStr = `<span style="color:#555d73">Ordered ${item.daysSinceOrdered}d ago · No ETA</span>`;
+        }
+      }
+      const trackingBtn = (item.state === 'ordered' && p.trackingNum)
+        ? `<button onclick="event.stopPropagation();window.openTrackingSearch('${(p.trackingNum||'').replace(/'/g,'')}')" style="font-size:10px;color:#60a5fa;background:rgba(30,58,95,.4);border:1px solid rgba(30,58,95,.6);border-radius:5px;padding:4px 9px;cursor:pointer;flex-shrink:0;font-family:inherit">🔗 Track ${p.trackingNum.slice(-6)}</button>`
+        : '';
+      const noteLine = p.note
+        ? `<div style="font-size:10px;color:#fbbf24;margin-top:3px;font-style:italic">📝 ${p.note}</div>`
+        : '';
+      listHtml += `
+        <div style="padding:11px 14px;border-bottom:1px solid #1e2230">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+            ${stateBadge}
+            <span style="font-size:13px;font-weight:600;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
+            <span style="font-size:12px;font-weight:700;color:#C8102E;flex-shrink:0">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#9ca3af;flex-wrap:wrap">
+            ${item.vendorName?`<span style="color:#818cf8">↗ ${item.vendorName}</span>`:''}
+            ${etaStr}
+            ${trackingBtn}
+          </div>
+          ${noteLine}
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <button class="ppl-btn ppl-receive" data-vid="${veh.id}" data-pidx="${item.partIdx}" title="Mark as received" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;border:1px solid #9a341688;background:#78350f33;color:#fdba74;cursor:pointer;font-family:inherit">📦 Mark received</button>
+            ${item.state === 'ordered'
+              ? `<button class="ppl-btn ppl-edit-eta" data-vid="${veh.id}" data-pidx="${item.partIdx}" title="Edit ETA / Tracking" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;border:1px solid #2a2f3f;background:#1e2230;color:#9ca3af;cursor:pointer;font-family:inherit">✎ Edit ETA / Tracking</button>`
+              : `<button class="ppl-btn ppl-mark-ordered" data-vid="${veh.id}" data-pidx="${item.partIdx}" title="Mark as ordered" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;border:1px solid #1e40af88;background:#1e3a8a33;color:#bfdbfe;cursor:pointer;font-family:inherit">🚚 Order this</button>`
+            }
+          </div>
+        </div>`;
+    });
+    listHtml += `</div></div>`;
+  });
+  host.innerHTML = listHtml;
+
+  // Wire action buttons
+  host.querySelectorAll('.ppl-receive').forEach(btn=>{
+    btn.onclick = ()=>{
+      const vid = btn.dataset.vid;
+      const pidx = parseInt(btn.dataset.pidx);
+      const veh = ST.vehicles.find(x=>x.id===vid);
+      if(!veh) return;
+      const cur = currentVisit(veh);
+      if(!cur || !cur.parts || !cur.parts[pidx]) return;
+      const part = cur.parts[pidx];
+      cur.parts[pidx] = {...part, state:'received', receivedDate:Date.now()};
+      veh.parts = cur.parts;
+      veh.updatedAt = Date.now();
+      syncPartsStatus(veh);
+      save();
+      toast(`✓ "${part.name}" marked as received`);
+      render();
+    };
+  });
+  host.querySelectorAll('.ppl-edit-eta, .ppl-mark-ordered').forEach(btn=>{
+    btn.onclick = ()=>{
+      const vid = btn.dataset.vid;
+      const pidx = parseInt(btn.dataset.pidx);
+      // Open the order/ETA dialog inline (mini version that doesn't require renderDetail context)
+      window.openOrderDialogStandalone(vid, pidx, ()=>render());
+    };
+  });
+}
+
+// Standalone order/ETA dialog (works outside the renderDetail closure too)
+window.openOrderDialogStandalone = function(vid, pidx, onSaved){
+  const veh = ST.vehicles.find(x=>x.id===vid);
+  if(!veh) return;
+  const cur = currentVisit(veh);
+  if(!cur || !cur.parts || !cur.parts[pidx]) return;
+  const p = cur.parts[pidx];
+  const isOrdering = p.state !== 'ordered';
+  const overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9990;display:flex;align-items:center;justify-content:center;padding:18px';
+  const etaVal = p.eta ? new Date(p.eta).toISOString().slice(0,10) : '';
+  const trackingVal = (p.trackingNum||'').replace(/"/g,'&quot;');
+  const noteVal = (p.note||'').replace(/"/g,'&quot;');
+  overlay.innerHTML = `
+    <div style="max-width:440px;width:100%;background:#111318;border:1px solid #2a2f3f;border-radius:14px;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid #1e2230;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:14px;font-weight:700;color:#fff">${isOrdering ? '🚚 Mark as ordered' : '✎ Edit order details'}</div>
+        <button id="pos-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:13px;padding:6px 12px;border-radius:6px;cursor:pointer">Close</button>
+      </div>
+      <div style="padding:16px">
+        <div style="font-size:13px;color:#e2e4ea;margin-bottom:14px;padding:8px 12px;background:#0c0e13;border-radius:8px;border-left:3px solid #C8102E">
+          <strong>${p.name}</strong>${p.partNum?` <span style="color:#555d73">#${p.partNum}</span>`:''}
+        </div>
+        <div class="field"><label>Expected arrival (optional)</label><input id="pos-eta" type="date" value="${etaVal}" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px"></div>
+        <div class="field"><label>Tracking # (optional)</label><input id="pos-tracking" value="${trackingVal}" placeholder="e.g. 1Z999AA10123456784" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px;font-family:ui-monospace,monospace"></div>
+        <div class="field"><label>Note (optional)</label><input id="pos-note" value="${noteVal}" placeholder="e.g. Backorder, drop-shipping from Atlanta" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px"></div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid #1e2230;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn-red" id="pos-save" style="padding:9px 18px;border-radius:8px;font-size:13px">${isOrdering ? '🚚 Mark as ordered' : 'Save changes'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const cleanup=()=>overlay.remove();
+  overlay.querySelector('#pos-close').onclick=cleanup;
+  overlay.onclick=(e)=>{if(e.target===overlay) cleanup();};
+  overlay.querySelector('#pos-save').onclick=()=>{
+    const etaInput = overlay.querySelector('#pos-eta').value;
+    const eta = etaInput ? new Date(etaInput+'T12:00:00').getTime() : null;
+    const trackingNum = overlay.querySelector('#pos-tracking').value.trim();
+    const note = overlay.querySelector('#pos-note').value.trim();
+    cur.parts[pidx] = {
+      ...p,
+      state: 'ordered',
+      orderedDate: p.orderedDate || Date.now(),
+      eta: eta || null,
+      trackingNum: trackingNum || '',
+      note: note || ''
+    };
+    veh.parts = cur.parts;
+    veh.updatedAt = Date.now();
+    syncPartsStatus(veh);
+    save();
+    cleanup();
+    toast(isOrdering ? `🚚 "${p.name}" marked as ordered` : `Order details saved`);
+    if(onSaved) onSaved();
+  };
+};
+
 function renderVendors(c){
   setTopbar('Vendors', '');
   const kind = _vendorTab;
@@ -6677,6 +6863,7 @@ function saleIcon(){return`<path d="M2 4h4l6 6-4 4L2 8V4z" stroke="currentColor"
 function gearIcon(){return`<circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>`}
 function vendorIcon(){return`<path d="M2 6h12l-1 7H3L2 6z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M5 6V4a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" fill="none"/>`}
 function chartIcon(){return`<line x1="2" y1="14" x2="14" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><rect x="3" y="9" width="2.5" height="5" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="6.75" y="6" width="2.5" height="8" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="10.5" y="3" width="2.5" height="11" stroke="currentColor" stroke-width="1.2" fill="none"/>`}
+function partsIcon(){return`<rect x="2" y="5" width="12" height="9" rx="1" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M5 5V3.5A1.5 1.5 0 016.5 2h3A1.5 1.5 0 0111 3.5V5" stroke="currentColor" stroke-width="1.3" fill="none"/><line x1="2" y1="9" x2="14" y2="9" stroke="currentColor" stroke-width="1" opacity=".6"/>`}
 function checkIcon(){return`<path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`}
 function saleIcon(){return`<path d="M2 4h5l7 7-5 5-7-7V4z" stroke="currentColor" stroke-width="1.3" fill="none"/><circle cx="5.5" cy="7.5" r="1" fill="currentColor"/>`}
 
