@@ -994,28 +994,37 @@ function finalizeReceiptParts(freshV, picked, matches){
     // If not marking received, leave state as 'ordered' so it stays in the pipeline
     newParts[m.orderedIdx] = updated;
   });
-  // Then add unmatched picked items as new 'received' parts
+  // Then add unmatched picked items as new parts in their chosen state.
+  // The 'state' field is set by the extraction modal (default 'received', user
+  // can flip individual rows to 'ordered'). Legacy callers without state default
+  // to 'received'.
   picked.forEach((row, idx)=>{
     if(matchedPickedIdx.has(idx)) return;
-    newParts.push({
+    const desiredState = (row.state === 'ordered' || row.state === 'needed') ? row.state : 'received';
+    const newPart = {
       name: row.description || '',
       partNum: row.partNumber || '',
       cost: parseFloat(row.eachCost) || 0,
       qty: parseInt(row.quantity) || 1,
-      state: 'received',
-      receivedDate: Date.now()
-    });
+      state: desiredState
+    };
+    if(desiredState === 'received') newPart.receivedDate = Date.now();
+    if(desiredState === 'ordered') newPart.orderedDate = Date.now();
+    newParts.push(newPart);
   });
   writeToCurrentVisit(freshV, 'parts', newParts);
   syncPartsStatus(freshV);
   window.save();
   const closedCount = matches.filter(m=>m.markReceived !== false).length;
   const updatedOnlyCount = matches.length - closedCount;
-  const newCount = picked.length - matches.length;
+  const newPicked = picked.filter((_,i)=>!matchedPickedIdx.has(i));
+  const newReceived = newPicked.filter(p=>(p.state||'received')==='received').length;
+  const newOrdered = newPicked.filter(p=>p.state==='ordered').length;
   const parts = [];
   if(closedCount) parts.push(`${closedCount} order${closedCount!==1?'s':''} closed`);
   if(updatedOnlyCount) parts.push(`${updatedOnlyCount} order${updatedOnlyCount!==1?'s':''} updated`);
-  if(newCount) parts.push(`${newCount} new part${newCount!==1?'s':''} added`);
+  if(newReceived) parts.push(`${newReceived} received`);
+  if(newOrdered) parts.push(`${newOrdered} ordered`);
   toast(parts.length ? parts.join(' · ') : 'Receipt processed');
 }
 
@@ -4005,13 +4014,60 @@ function renderDetail(c,v){
         st.textContent=`Found ${items.length} item${items.length!==1?'s':''}. Review and confirm:`;
         st.style.color='#34d399';
         let h=`<div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;overflow:hidden;margin-top:6px">`;
+        // Bulk-state header
+        h+=`<div style="padding:8px 12px;border-bottom:1px solid #1e2230;background:#0c0e13;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:10px;color:#555d73;letter-spacing:.5px;text-transform:uppercase;font-weight:700">Mark all as</span>
+          <button id="ri-bulk-recv" type="button" style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;border:1px solid #14532d;background:#14532d33;color:#bbf7d0;cursor:pointer;letter-spacing:.4px;font-family:inherit">✓ RECEIVED</button>
+          <button id="ri-bulk-ord" type="button" style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;border:1px solid #1e3a8a;background:#1e3a8a33;color:#bfdbfe;cursor:pointer;letter-spacing:.4px;font-family:inherit">🚚 ORDERED</button>
+        </div>`;
         items.forEach((item,i)=>{
           // New shape has eachCost+quantity, legacy has cost only
           const displayCost = item.eachCost != null ? (item.eachCost * (item.quantity||1)) : (item.cost||0);
-          h+=`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #1e2230"><input type="checkbox" id="ri-${i}" checked style="accent-color:#C8102E;width:16px;height:16px;flex-shrink:0"><span style="flex:1;font-size:13px;color:#e2e4ea">${item.description}</span><span style="font-size:13px;font-weight:600;color:#C8102E;white-space:nowrap">${fmt$(displayCost)}</span></div>`;
+          h+=`<div style="padding:10px 14px;border-bottom:1px solid #1e2230">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <input type="checkbox" id="ri-${i}" checked style="accent-color:#C8102E;width:16px;height:16px;flex-shrink:0">
+              <span style="flex:1;font-size:13px;color:#e2e4ea;min-width:0">${item.description}</span>
+              <span style="font-size:13px;font-weight:600;color:#C8102E;white-space:nowrap">${fmt$(displayCost)}</span>
+            </div>
+            <div style="display:inline-flex;border:1px solid #1e2230;border-radius:6px;overflow:hidden;margin-left:26px">
+              <button type="button" data-rs-state="${i}" data-rs-state-val="received"
+                style="font-size:9px;font-weight:700;padding:4px 9px;border:none;cursor:pointer;letter-spacing:.4px;background:#14532d;color:#bbf7d0;font-family:inherit">✓ RECEIVED</button>
+              <button type="button" data-rs-state="${i}" data-rs-state-val="ordered"
+                style="font-size:9px;font-weight:700;padding:4px 9px;border:none;border-left:1px solid #1e2230;cursor:pointer;letter-spacing:.4px;background:transparent;color:#555d73;font-family:inherit">🚚 ORDERED</button>
+            </div>
+          </div>`;
         });
         h+=`</div><button class="btn-red" style="margin-top:10px;width:100%;padding:11px;border-radius:8px;font-size:13px;font-weight:600" onclick="window.confirmReceiptItems(${JSON.stringify(items).replace(/"/g,'&quot;')})">Add checked items to parts</button>`;
         pv.innerHTML=h;
+        // Wire per-row state buttons (visual + tracking on data attribute on the row)
+        const setRowState=(i, val)=>{
+          const buttons = pv.querySelectorAll(`[data-rs-state="${i}"]`);
+          buttons.forEach(b=>{
+            const isActive = b.dataset.rsStateVal === val;
+            if(b.dataset.rsStateVal === 'received'){
+              b.style.background = isActive ? '#14532d' : 'transparent';
+              b.style.color = isActive ? '#bbf7d0' : '#555d73';
+            } else {
+              b.style.background = isActive ? '#1e3a8a' : 'transparent';
+              b.style.color = isActive ? '#bfdbfe' : '#555d73';
+            }
+            // Stash state on the checkbox for read at confirm time
+            const cb = document.getElementById(`ri-${i}`);
+            if(cb) cb.dataset.state = val;
+          });
+        };
+        // Initialize all to received
+        items.forEach((_,i)=>setRowState(i,'received'));
+        pv.querySelectorAll('[data-rs-state]').forEach(btn=>{
+          btn.onclick = ()=>setRowState(parseInt(btn.dataset.rsState), btn.dataset.rsStateVal);
+        });
+        // Bulk-action buttons
+        pv.querySelector('#ri-bulk-recv').onclick = ()=>{
+          items.forEach((_,i)=>setRowState(i,'received'));
+        };
+        pv.querySelector('#ri-bulk-ord').onclick = ()=>{
+          items.forEach((_,i)=>setRowState(i,'ordered'));
+        };
       }catch(e){st.textContent='Error: '+e.message;st.style.color='#f87171';console.error(e);}
     };
     window.confirmReceiptItems=function(itemsJson){
@@ -4023,11 +4079,14 @@ function renderDetail(c,v){
         if(cb&&cb.checked){
           const qty = item.quantity || 1;
           const each = item.eachCost != null ? item.eachCost : (item.cost || 0);
+          // Read per-row state from the checkbox's data-state (default received)
+          const rowState = (cb.dataset.state === 'ordered') ? 'ordered' : 'received';
           picked.push({
             description: item.description || '',
             partNumber: item.partNumber || '',
             eachCost: parseFloat(each) || 0,
-            quantity: parseInt(qty) || 1
+            quantity: parseInt(qty) || 1,
+            state: rowState
           });
         }
       });
@@ -4808,15 +4867,39 @@ function renderDetail(c,v){
           eachCost: eachWithTax, // includes proportional tax
           quantity: qty,
           pick: true,
+          state: 'received', // 'received' | 'ordered' — per-item choice
           _id: 'ex-row-'+idx
         };
       });
+
+      // Update bulk-state header summary
+      const updateBulkHdr = ()=>{
+        const hdr = overlay.querySelector('#ex-bulk-summary');
+        if(!hdr) return;
+        const picked = working.filter(r=>r.pick);
+        const recv = picked.filter(r=>r.state==='received').length;
+        const ord = picked.filter(r=>r.state==='ordered').length;
+        const parts = [];
+        if(recv) parts.push(`<span style="color:#bbf7d0">${recv} received</span>`);
+        if(ord) parts.push(`<span style="color:#bfdbfe">${ord} ordered</span>`);
+        hdr.innerHTML = parts.join(' <span style="color:#374151">·</span> ') || '<span style="color:#555d73">No items selected</span>';
+      };
 
       const renderRows = ()=>{
         const rowsDiv = overlay.querySelector('#ex-rows');
         if(!rowsDiv) return;
         rowsDiv.innerHTML = working.map((row,i)=>{
           const lineTotal = (Number(row.eachCost)||0) * (Number(row.quantity)||1);
+          const isReceived = row.state === 'received';
+          const isOrdered = row.state === 'ordered';
+          // State toggle: two-button segmented control
+          const stateToggle = `
+            <div style="display:inline-flex;border:1px solid #1e2230;border-radius:7px;overflow:hidden;font-family:inherit">
+              <button data-ex-state="${i}" data-ex-state-val="received" type="button"
+                style="font-size:10px;font-weight:700;padding:5px 10px;border:none;cursor:pointer;letter-spacing:.4px;background:${isReceived?'#14532d':'transparent'};color:${isReceived?'#bbf7d0':'#555d73'};font-family:inherit">✓ RECEIVED</button>
+              <button data-ex-state="${i}" data-ex-state-val="ordered" type="button"
+                style="font-size:10px;font-weight:700;padding:5px 10px;border:none;border-left:1px solid #1e2230;cursor:pointer;letter-spacing:.4px;background:${isOrdered?'#1e3a8a':'transparent'};color:${isOrdered?'#bfdbfe':'#555d73'};font-family:inherit">🚚 ORDERED</button>
+            </div>`;
           return `
           <div style="padding:11px;background:#0d0f14;border:1px solid ${row.pick?'#2a2f3f':'#1e2230'};border-radius:9px;margin-bottom:8px;opacity:${row.pick?'1':'0.5'}">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -4824,7 +4907,7 @@ function renderDetail(c,v){
               <input type="text" data-ex-desc="${i}" value="${(row.description||'').replace(/"/g,'&quot;')}" placeholder="Description"
                 style="flex:1;min-width:0;background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:7px 9px;color:#e2e4ea;font-size:13px">
             </div>
-            <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:8px;align-items:center;padding-left:26px">
+            <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:8px;align-items:center;padding-left:26px;margin-bottom:8px">
               <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px">Part #</span>
               <input type="text" data-ex-partnum="${i}" value="${(row.partNumber||'').replace(/"/g,'&quot;')}" placeholder="—"
                 style="grid-column:2 / span 3;background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#9ca3af;font-size:12px;font-family:ui-monospace,monospace">
@@ -4837,6 +4920,9 @@ function renderDetail(c,v){
               <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px;text-align:right">Line</span>
               <span data-ex-line="${i}" style="font-size:13px;font-weight:700;color:#fbbf24;text-align:right;padding:6px 9px;font-family:ui-monospace,monospace">$${lineTotal.toFixed(2)}</span>
             </div>
+            <div style="padding-left:26px">
+              ${stateToggle}
+            </div>
           </div>`;
         }).join('');
 
@@ -4847,6 +4933,7 @@ function renderDetail(c,v){
             working[i].pick = cb.checked;
             renderRows(); // re-render to update opacity + row bg
             updateTotal();
+            updateBulkHdr();
           };
         });
         overlay.querySelectorAll('[data-ex-desc]').forEach(inp=>{
@@ -4874,6 +4961,15 @@ function renderDetail(c,v){
             updateTotal();
           };
         });
+        // State toggle (per row)
+        overlay.querySelectorAll('[data-ex-state]').forEach(btn=>{
+          btn.onclick = ()=>{
+            const i = +btn.dataset.exState;
+            working[i].state = btn.dataset.exStateVal;
+            renderRows();
+            updateBulkHdr();
+          };
+        });
       };
 
       const updateTotal = ()=>{
@@ -4885,12 +4981,18 @@ function renderDetail(c,v){
       };
 
       body.innerHTML = items.length ? `
-        <div style="padding:14px 16px 8px;flex-shrink:0">
-          <div style="font-size:11px;color:#8896a8;letter-spacing:.4px;line-height:1.5">
-            Each part's cost includes its share of tax. Edit any field below.
+        <div style="padding:12px 16px 8px;flex-shrink:0;border-bottom:1px solid #1e2230;background:#0c0e13">
+          <div style="font-size:11px;color:#8896a8;letter-spacing:.4px;line-height:1.5;margin-bottom:8px">
+            Each part's cost includes its share of tax. Set state per item below.
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:10px;color:#555d73;letter-spacing:.5px;text-transform:uppercase;font-weight:700">Mark all as</span>
+            <button id="ex-bulk-recv" style="font-size:10px;font-weight:700;padding:5px 11px;border-radius:6px;border:1px solid #14532d;background:#14532d33;color:#bbf7d0;cursor:pointer;letter-spacing:.4px;font-family:inherit">✓ RECEIVED</button>
+            <button id="ex-bulk-ord" style="font-size:10px;font-weight:700;padding:5px 11px;border-radius:6px;border:1px solid #1e3a8a;background:#1e3a8a33;color:#bfdbfe;cursor:pointer;letter-spacing:.4px;font-family:inherit">🚚 ORDERED</button>
+            <span id="ex-bulk-summary" style="margin-left:auto;font-size:11px;color:#9ca3af"></span>
           </div>
         </div>
-        <div id="ex-rows" style="flex:1;min-height:0;overflow-y:auto;padding:0 16px;-webkit-overflow-scrolling:touch"></div>
+        <div id="ex-rows" style="flex:1;min-height:0;overflow-y:auto;padding:14px 16px 0;-webkit-overflow-scrolling:touch"></div>
         <div style="flex-shrink:0;padding:10px 16px 14px;border-top:1px solid #1e2230;background:#0d0f14">
           <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px 10px">
             <div style="font-size:11px;color:#555d73;text-transform:uppercase;letter-spacing:.6px">Selected total</div>
@@ -4908,7 +5010,20 @@ function renderDetail(c,v){
         </div>
       `;
 
-      if(items.length){ renderRows(); updateTotal(); }
+      if(items.length){
+        renderRows();
+        updateTotal();
+        updateBulkHdr();
+        // Wire bulk-action buttons
+        overlay.querySelector('#ex-bulk-recv').onclick = ()=>{
+          working.forEach(r=>{ if(r.pick) r.state = 'received'; });
+          renderRows(); updateBulkHdr();
+        };
+        overlay.querySelector('#ex-bulk-ord').onclick = ()=>{
+          working.forEach(r=>{ if(r.pick) r.state = 'ordered'; });
+          renderRows(); updateBulkHdr();
+        };
+      }
 
       overlay.querySelector('#ex-add').onclick=()=>{
         const picked = working.filter(r=>r.pick);
@@ -4924,7 +5039,7 @@ function renderDetail(c,v){
         if(orderedPending.length > 0){
           openReceiptIntent(freshV, picked, orderedPending, cleanup);
         } else {
-          // No pending orders → add as 'received'
+          // No pending orders → add with each item's chosen state
           finalizeReceiptParts(freshV, picked, []);
           cleanup();
         }
