@@ -3464,7 +3464,7 @@ function renderDetail(c,v){
     toast('Saved');
     refreshDetail();
     const isHigh = v.priority==='high' && v.assignedTo;
-    if(isHigh && (!wasHigh || updates.assignedTo || updates.priority==='high')){
+    if(isHigh && (!wasHigh || (updates && updates.assignedTo) || (updates && updates.priority==='high'))){
       notifyHighPriority(v);
     }
   };
