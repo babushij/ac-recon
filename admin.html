@@ -5311,6 +5311,9 @@ function renderMechPipeline(c){
 
   const DONE_STATUSES=['cleaning','sale','work_complete','sold','receipts_in','booked'];
 
+  // Sort vehicles by createdAt ascending (oldest first)
+  const oldestFirst = (a,b) => (a.createdAt||0) - (b.createdAt||0);
+
   function vCost(v){
     const pc=(v.parts||[]).reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
     const lc=(v.laborLines||[]).reduce((a,l)=>a+((parseFloat(l.hours)||0)*(parseFloat(l.rate)||0)),0);
@@ -5378,7 +5381,9 @@ function renderMechPipeline(c){
 
   // ── SINGLE MECHANIC VIEW ──
   if(mechId){
-    const mine=ST.vehicles.filter(v=>v.assignedTo===mechId);
+    // Mechanic pipeline shows assigned vehicles, EXCLUDING anything booked
+    // (booked vehicles are still findable in All vehicles / Completed vehicles)
+    const mine=ST.vehicles.filter(v => v.assignedTo===mechId && !(v.statuses||[]).includes('booked'));
 
     html+=`<div class="mechanic-header">
       <div class="mech-avatar" style="background:${mech.color}22;font-size:24px">${mech.icon}</div>
@@ -5436,92 +5441,93 @@ function renderMechPipeline(c){
       html += `</div></div>`;
     }
 
-    // ── Priority group (active work) ──
-    const activeVehicles=mine.filter(GROUPS[0].filter);
-    if(activeVehicles.length){
-      // Sub-group by priority
-      [
-        {id:'high',   label:'🔴 High priority',  color:'#ef4444'},
-        {id:'medium', label:'🟡 Medium priority', color:'#f59e0b'},
-        {id:'low',    label:'⚫ Low priority',    color:'#6b7280'},
-      ].forEach(pri=>{
-        const grp=activeVehicles.filter(v=>(v.priority||'medium')===pri.id);
-        if(!grp.length)return;
-        html+=`<div class="priority-section">
-          <div class="pri-hdr">
-            <span style="font-size:14px">${pri.label.split(' ')[0]}</span>
-            <span style="color:${pri.color}">${pri.label.slice(3)}</span>
-            <span style="margin-left:auto;color:#555d73;font-size:12px">${grp.length}</span>
-          </div>
-          <div class="grid-cards">${grp.map(v=>cardHTML(v,mechId)).join('')}</div>
-        </div>`;
-      });
-    }
+    // ══════════════════════════════════════════════════
+    // MECHANIC PIPELINE — sections in order:
+    //   1. Inspections needed (on_lot)
+    //   2. Waiting on parts (parts)
+    //   3. At body shop (body_daniel / body_jose)
+    //   4. At outside shop (outside_shop)
+    //   5. Receipts needed (completed but NOT receipts_in)
+    //   6. Receipts entered (receipts_in)
+    //   7. Other (catch-all — anything assigned but not in above)
+    //
+    // A vehicle CAN appear in multiple sections if it matches multiple criteria.
+    //
+    // Inside every section, sub-order is:
+    //   Sold/Sale pending > Customer appt > Came from auction > Trade-in > Repo > Else
+    //   then High > Medium > Low priority
+    //   then oldest first (createdAt asc)
+    // ══════════════════════════════════════════════════
 
-    // ── Waiting on parts ──
-    const partsVs=mine.filter(GROUPS[1].filter);
-    if(partsVs.length){
-      html+=`<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;margin-bottom:8px;border-bottom:2px solid #f59e0b33">
-          <span style="font-size:15px">⏳</span>
-          <span style="font-size:13px;font-weight:700;color:#f59e0b">Waiting on parts</span>
-          <span style="margin-left:auto;font-size:11px;color:#555d73">${partsVs.length}</span>
+    const subRankOf = (v) => {
+      const sts = v.statuses || [];
+      if(sts.includes('sold') || sts.includes('sale_pending')) return 1;
+      if(sts.includes('customer_appt')) return 2;
+      if(sts.includes('auction')) return 3;
+      if(sts.includes('trade_in')) return 4;
+      if(sts.includes('repo')) return 5;
+      return 6;
+    };
+    const priorityWeight = (v) => {
+      const p = v.priority || 'medium';
+      return p === 'high' ? 0 : p === 'low' ? 2 : 1;
+    };
+    const sortBySubOrder = (arr) => [...arr].sort((a,b) => {
+      const ra = subRankOf(a), rb = subRankOf(b);
+      if(ra !== rb) return ra - rb;
+      const pa = priorityWeight(a), pb = priorityWeight(b);
+      if(pa !== pb) return pa - pb;
+      return (a.createdAt||0) - (b.createdAt||0);
+    });
+    const renderSection = (label, icon, color, vehicles) => {
+      if(!vehicles.length) return '';
+      return `<div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;margin-bottom:8px;border-bottom:2px solid ${color}33">
+          <span style="font-size:15px">${icon}</span>
+          <span style="font-size:13px;font-weight:700;color:${color}">${label}</span>
+          <span style="margin-left:auto;font-size:11px;color:#555d73">${vehicles.length}</span>
         </div>
-        <div class="grid-cards">${partsVs.map(v=>cardHTML(v,mechId)).join('')}</div>
+        <div class="grid-cards">${vehicles.map(v=>cardHTML(v,mechId)).join('')}</div>
       </div>`;
-    }
+    };
 
-    // ── At body shop ──
-    const bodyVs=mine.filter(GROUPS[2].filter);
-    if(bodyVs.length){
-      html+=`<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;margin-bottom:8px;border-bottom:2px solid #ec4899  33">
-          <span style="font-size:15px">🏠</span>
-          <span style="font-size:13px;font-weight:700;color:#ec4899">At body shop</span>
-          <span style="margin-left:auto;font-size:11px;color:#555d73">${bodyVs.length}</span>
-        </div>
-        <div class="grid-cards">${bodyVs.map(v=>cardHTML(v,mechId)).join('')}</div>
-      </div>`;
-    }
+    // Section 1: Inspections needed
+    const inspectionVs = sortBySubOrder(mine.filter(v => (v.statuses||[]).includes('on_lot')));
+    html += renderSection('Inspections needed', '🔍', '#22c55e', inspectionVs);
 
-    // ── At outside shop ──
-    const outsideVs=mine.filter(GROUPS[3].filter);
-    if(outsideVs.length){
-      html+=`<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;margin-bottom:8px;border-bottom:2px solid #a78bfa33">
-          <span style="font-size:15px">🏭</span>
-          <span style="font-size:13px;font-weight:700;color:#a78bfa">At outside shop</span>
-          <span style="margin-left:auto;font-size:11px;color:#555d73">${outsideVs.length}</span>
-        </div>
-        <div class="grid-cards">${outsideVs.map(v=>cardHTML(v,mechId)).join('')}</div>
-      </div>`;
-    }
+    // Section 2: Waiting on parts
+    const partsVs = sortBySubOrder(mine.filter(v => (v.statuses||[]).includes('parts')));
+    html += renderSection('Waiting on parts', '⏳', '#f59e0b', partsVs);
 
-    // ── Recon complete ──
-    const doneVs=mine.filter(GROUPS[4].filter);
-    if(doneVs.length){
-      html+=`<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;margin-bottom:8px;border-bottom:2px solid #22c55e33">
-          <span style="font-size:15px">✔️</span>
-          <span style="font-size:13px;font-weight:700;color:#22c55e">Recon complete</span>
-          <span style="margin-left:auto;font-size:11px;color:#555d73">${doneVs.length}</span>
-        </div>
-        <div class="grid-cards">${doneVs.map(v=>cardHTML(v,mechId)).join('')}</div>
-      </div>`;
-    }
+    // Section 3: At body shop
+    const bodyVs = sortBySubOrder(mine.filter(v => {
+      const sts = v.statuses||[];
+      return sts.includes('body_daniel') || sts.includes('body_jose');
+    }));
+    html += renderSection('At body shop', '🏠', '#ec4899', bodyVs);
 
-    // ── Receipts needed (subset of done) ──
-    const receiptVs=mine.filter(GROUPS[5].filter);
-    if(receiptVs.length){
-      html+=`<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;margin-bottom:8px;border-bottom:2px solid #f8717133">
-          <span style="font-size:15px">🧾</span>
-          <span style="font-size:13px;font-weight:700;color:#f87171">Receipts needed</span>
-          <span style="margin-left:auto;font-size:11px;color:#555d73">${receiptVs.length}</span>
-        </div>
-        <div class="grid-cards">${receiptVs.map(v=>cardHTML(v,mechId)).join('')}</div>
-      </div>`;
-    }
+    // Section 4: At outside shop
+    const outsideVs = sortBySubOrder(mine.filter(v => (v.statuses||[]).includes('outside_shop')));
+    html += renderSection('At outside shop', '🏭', '#a78bfa', outsideVs);
+
+    // Section 5: Receipts needed (completed but not receipts_in)
+    const completed = mine.filter(v => DONE_STATUSES.some(s => (v.statuses||[]).includes(s)));
+    const receiptsNeededVs = sortBySubOrder(
+      completed.filter(v => !(v.statuses||[]).includes('receipts_in'))
+    );
+    html += renderSection('Receipts needed', '🧾', '#f87171', receiptsNeededVs);
+
+    // Section 6: Receipts entered
+    const receiptsInVs = sortBySubOrder(mine.filter(v => (v.statuses||[]).includes('receipts_in')));
+    html += renderSection('Receipts entered', '🧾', '#34d399', receiptsInVs);
+
+    // Section 7: Other — anything assigned that didn't match any of the above
+    const matchedIds = new Set([
+      ...inspectionVs, ...partsVs, ...bodyVs, ...outsideVs,
+      ...receiptsNeededVs, ...receiptsInVs
+    ].map(v => v.id));
+    const otherVs = sortBySubOrder(mine.filter(v => !matchedIds.has(v.id)));
+    html += renderSection('Other', '📋', '#9ca3af', otherVs);
 
     if(!mine.length) html+=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">Pipeline is clear</div></div>`;
 
@@ -5531,7 +5537,7 @@ function renderMechPipeline(c){
     const unassigned=ST.vehicles.filter(v=>!v.assignedTo);
 
     mechs.forEach(m=>{
-      const mvs=ST.vehicles.filter(v=>v.assignedTo===m.id);
+      const mvs=ST.vehicles.filter(v=>v.assignedTo===m.id && !(v.statuses||[]).includes('booked'));
       html+=`<div style="margin-bottom:20px">
         <div style="display:flex;align-items:center;gap:10px;padding:10px 0;margin-bottom:10px;border-bottom:2px solid ${m.color}33">
           <div style="width:36px;height:36px;border-radius:50%;background:${m.color}22;border:2px solid ${m.color}44;display:flex;align-items:center;justify-content:center;font-size:18px">${m.icon}</div>
