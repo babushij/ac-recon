@@ -5652,7 +5652,7 @@ function renderMechPipeline(c){
           <span style="font-size:13px;font-weight:700;color:${color}">${label}</span>
           <span style="margin-left:auto;font-size:11px;color:#555d73">${vehicles.length}</span>
         </div>
-        <div class="grid-cards">${vehicles.map(v=>cardHTML(v,mechId)).join('')}</div>
+        <div class="v-list">${vehicles.map(v=>vRowHTML(v)).join('')}</div>
       </div>`;
     };
 
@@ -5712,7 +5712,7 @@ function renderMechPipeline(c){
           </div>
           <div style="margin-left:auto;font-size:11px;color:#555d73">${mvs.filter(v=>v.priority==='high').length} high priority</div>
         </div>
-        ${mvs.length?`<div class="grid-cards">${mvs.map(v=>cardHTML(v,m.id)).join('')}</div>`:`<div style="text-align:center;font-size:13px;color:#374151;padding:16px 0">No vehicles assigned</div>`}
+        ${mvs.length?`<div class="v-list">${mvs.map(v=>vRowHTML(v)).join('')}</div>`:`<div style="text-align:center;font-size:13px;color:#374151;padding:16px 0">No vehicles assigned</div>`}
       </div>`;
     });
 
@@ -5725,7 +5725,7 @@ function renderMechPipeline(c){
             <div style="font-size:11px;color:#555d73">${unassigned.length} vehicle${unassigned.length!==1?'s':''}</div>
           </div>
         </div>
-        <div class="grid-cards">${unassigned.map(v=>cardHTML(v,null)).join('')}</div>
+        <div class="v-list">${unassigned.map(v=>vRowHTML(v)).join('')}</div>
       </div>`;
     }
 
@@ -5733,6 +5733,11 @@ function renderMechPipeline(c){
   }
 
   c.innerHTML=html;
+
+  // Dashboard-style rows (vRowHTML) — same click behavior as manager dashboard
+  c.querySelectorAll('.v-row[data-vid]').forEach(row=>{
+    row.onclick=()=>{ST.selectedId=row.dataset.vid;ST.view='detail';ST.activeTab='overview';render();};
+  });
 
   c.querySelectorAll('.vehicle-card-grid[data-vid]').forEach(card=>{
     card.onclick=e=>{
