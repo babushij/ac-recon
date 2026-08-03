@@ -1830,7 +1830,16 @@ function renderContent(){
     case 'detail':       renderDetail(c,getV(ST.selectedId));break;
     case 'camera':       renderCamera(c);break;
     case 'history':      renderHistory(c);break;
-    case 'mypipeline':   renderMechPipeline(c);break;
+    case 'mypipeline':   {
+      // For an individual mechanic, show the dashboard-style view filtered to their vehicles.
+      // For the manager (who can browse mechanic pipelines), keep the old multi-mech grid view.
+      if(ST.role !== 'manager' && getMMAP()[ST.role]){
+        renderMechDashboard(c, ST.role);
+      } else {
+        renderMechPipeline(c);
+      }
+      break;
+    }
     case 'detailer':     renderDetailerQueue(c);break;
     case 'invoice':      renderInvoice(c,getV(ST.selectedId));break;
     case 'salespipeline':renderSalesPipeline(c);break;
@@ -5304,6 +5313,162 @@ function renderHistory(c){
 // ═══════════════════════════════════════════════
 // MECHANIC PIPELINE
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// MECHANIC DASHBOARD VIEW
+// Same visual structure as renderDashboard, but filtered to a single
+// mechanic's assigned vehicles. No "+ Add vehicle", no Mechanic Status panel.
+// ═══════════════════════════════════════════════════
+function renderMechDashboard(c, mechId){
+  const mech = getMMAP()[mechId];
+  if(!mech){
+    c.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-msg">Mechanic not found</div></div>`;
+    return;
+  }
+  setTopbar(`${mech.icon} ${mech.name} — Pipeline`, '');
+
+  // Filter to this mechanic's assigned vehicles, EXCLUDING booked
+  const vs = ST.vehicles.filter(v => v.assignedTo === mechId && !(v.statuses||[]).includes('booked'));
+
+  function vCost(v){
+    const pc=(v.parts||[]).reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+    const lc=(v.laborLines||[]).reduce((a,l)=>a+((parseFloat(l.hours)||0)*(parseFloat(l.rate)||0)),0);
+    const rc=(v.repairs||[]).reduce((a,r)=>a+Number(r.cost||0),0);
+    return pc+lc+rc;
+  }
+
+  // ── Stats for the mechanic's vehicles only ──
+  const totalCost = vs.reduce((a,v)=>a+vCost(v),0);
+  const highCount = vs.filter(v=>v.priority==='high').length;
+  const concernCount = vs.reduce((n,v)=>n+(v.concerns||[]).filter(c=>c.status==='pending').length, 0);
+  const partsPendingCount = vs.filter(v=>{
+    return (v.parts||[]).some(p=>(p.state||'received')!=='received');
+  }).length;
+
+  // Active session info for this mechanic
+  const activeSessions = vs.flatMap(v=>(v.timeSessions||[]).filter(s=>s.mechId===mechId&&!s.end).map(s=>({...s, vehicle:v})));
+  const isActive = activeSessions.length > 0;
+
+  let html = '';
+
+  // ══ STATS HEADER ══
+  html += `<div class="stats-panel">
+    <div style="padding:14px 16px;background:linear-gradient(135deg, ${mech.color}1a, transparent)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="width:46px;height:46px;border-radius:50%;background:${mech.color}22;border:2px solid ${mech.color}66;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;position:relative">
+          ${mech.icon}
+          ${isActive?`<span style="position:absolute;bottom:-2px;right:-2px;width:13px;height:13px;background:#4ade80;border-radius:50%;border:2px solid #111318"></span>`:''}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:16px;font-weight:700;color:#fff">${mech.name}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">
+            ${isActive ? `<span style="color:#4ade80;font-weight:700">● ON CLOCK</span> · ${activeSessions.length} car${activeSessions.length!==1?'s':''} active` : '<span style="color:#374151">IDLE</span>'}
+            · $${mech.laborRate||65}/hr
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0">
+        <div style="flex:1;padding-right:12px;border-right:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px">Assigned</div>
+          <div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1">${vs.length}</div>
+          <div style="font-size:9px;color:var(--text4);margin-top:3px">${highCount} high priority</div>
+        </div>
+        <div style="flex:1;padding:0 12px;border-right:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px">Recon cost</div>
+          <div style="font-size:22px;font-weight:800;color:#C8102E;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1">${fmt$(totalCost)}</div>
+          <div style="font-size:9px;color:var(--text4);margin-top:3px">${vs.length?fmt$(Math.round(totalCost/vs.length))+'/car':'$0/car'}</div>
+        </div>
+        <div style="flex:1;padding-left:12px">
+          <div style="font-size:9px;color:var(--text3);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px">Pending</div>
+          <div style="font-size:22px;font-weight:800;color:#f59e0b;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1">${partsPendingCount}</div>
+          <div style="font-size:9px;color:var(--text4);margin-top:3px">${concernCount} concerns</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  if(!vs.length){
+    html += `<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">No vehicles assigned</div><div class="empty-sub">Manager will assign vehicles to you</div></div>`;
+    c.innerHTML = html;
+    return;
+  }
+
+  // ── Sub-order ranks (same logic as dashboard groups) ──
+  const subRankOf = (v) => {
+    const sts = v.statuses || [];
+    if(sts.includes('sold') || sts.includes('sale_pending')) return 1;
+    if(sts.includes('customer_appt')) return 2;
+    if(sts.includes('auction')) return 3;
+    if(sts.includes('trade_in')) return 4;
+    if(sts.includes('repo')) return 5;
+    return 6;
+  };
+  const priorityWeight = (v) => {
+    const p = v.priority || 'medium';
+    return p === 'high' ? 0 : p === 'low' ? 2 : 1;
+  };
+  const sortBySubOrder = (arr) => [...arr].sort((a,b) => {
+    const ra = subRankOf(a), rb = subRankOf(b);
+    if(ra !== rb) return ra - rb;
+    const pa = priorityWeight(a), pb = priorityWeight(b);
+    if(pa !== pb) return pa - pb;
+    return (a.createdAt||0) - (b.createdAt||0);
+  });
+
+  // Sections mirror the dashboard's STATUS_ORDER concept, in the order you requested
+  const SECTIONS = [
+    {label:'Inspections needed', icon:'🔍', color:'#22c55e',
+      filter: v => (v.statuses||[]).includes('on_lot')},
+    {label:'Waiting on parts',   icon:'⏳', color:'#f59e0b',
+      filter: v => (v.statuses||[]).includes('parts')},
+    {label:'At body shop',       icon:'🏠', color:'#ec4899',
+      filter: v => { const s=v.statuses||[]; return s.includes('body_daniel')||s.includes('body_jose'); }},
+    {label:'At outside shop',    icon:'🏭', color:'#a78bfa',
+      filter: v => (v.statuses||[]).includes('outside_shop')},
+    {label:'Receipts needed',    icon:'🧾', color:'#f87171',
+      filter: v => {
+        const sts = v.statuses||[];
+        const done = ['cleaning','sale','work_complete','sold','receipts_in'].some(s=>sts.includes(s));
+        return done && !sts.includes('receipts_in');
+      }},
+    {label:'Receipts entered',   icon:'🧾', color:'#34d399',
+      filter: v => (v.statuses||[]).includes('receipts_in')},
+  ];
+
+  // Track which vehicles get matched to any section so we can show "Other" catch-all
+  const matchedIds = new Set();
+  SECTIONS.forEach(sec => {
+    const matching = sortBySubOrder(vs.filter(sec.filter));
+    if(!matching.length) return;
+    matching.forEach(v => matchedIds.add(v.id));
+    html += `<div class="sec-hdr" style="margin-top:18px">
+      <span style="color:${sec.color}">${sec.icon} ${sec.label}</span>
+      <span style="color:#555d73;font-weight:400">${matching.length}</span>
+    </div>`;
+    html += `<div class="v-list">`;
+    matching.forEach(v => { html += vRowHTML(v); });
+    html += `</div>`;
+  });
+
+  // ── Other (catch-all) ──
+  const otherVs = sortBySubOrder(vs.filter(v => !matchedIds.has(v.id)));
+  if(otherVs.length){
+    html += `<div class="sec-hdr" style="margin-top:18px">
+      <span style="color:#9ca3af">📋 Other</span>
+      <span style="color:#555d73;font-weight:400">${otherVs.length}</span>
+    </div>`;
+    html += `<div class="v-list">`;
+    otherVs.forEach(v => { html += vRowHTML(v); });
+    html += `</div>`;
+  }
+
+  html += `<div style="font-size:11px;color:#374151;text-align:center;margin-top:16px;padding-bottom:8px">${vs.length} vehicle${vs.length!==1?'s':''} on your pipeline</div>`;
+
+  c.innerHTML = html;
+  c.querySelectorAll('.v-row').forEach(row => {
+    row.onclick = () => { ST.selectedId = row.dataset.vid; ST.view='detail'; ST.activeTab='overview'; render(); };
+  });
+}
+
 function renderMechPipeline(c){
   const mechId=ST.role==='manager'?null:ST.role;
   const mech=mechId?getMMAP()[mechId]:null;
@@ -7465,6 +7630,9 @@ let firebaseReady = false;
 // On incoming Firestore updates, these are preserved locally instead of being
 // overwritten by the smaller-but-stale cloud copy.
 let pendingUnsyncedIds = new Set();
+// Counter of in-flight Firestore saves. While > 0, incoming snapshots may be
+// echoes of our own pending writes — preserve local per-vehicle if newer.
+let saveInFlight = 0;
 
 try {
   if(typeof firebase !== 'undefined'){
@@ -7538,6 +7706,8 @@ window.showSyncStatus = function(){
 async function saveToFirestore(vehicles) {
   if(!db){setSyncStatus('err');return;}
   setSyncStatus('syncing');
+  // Mark save-in-flight so incoming snapshots don't clobber our local
+  saveInFlight++;
   try {
     const json = JSON.stringify(vehicles);
     // Firestore limit is 1MB per document — skip sync if too big, keep local
@@ -7566,6 +7736,8 @@ async function saveToFirestore(vehicles) {
     // Also mark all current IDs as pending on any sync error
     pendingUnsyncedIds = new Set(vehicles.map(v=>v.id));
     toast('Sync error — saved locally only','err');
+  } finally {
+    saveInFlight--;
   }
 }
 
@@ -7586,21 +7758,47 @@ function subscribeToFirestore() {
         const incoming = JSON.parse(data.vehicles || '[]');
         const prev = ST.vehicles || [];
 
-        // PROTECTION: preserve any local vehicles that failed to sync (pendingUnsyncedIds)
-        // OR that simply don't exist in the incoming cloud data (local-only additions).
-        // This prevents Firestore's stale copy from wiping out new records created
-        // while the doc was over the size limit.
-        const incomingIds = new Set(incoming.map(v=>v.id));
-        const preservedLocal = prev.filter(v=>{
-          if(!v || !v.id) return false;
-          // If this local vehicle is flagged as pending, keep it
-          if(pendingUnsyncedIds.has(v.id)) return true;
-          // If Firestore doesn't know about it at all, also keep it
-          if(!incomingIds.has(v.id)) return true;
-          return false;
+        // PROTECTION: for each vehicle ID that exists in BOTH local and cloud,
+        // pick the one with the newer updatedAt. This prevents race conditions where
+        // a snapshot echo arrives BEFORE our own save finishes and wipes out a
+        // just-added receipt / part / concern.
+        //
+        // For vehicle IDs that exist only in one side:
+        //   - Local-only or pendingUnsyncedIds → keep local
+        //   - Cloud-only → use cloud
+        const localById = new Map(prev.filter(v=>v&&v.id).map(v=>[v.id, v]));
+        const cloudById = new Map(incoming.map(v=>[v.id, v]));
+        const allIds = new Set([...localById.keys(), ...cloudById.keys()]);
+        const merged = [];
+        allIds.forEach(id => {
+          const localV = localById.get(id);
+          const cloudV = cloudById.get(id);
+          if(!cloudV){
+            // Local only — keep it (new vehicle we added before sync landed)
+            merged.push(localV);
+            return;
+          }
+          if(!localV){
+            // Cloud only — use cloud (added on another device)
+            merged.push(cloudV);
+            return;
+          }
+          // Both sides have it — flagged as pending or newer local wins
+          if(pendingUnsyncedIds.has(id)){
+            merged.push(localV);
+            return;
+          }
+          const localT = localV.updatedAt || 0;
+          const cloudT = cloudV.updatedAt || 0;
+          // If our local copy is newer (or equal), prefer it. Equal-timestamp keeps
+          // local so an in-flight save echo doesn't wipe our just-made change.
+          if(localT >= cloudT){
+            merged.push(localV);
+          } else {
+            merged.push(cloudV);
+          }
         });
 
-        const merged = [...incoming, ...preservedLocal];
         ST.vehicles = merged;
         migrateVehiclesToVisits();
         applyVisitShimAll();
@@ -7613,11 +7811,11 @@ function subscribeToFirestore() {
           if(document.getElementById('app')?.style.display !== 'none'){
             render();
           }
-          // If we merged in local-only vehicles OR migration changed the data,
-          // push back to Firestore so the cloud catches up (size permitting)
+          // If our merged state differs from the incoming cloud copy, our local
+          // had newer changes — push back so the cloud catches up.
           const incomingJson = JSON.stringify(incoming);
-          if(mergedJson !== incomingJson){
-            console.log('Local-only or migrated data detected — syncing back to Firestore');
+          if(mergedJson !== incomingJson && saveInFlight === 0){
+            console.log('Local newer than cloud — syncing back to Firestore');
             saveToFirestore(ST.vehicles);
           }
         } else {
