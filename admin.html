@@ -1744,6 +1744,7 @@ function buildSidebar(){
   ]:ST.role==='sales'?[
     {section:'MY SALES'},
     {id:'salespipeline',label:'My pipeline',icon:saleIcon()},
+    {id:'salesfind',label:'Find vehicle',icon:searchIcon()},
     {id:'camera',label:'Camera & media',icon:camIcon()},
   ]:ST.role==='detailer'?[
     {section:'MY WORK'},
@@ -1789,6 +1790,7 @@ function buildBottomNav(){
     {id:'salespipeline',label:'Sales',icon:saleIcon()},
   ]:ST.role==='sales'?[
     {id:'salespipeline',label:'My sales',icon:saleIcon(),fab:true},
+    {id:'salesfind',label:'Find',icon:searchIcon()},
     {id:'camera',label:'Camera',icon:camIcon()},
   ]:ST.role==='detailer'?[
     {id:'detailer',label:'Queue',icon:broom()},
@@ -1844,6 +1846,7 @@ function renderContent(){
     case 'detailer':     renderDetailerQueue(c);break;
     case 'invoice':      renderInvoice(c,getV(ST.selectedId));break;
     case 'salespipeline':renderSalesPipeline(c);break;
+    case 'salesfind':    renderSalesFind(c);break;
     case 'approvals':    renderApprovals(c);break;
     case 'completed':    renderCompleted(c);break;
     case 'vendors':      renderVendors(c);break;
@@ -5995,6 +5998,156 @@ function renderSalesPipeline(c){
     btn.onclick=e=>{e.stopPropagation();openAddToQueueModal(btn.dataset.addQueue);};
   });
 }
+
+// ═══════════════════════════════════════════════════
+// SALES — FIND VEHICLE & ENTER FOR SERVICE
+// Search any vehicle by stock # / VIN / make / model / year.
+// Shows ONLY basic info + status tags — no costs, parts, labor,
+// receipts, or repair details. "Enter for service" starts a NEW
+// visit and logs the request as a concern for manager approval.
+// ═══════════════════════════════════════════════════
+function renderSalesFind(c){
+  setTopbar('Find vehicle','');
+  const q=(ST._salesFindQ||'').trim().toLowerCase();
+
+  let html=`<div style="margin-bottom:14px">
+    <input id="sf-search" type="text" value="${(ST._salesFindQ||'').replace(/"/g,'&quot;')}" placeholder="Search stock #, VIN, year, make, model…"
+      style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:10px;padding:13px 15px;color:#e2e4ea;font-size:15px"
+      oninput="ST._salesFindQ=this.value;clearTimeout(window._sfT);window._sfT=setTimeout(()=>{renderSalesFind(document.getElementById('content'));const i=document.getElementById('sf-search');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},250)">
+  </div>`;
+
+  let matches=[];
+  if(q.length>=2){
+    matches=ST.vehicles.filter(v=>{
+      const hay=`${v.stockNumber||''} ${v.vin||''} ${v.year||''} ${v.make||''} ${v.model||''}`.toLowerCase();
+      return q.split(/\s+/).every(w=>hay.includes(w));
+    }).slice(0,30);
+  }
+
+  if(q.length<2){
+    html+=`<div class="empty"><div class="empty-icon">🔍</div>
+      <div class="empty-msg">Search the system</div>
+      <div class="empty-sub">Type at least 2 characters — stock number, VIN, or vehicle name</div></div>`;
+  } else if(!matches.length){
+    html+=`<div class="empty"><div class="empty-icon">🚫</div>
+      <div class="empty-msg">No vehicles found</div>
+      <div class="empty-sub">Try a different stock #, VIN, or name</div></div>`;
+  } else {
+    html+=`<div style="font-size:11px;color:#555d73;margin-bottom:8px">${matches.length} match${matches.length!==1?'es':''}</div><div class="v-list">`;
+    matches.forEach(v=>{
+      const sts=(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean);
+      const photo=photoUrl(v.photos&&v.photos[0]);
+      const visitCount=(v.visits||[]).length;
+      html+=`<div class="v-row" data-sfvid="${v.id}" style="cursor:pointer">
+        ${photo?`<div class="v-row-photo"><img src="${photo}" loading="lazy"></div>`:`<div class="v-row-photo-empty"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M2 10L4 5h8l2 5H2z" stroke="#374151" stroke-width="1.2" fill="none"/></svg></div>`}
+        <div style="min-width:0;flex:1">
+          <div class="v-name">${v.year||''} ${v.make||''} ${v.model||''}</div>
+          <div class="v-meta">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${visitCount>1?` · ${visitCount} visits`:''}</div>
+          <div class="v-tags">${sts.map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border-color:${s.color}33">${s.icon||''} ${s.label}</span>`).join('')}</div>
+        </div>
+        <button data-sfservice="${v.id}" style="background:#3b82f6;border:none;color:#fff;font-size:12px;font-weight:700;padding:9px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;flex-shrink:0">🔧 Enter for service</button>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  c.innerHTML=html;
+
+  // Row tap → read-only basic info (NO repair/cost details for sales)
+  c.querySelectorAll('.v-row[data-sfvid]').forEach(row=>{
+    row.onclick=e=>{
+      if(e.target.closest('button'))return;
+      openSalesVehicleInfoModal(row.dataset.sfvid);
+    };
+  });
+  c.querySelectorAll('button[data-sfservice]').forEach(btn=>{
+    btn.onclick=e=>{e.stopPropagation();openSalesServiceCheckinModal(btn.dataset.sfservice);};
+  });
+}
+
+// Read-only basic info modal for sales — deliberately excludes repairs,
+// parts, labor, costs, receipts, and concern details.
+function openSalesVehicleInfoModal(vehicleId){
+  const v=ST.vehicles.find(x=>x.id===vehicleId);
+  if(!v) return;
+  const sts=(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean);
+  const photo=photoUrl(v.photos&&v.photos[0]);
+  const visits=v.visits||[];
+  const lastIn=visits.length?fmtD(visits[visits.length-1].dateIn):(v.createdAt?fmtD(v.createdAt):'—');
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML=`
+  <div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:420px;overflow:hidden">
+    ${photo?`<div style="height:160px;overflow:hidden"><img src="${photo}" style="width:100%;height:100%;object-fit:cover"></div>`:''}
+    <div style="padding:20px">
+      <div style="font-size:17px;font-weight:700;color:#fff">${v.year||''} ${v.make||''} ${v.model||''}</div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:4px">Stock #${v.stockNumber||'—'}</div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:2px;font-family:monospace">VIN: ${v.vin||'—'}</div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:2px">Last checked in: ${lastIn}${visits.length>1?` · ${visits.length} visits total`:''}</div>
+      <div class="v-tags" style="margin-top:10px">${sts.map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border-color:${s.color}33">${s.icon||''} ${s.label}</span>`).join('')||'<span style="font-size:12px;color:#555d73">No status tags</span>'}</div>
+      <button onclick="this.closest('div[style*=fixed]').remove();openSalesServiceCheckinModal('${v.id}')" style="width:100%;margin-top:18px;background:#3b82f6;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">🔧 Enter for service</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Close</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
+}
+window.openSalesVehicleInfoModal=openSalesVehicleInfoModal;
+
+// Service check-in modal — starts a NEW visit
+function openSalesServiceCheckinModal(vehicleId){
+  const v=ST.vehicles.find(x=>x.id===vehicleId);
+  if(!v) return;
+  // If the vehicle looks like it's still actively in service, warn first
+  const ACTIVE=['on_lot','parts','recon','wip','body_daniel','body_jose','outside_shop','cleaning'];
+  const isActive=(v.statuses||[]).some(s=>ACTIVE.includes(s));
+  if(isActive && !confirm('This vehicle appears to still be in service (active status). Start a NEW service visit anyway?')) return;
+
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML=`
+  <div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:420px">
+    <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:700;color:#fff">🔧 Enter for service</div>
+    <div style="padding:20px">
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:16px">${v.year||''} ${v.make||''} ${v.model||''} · #${v.stockNumber||'—'} · VIN ...${(v.vin||'------').slice(-6)}</div>
+      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin-bottom:8px">WHAT DOES IT NEED? *</label>
+      <textarea id="sfc-desc" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:11px 13px;color:#e2e4ea;font-size:14px;min-height:90px;resize:vertical;font-family:inherit" placeholder="Describe the customer's issue / work requested…"></textarea>
+      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin:14px 0 8px">APPOINTMENT DATE (optional)</label>
+      <input id="sfc-appt" type="date" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:11px 13px;color:#e2e4ea;font-size:14px">
+      <div style="font-size:11px;color:#555d73;margin-top:14px;line-height:1.5">This starts a new service visit. The manager will review and assign a mechanic.</div>
+      <button onclick="submitSalesServiceCheckin('${vehicleId}',this)" style="width:100%;margin-top:14px;background:#3b82f6;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Check in for service →</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
+}
+window.openSalesServiceCheckinModal=openSalesServiceCheckinModal;
+
+window.submitSalesServiceCheckin=function(vehicleId, btn){
+  const desc=document.getElementById('sfc-desc')?.value.trim();
+  const appt=document.getElementById('sfc-appt')?.value||'';
+  if(!desc){toast('Describe what the vehicle needs','err');return;}
+  const v=ST.vehicles.find(x=>x.id===vehicleId);
+  if(!v) return;
+
+  // Start a fresh visit — car is returning for service
+  const statuses=['received'];
+  if(appt) statuses.push('customer_appt');
+  startNewVisit(v,{statuses,priority:'medium',apptDate:appt});
+  applyVisitShim(v);
+
+  // Log the request as a pending concern → manager approval flow
+  writeToCurrentVisit(v,'concerns',[{
+    id:uid(), description:desc, addedBy:'Sales',
+    status:'pending', createdAt:Date.now()
+  }]);
+
+  save();
+  btn.closest('div[style*=fixed]').remove();
+  toast('✓ Checked in for service — manager will review');
+  render();
+};
 
 // Sales adds vehicle to work queue (sets recon status + assigns mechanic)
 function openAddToQueueModal(vehicleId){
