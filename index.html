@@ -1599,6 +1599,7 @@ function render(){
   if(!ST.role){renderRoleScreen();return}
   document.getElementById('role-screen').style.display='none';
   document.getElementById('app').style.display='flex';
+  try{if(typeof updateSyncBanner==='function')updateSyncBanner();}catch(e){}
   try{buildSidebar();}catch(e){console.error('buildSidebar error:',e);toast('Sidebar error: '+e.message,'err');}
   try{buildBottomNav();}catch(e){console.error('buildBottomNav error:',e);}
   try{
@@ -7634,7 +7635,27 @@ let firebaseReady = false;
 // Track vehicle IDs that failed to sync to Firestore (e.g., over size limit).
 // On incoming Firestore updates, these are preserved locally instead of being
 // overwritten by the smaller-but-stale cloud copy.
+// IDs of vehicles whose latest changes exist ONLY locally (cloud sync refused/failed).
+// Persisted to localStorage so protection survives page reloads / re-logins.
+const PENDING_SYNC_KEY='acrecon_pending_unsynced_v1';
 let pendingUnsyncedIds = new Set();
+try{
+  const saved=JSON.parse(localStorage.getItem(PENDING_SYNC_KEY)||'[]');
+  if(Array.isArray(saved)) pendingUnsyncedIds=new Set(saved);
+}catch(e){}
+function persistPendingIds(){
+  try{localStorage.setItem(PENDING_SYNC_KEY,JSON.stringify([...pendingUnsyncedIds]));}catch(e){}
+}
+function setPendingIds(ids){
+  pendingUnsyncedIds=new Set(ids);
+  persistPendingIds();
+  updateSyncBanner();
+}
+function clearPendingIds(){
+  pendingUnsyncedIds.clear();
+  persistPendingIds();
+  updateSyncBanner();
+}
 // Counter of in-flight Firestore saves. While > 0, incoming snapshots may be
 // echoes of our own pending writes — preserve local per-vehicle if newer.
 let saveInFlight = 0;
@@ -7720,9 +7741,10 @@ async function saveToFirestore(vehicles) {
     if(sizeKB > 900){
       console.warn('Vehicles doc too big for Firestore:', Math.round(sizeKB)+'KB — saved locally only');
       // Remember every current vehicle ID as "pending unsynced" so next Firestore push
-      // doesn't overwrite them with the stale cloud copy
-      pendingUnsyncedIds = new Set(vehicles.map(v=>v.id));
-      toast('⚠ Over 1MB — only saved locally. Run Storage Migration!','err');
+      // doesn't overwrite them with the stale cloud copy (persisted across reloads)
+      setPendingIds(vehicles.map(v=>v.id));
+      _syncFailReason='oversize';
+      updateSyncBanner();
       setSyncStatus('err');
       return;
     }
@@ -7731,19 +7753,43 @@ async function saveToFirestore(vehicles) {
       vehicles: json,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    // Sync succeeded — clear the pending list
-    pendingUnsyncedIds.clear();
+    // Sync succeeded — clear the pending list + banner
+    clearPendingIds();
+    _syncFailReason=null;
+    updateSyncBanner();
     setSyncStatus('ok');
     console.log('Firestore save OK ✅ ('+Math.round(sizeKB)+'KB)');
   } catch(e) {
     setSyncStatus('err');
     console.error('Firestore save failed:', e);
-    // Also mark all current IDs as pending on any sync error
-    pendingUnsyncedIds = new Set(vehicles.map(v=>v.id));
-    toast('Sync error — saved locally only','err');
+    // Also mark all current IDs as pending on any sync error (persisted)
+    setPendingIds(vehicles.map(v=>v.id));
+    _syncFailReason='error';
+    updateSyncBanner();
   } finally {
     saveInFlight--;
   }
+}
+
+// ─── PERSISTENT SYNC-FAILURE BANNER ───
+// Transient toasts are easy to miss; while sync is failing we pin a red banner
+// to the top of the app so nobody keeps working thinking data is safe.
+let _syncFailReason=null; // 'oversize' | 'error' | null
+function updateSyncBanner(){
+  let b=document.getElementById('sync-fail-banner');
+  const failing=_syncFailReason!==null || pendingUnsyncedIds.size>0;
+  if(!failing){ if(b) b.remove(); return; }
+  const msg=_syncFailReason==='oversize'
+    ? '⚠ DATA OVER 1MB — changes are saving to THIS DEVICE ONLY. Open Settings → run Storage Migration now.'
+    : '⚠ CLOUD SYNC FAILING — changes are saving to THIS DEVICE ONLY. Check internet, then tap the sync dot.';
+  if(!b){
+    b=document.createElement('div');
+    b.id='sync-fail-banner';
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#7f1d1d;color:#fecaca;font-size:12px;font-weight:700;padding:8px 40px 8px 12px;text-align:center;border-bottom:2px solid #ef4444;line-height:1.4;cursor:pointer';
+    b.onclick=()=>{ if(_syncFailReason==='oversize'){ ST.view='settings'; render(); } };
+    document.body.appendChild(b);
+  }
+  b.textContent=msg;
 }
 
 // Subscribe to real-time updates from Firestore
