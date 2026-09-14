@@ -8200,7 +8200,12 @@ function updateSyncBanner(){
     b=document.createElement('div');
     b.id='sync-fail-banner';
     b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#7f1d1d;color:#fecaca;font-size:12px;font-weight:700;padding:8px 40px 8px 12px;text-align:center;border-bottom:2px solid #ef4444;line-height:1.4;cursor:pointer';
-    b.onclick=()=>{ if(_syncFailReason==='oversize'){ ST.view='settings'; render(); } };
+    b.onclick=()=>{
+      if(_syncFailReason==='oversize'){ ST.view='settings'; render(); return; }
+      // Any other failure: tap = retry sync now
+      toast('Retrying cloud sync…');
+      if(typeof saveToFirestore==='function' && ST.vehicles) saveToFirestore(ST.vehicles);
+    };
     document.body.appendChild(b);
   }
   b.textContent=msg;
@@ -8286,6 +8291,14 @@ function subscribeToFirestore() {
         } else {
           // Data unchanged, restore prev reference
           ST.vehicles = prev;
+        }
+
+        // STALE-FLAG RECOVERY: if we still carry a persisted "unsynced changes"
+        // flag (e.g. sync previously failed due to size limit / quota, now fixed),
+        // proactively attempt a save. Success clears the flag + red banner.
+        if(pendingUnsyncedIds.size > 0 && saveInFlight === 0){
+          console.log('Pending unsynced changes detected — attempting sync flush');
+          saveToFirestore(ST.vehicles);
         }
       } catch(e) {
         console.warn('Firestore parse error:', e);
