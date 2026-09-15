@@ -1546,7 +1546,7 @@ function load(){
   autoClockOutExpired();
   // Start real-time Firestore listeners
   if(firebaseReady){
-    subscribeToFirestore();
+    ensurePerVehicleCloud().finally(()=>subscribeToFirestore());
     subscribeToSettings();
   }
 }
@@ -8118,9 +8118,14 @@ function setSyncStatus(status){
 
 // Click-to-diagnose sync health
 window.showSyncStatus = function(){
-  const vehicleCount = (ST.vehicles||[]).length;
-  const jsonSize = JSON.stringify(ST.vehicles||[]).length;
-  const sizeKB = Math.round(jsonSize / 1024);
+  const vs = ST.vehicles||[];
+  const vehicleCount = vs.length;
+  let totalKB = 0, biggest = 0, biggestName = '';
+  vs.forEach(v=>{
+    const kb = JSON.stringify(v).length/1024;
+    totalKB += kb;
+    if(kb > biggest){ biggest = kb; biggestName = (v.year||'')+' '+(v.make||'')+' '+(v.model||'')+' #'+(v.stockNumber||''); }
+  });
   const pendingCount = pendingUnsyncedIds.size;
   const status = document.getElementById('sync-dot')?.className || 'unknown';
   const statusText = {
@@ -8131,11 +8136,12 @@ window.showSyncStatus = function(){
   }[status] || 'Unknown status';
 
   let msg = statusText + '\n\n';
-  msg += 'Records: ' + vehicleCount + '\n';
-  msg += 'Data size: ' + sizeKB + ' KB\n';
-  msg += 'Firestore limit: 1024 KB (1 MB)\n';
-  if(sizeKB > 900){
-    msg += '\n⚠ OVER SIZE LIMIT — Firestore cannot save. Run Storage Migration in Settings to fix.\n';
+  msg += 'Records: ' + vehicleCount + ' (each syncs as its own cloud doc)\n';
+  msg += 'Total data: ' + Math.round(totalKB) + ' KB\n';
+  msg += 'Largest vehicle: ' + Math.round(biggest) + ' KB — ' + biggestName + '\n';
+  msg += 'Per-vehicle limit: 900 KB\n';
+  if(biggest > 900){
+    msg += '\n⚠ That vehicle is over the per-record limit and cannot sync.\n';
   }
   if(pendingCount > 0){
     msg += '\n' + pendingCount + ' record(s) saved locally only — not yet in cloud.\n';
@@ -8146,42 +8152,108 @@ window.showSyncStatus = function(){
 async function saveToFirestore(vehicles) {
   if(!db){setSyncStatus('err');return;}
   setSyncStatus('syncing');
-  // Mark save-in-flight so incoming snapshots don't clobber our local
   saveInFlight++;
   try {
-    const json = JSON.stringify(vehicles);
-    // Firestore limit is 1MB per document — skip sync if too big, keep local
-    const sizeKB = json.length / 1024;
-    if(sizeKB > 900){
-      console.warn('Vehicles doc too big for Firestore:', Math.round(sizeKB)+'KB — saved locally only');
-      // Remember every current vehicle ID as "pending unsynced" so next Firestore push
-      // doesn't overwrite them with the stale cloud copy (persisted across reloads)
-      setPendingIds(vehicles.map(v=>v.id));
-      _syncFailReason='oversize';
-      updateSyncBanner();
-      setSyncStatus('err');
+    const colRef = db.collection('shops').doc('automotive_connection').collection('vehicles');
+    const currentIds = new Set();
+    const changed = [];
+    for(const v of (vehicles||[])){
+      if(!v || !v.id) continue;
+      currentIds.add(v.id);
+      const json = JSON.stringify(v);
+      if(json.length/1024 > 900){
+        // One single vehicle over 900KB — extremely unlikely with files in Storage
+        console.warn('Vehicle too large to sync:', v.id, Math.round(json.length/1024)+'KB');
+        toast(`⚠ ${v.stockNumber||'A vehicle'} is too large to sync`, 'err');
+        continue;
+      }
+      if(lastPushedJson.get(v.id) !== json) changed.push({id:v.id, json});
+    }
+    const removed = [...lastPushedJson.keys()].filter(id=>!currentIds.has(id));
+
+    if(!changed.length && !removed.length){
+      clearPendingIds(); _syncFailReason=null; updateSyncBanner(); setSyncStatus('ok');
       return;
     }
-    const ref = db.collection('shops').doc('automotive_connection');
-    await ref.set({
-      vehicles: json,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    // Sync succeeded — clear the pending list + banner
-    clearPendingIds();
-    _syncFailReason=null;
-    updateSyncBanner();
-    setSyncStatus('ok');
-    console.log('Firestore save OK ✅ ('+Math.round(sizeKB)+'KB)');
+
+    // Firestore batches max out at 500 ops — chunk if ever needed
+    const ops = [...changed.map(c=>({t:'set',...c})), ...removed.map(id=>({t:'del',id}))];
+    for(let i=0;i<ops.length;i+=400){
+      const batch = db.batch();
+      ops.slice(i,i+400).forEach(op=>{
+        if(op.t==='set') batch.set(colRef.doc(op.id), {json:op.json, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+        else batch.delete(colRef.doc(op.id));
+      });
+      await batch.commit();
+    }
+    changed.forEach(c=>lastPushedJson.set(c.id, c.json));
+    removed.forEach(id=>lastPushedJson.delete(id));
+
+    clearPendingIds(); _syncFailReason=null; updateSyncBanner(); setSyncStatus('ok');
+    console.log(`Firestore save OK ✅ (${changed.length} vehicle${changed.length!==1?'s':''} updated${removed.length?', '+removed.length+' removed':''})`);
   } catch(e) {
     setSyncStatus('err');
     console.error('Firestore save failed:', e);
-    // Also mark all current IDs as pending on any sync error (persisted)
-    setPendingIds(vehicles.map(v=>v.id));
-    _syncFailReason='error';
+    setPendingIds((vehicles||[]).map(v=>v.id));
+    _syncFailReason = (e && e.code==='permission-denied') ? 'permission' : 'error';
     updateSyncBanner();
   } finally {
     saveInFlight--;
+  }
+}
+
+// One-time cloud migration: single legacy doc → per-vehicle docs.
+// Merges legacy cloud data with local (newer updatedAt wins, local wins ties
+// and pending-unsynced), writes every vehicle as its own doc, leaves the old
+// doc in place as a backup.
+async function ensurePerVehicleCloud(){
+  if(!db) return;
+  const shopRef = db.collection('shops').doc('automotive_connection');
+  try{
+    const probe = await shopRef.collection('vehicles').limit(1).get();
+    if(!probe.empty) return; // already on per-vehicle docs
+
+    let legacyVs = [];
+    try{
+      const legacy = await shopRef.get();
+      if(legacy.exists && legacy.data().vehicles) legacyVs = JSON.parse(legacy.data().vehicles);
+    }catch(e){ console.warn('Legacy doc read failed:', e); }
+
+    // Merge legacy cloud with local — same rules as live merge
+    const localById = new Map((ST.vehicles||[]).filter(v=>v&&v.id).map(v=>[v.id,v]));
+    const merged = []; const seen = new Set();
+    legacyVs.forEach(cv=>{
+      if(!cv||!cv.id) return; seen.add(cv.id);
+      const lv = localById.get(cv.id);
+      if(!lv){ merged.push(cv); return; }
+      if(pendingUnsyncedIds.has(cv.id)){ merged.push(lv); return; }
+      merged.push(((lv.updatedAt||0) >= (cv.updatedAt||0)) ? lv : cv);
+    });
+    localById.forEach((lv,id)=>{ if(!seen.has(id)) merged.push(lv); });
+
+    if(!merged.length) return; // nothing to migrate (fresh install)
+
+    ST.vehicles = merged;
+    migrateVehiclesToVisits();
+    applyVisitShimAll();
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(ST.vehicles)); }catch(e){}
+
+    for(let i=0;i<merged.length;i+=400){
+      const batch = db.batch();
+      merged.slice(i,i+400).forEach(v=>{
+        if(!v||!v.id) return;
+        const json = JSON.stringify(v);
+        if(json.length/1024 > 900) return;
+        batch.set(shopRef.collection('vehicles').doc(v.id), {json, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+        lastPushedJson.set(v.id, json);
+      });
+      await batch.commit();
+    }
+    console.log('☁️ Cloud upgraded to per-vehicle docs:', merged.length, 'vehicles');
+    clearPendingIds(); _syncFailReason=null; updateSyncBanner();
+    toast('✓ Cloud storage upgraded — size limit removed');
+  }catch(e){
+    console.error('Per-vehicle cloud migration failed:', e);
   }
 }
 
@@ -8194,8 +8266,10 @@ function updateSyncBanner(){
   const failing=_syncFailReason!==null || pendingUnsyncedIds.size>0;
   if(!failing){ if(b) b.remove(); return; }
   const msg=_syncFailReason==='oversize'
-    ? '⚠ DATA OVER 1MB — changes are saving to THIS DEVICE ONLY. Open Settings → run Storage Migration now.'
-    : '⚠ CLOUD SYNC FAILING — changes are saving to THIS DEVICE ONLY. Check internet, then tap the sync dot.';
+    ? '⚠ A VEHICLE RECORD IS TOO LARGE TO SYNC — tap the sync dot for details.'
+    : _syncFailReason==='permission'
+    ? '⚠ CLOUD PERMISSION DENIED — Firestore security rules are blocking writes. Tell your developer.'
+    : '⚠ CLOUD SYNC FAILING — changes are saving to THIS DEVICE ONLY. Tap here to retry.';
   if(!b){
     b=document.createElement('div');
     b.id='sync-fail-banner';
@@ -8211,61 +8285,56 @@ function updateSyncBanner(){
   b.textContent=msg;
 }
 
-// Subscribe to real-time updates from Firestore
+// Subscribe to real-time updates from Firestore (per-vehicle collection)
 function subscribeToFirestore() {
   if(!db) return;
   if(unsubscribeFirestore) unsubscribeFirestore();
   setSyncStatus('syncing');
-  unsubscribeFirestore = db.collection('shops').doc('automotive_connection')
+  unsubscribeFirestore = db.collection('shops').doc('automotive_connection').collection('vehicles')
     .onSnapshot(snap => {
       setSyncStatus('ok');
-      if(!snap.exists){
-        console.log('Firestore: no data yet — first use');
-        return;
-      }
       try {
-        const data = snap.data();
-        const incoming = JSON.parse(data.vehicles || '[]');
+        const incoming = [];
+        const cloudJsonById = new Map();
+        snap.docs.forEach(d => {
+          try{
+            const j = d.data().json;
+            if(!j) return;
+            const v = JSON.parse(j);
+            if(v && v.id){ incoming.push(v); cloudJsonById.set(v.id, j); }
+          }catch(e){}
+        });
+        if(!snap.docs.length){
+          console.log('Firestore: vehicle collection empty');
+          return;
+        }
         const prev = ST.vehicles || [];
 
-        // PROTECTION: for each vehicle ID that exists in BOTH local and cloud,
-        // pick the one with the newer updatedAt. This prevents race conditions where
-        // a snapshot echo arrives BEFORE our own save finishes and wipes out a
-        // just-added receipt / part / concern.
-        //
-        // For vehicle IDs that exist only in one side:
-        //   - Local-only or pendingUnsyncedIds → keep local
-        //   - Cloud-only → use cloud
+        // PROTECTION: per-vehicle newest-updatedAt merge (local wins ties and
+        // pending-unsynced) — prevents snapshot echoes from wiping fresh edits.
         const localById = new Map(prev.filter(v=>v&&v.id).map(v=>[v.id, v]));
-        const cloudById = new Map(incoming.map(v=>[v.id, v]));
-        const allIds = new Set([...localById.keys(), ...cloudById.keys()]);
+        const allIds = new Set([...localById.keys(), ...cloudJsonById.keys()]);
         const merged = [];
         allIds.forEach(id => {
           const localV = localById.get(id);
-          const cloudV = cloudById.get(id);
+          const cloudV = incoming.find(v=>v.id===id);
           if(!cloudV){
-            // Local only — keep it (new vehicle we added before sync landed)
+            // Local-only. If cloud previously knew it (lastPushedJson) it was
+            // deleted on another device — drop it unless pending here.
+            if(lastPushedJson.has(id) && !pendingUnsyncedIds.has(id)) return;
             merged.push(localV);
             return;
           }
-          if(!localV){
-            // Cloud only — use cloud (added on another device)
-            merged.push(cloudV);
-            return;
-          }
-          // Both sides have it — flagged as pending or newer local wins
-          if(pendingUnsyncedIds.has(id)){
-            merged.push(localV);
-            return;
-          }
+          if(!localV){ merged.push(cloudV); lastPushedJson.set(id, cloudJsonById.get(id)); return; }
+          if(pendingUnsyncedIds.has(id)){ merged.push(localV); return; }
           const localT = localV.updatedAt || 0;
           const cloudT = cloudV.updatedAt || 0;
-          // If our local copy is newer (or equal), prefer it. Equal-timestamp keeps
-          // local so an in-flight save echo doesn't wipe our just-made change.
-          if(localT >= cloudT){
-            merged.push(localV);
+          if(localT > cloudT){
+            merged.push(localV); // local newer — will be pushed by flush below
+          } else if(localT < cloudT){
+            merged.push(cloudV); lastPushedJson.set(id, cloudJsonById.get(id));
           } else {
-            merged.push(cloudV);
+            merged.push(localV); lastPushedJson.set(id, cloudJsonById.get(id));
           }
         });
 
@@ -8281,21 +8350,15 @@ function subscribeToFirestore() {
           if(document.getElementById('app')?.style.display !== 'none'){
             render();
           }
-          // If our merged state differs from the incoming cloud copy, our local
-          // had newer changes — push back so the cloud catches up.
-          const incomingJson = JSON.stringify(incoming);
-          if(mergedJson !== incomingJson && saveInFlight === 0){
-            console.log('Local newer than cloud — syncing back to Firestore');
-            saveToFirestore(ST.vehicles);
+          if(saveInFlight === 0){
+            saveToFirestore(ST.vehicles); // diff-based: only pushes what differs
           }
         } else {
-          // Data unchanged, restore prev reference
           ST.vehicles = prev;
         }
 
-        // STALE-FLAG RECOVERY: if we still carry a persisted "unsynced changes"
-        // flag (e.g. sync previously failed due to size limit / quota, now fixed),
-        // proactively attempt a save. Success clears the flag + red banner.
+        // STALE-FLAG RECOVERY: attempt a flush while unsynced flag is set;
+        // a successful (even empty-diff) save clears the flag + red banner.
         if(pendingUnsyncedIds.size > 0 && saveInFlight === 0){
           console.log('Pending unsynced changes detected — attempting sync flush');
           saveToFirestore(ST.vehicles);
