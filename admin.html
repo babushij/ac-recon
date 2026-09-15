@@ -8152,6 +8152,12 @@ window.showSyncStatus = function(){
   alert(msg);
 };
 
+// ═══════════════════════════════════════════════════
+// PER-VEHICLE CLOUD SYNC
+// Each vehicle is its own Firestore doc: shops/automotive_connection/vehicles/{id}
+// ═══════════════════════════════════════════════════
+let lastPushedJson = new Map();  // vehicle id -> json we last wrote/accepted from cloud
+
 async function saveToFirestore(vehicles) {
   if(!db){setSyncStatus('err');return;}
   setSyncStatus('syncing');
