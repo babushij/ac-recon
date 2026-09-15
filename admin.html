@@ -31,7 +31,7 @@
   /* Borders */
   --border:#1a2035;--border2:#243048;--border3:#2e3d56;
   /* Text */
-  --text:#e8eaf2;--text2:#8896a8;--text3:#3d5068;--text4:#2a3a50;
+  --text:#eef0f6;--text2:#b8c3d3;--text3:#8a9ab0;--text4:#64758d;
   /* Sidebar */
   --sidebar-w:230px;--topbar-h:56px;--bottom-nav-h:60px;
   /* Radius — sharp industrial */
@@ -51,7 +51,7 @@ input,select,textarea{
 }
 input:focus,select:focus,textarea:focus{border-color:var(--red);background:var(--surface3)}
 select{cursor:pointer;appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3l3 4 3-4' stroke='%233d5068' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3l3 4 3-4' stroke='%238a9ab0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 11px center;padding-right:30px
 }
 textarea{resize:vertical;min-height:80px;line-height:1.55}
@@ -107,10 +107,10 @@ a{text-decoration:none;color:inherit}
 .sb-logo-top{display:flex;align-items:center;gap:8px}
 .sb-logo-dot{width:6px;height:6px;background:var(--red);border-radius:1px;flex-shrink:0}
 .sb-logo-mark{font-size:17px;font-weight:800;letter-spacing:3px;color:#fff;text-transform:uppercase}
-.sb-logo-sub{font-size:9px;color:#9aa7bd;letter-spacing:2.5px;margin-top:3px;text-transform:uppercase;font-weight:600}
+.sb-logo-sub{font-size:9px;color:#c3cddb;letter-spacing:2.5px;margin-top:3px;text-transform:uppercase;font-weight:600}
 .sb-nav{flex:1;padding:8px 0;overflow-y:auto}
 .sb-section{
-  font-size:9px;color:#9aa7bd;letter-spacing:2px;font-weight:700;
+  font-size:9px;color:#c3cddb;letter-spacing:2px;font-weight:700;
   padding:14px 16px 4px;text-transform:uppercase
 }
 .sb-item{
@@ -127,7 +127,7 @@ a{text-decoration:none;color:inherit}
 .sb-user{padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .sb-avatar{width:28px;height:28px;border-radius:var(--r-md);background:var(--red);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:.5px}
 .sb-user-name{font-size:12px;font-weight:600;color:var(--text);letter-spacing:.2px}
-.sb-user-role{font-size:10px;color:#9aa7bd;letter-spacing:.5px;text-transform:uppercase;font-weight:600}
+.sb-user-role{font-size:10px;color:#c3cddb;letter-spacing:.5px;text-transform:uppercase;font-weight:600}
 .sb-switch{margin-left:auto;background:none;border:none;color:var(--text4);font-size:10px;padding:4px 6px;border-radius:var(--r)}
 .sb-switch:hover{color:var(--text2)}
 
@@ -197,13 +197,13 @@ a{text-decoration:none;color:inherit}
 .v-meta{font-size:10px;color:var(--text3);margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase;font-weight:600}
 .v-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
 .v-tag{
-  font-size:9px;padding:3px 7px;border-radius:var(--r);font-weight:700;
+  font-size:9px;padding:3px 7px;border-radius:var(--r);font-weight:800;
   border:1px solid transparent;letter-spacing:.6px;text-transform:uppercase
 }
 .v-pri{font-size:9px;font-weight:700;padding:3px 7px;border-radius:var(--r);letter-spacing:.6px;white-space:nowrap;text-transform:uppercase}
 .v-cost{font-size:14px;font-weight:800;color:var(--red);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
 .v-mech{font-size:10px;color:var(--text3);text-align:right}
-.v-chevron{color:var(--border2);flex-shrink:0}
+.v-chevron{color:var(--text4);flex-shrink:0}
 
 /* ═══ CARDS / PANELS ═══ */
 .panel{
@@ -267,7 +267,7 @@ a{text-decoration:none;color:inherit}
 /* ═══ PARTS PIPELINE BUTTONS ═══ */
 .ppl-btn{
   font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;
-  border:1px solid #2a2f3f;background:#1e2230;color:#9ca3af;
+  border:1px solid #2a2f3f;background:#1e2230;color:#cdd3de;
   cursor:pointer;transition:all .1s;font-family:inherit
 }
 .ppl-btn:hover{border-color:#374151;color:#fff}
@@ -305,7 +305,7 @@ a{text-decoration:none;color:inherit}
   font-family:ui-monospace,monospace;
 }
 .file-thumb-pdf-icon{
-  position:absolute;bottom:4px;left:4px;font-size:11px;color:#9ca3af;
+  position:absolute;bottom:4px;left:4px;font-size:11px;color:#cdd3de;
 }
 
 /* ═══ FRAZER ═══ */
@@ -432,7 +432,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
 .sf-chip{display:inline-flex;align-items:center;gap:3px;padding:4px 9px;border-radius:var(--r);border:1px solid var(--border2);background:var(--surface2);font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;transition:all .1s;white-space:nowrap;letter-spacing:.5px;text-transform:uppercase}
 .sf-chip:hover{border-color:var(--border3);color:var(--text2)}
 .sf-chip.on{color:#fff}
-.sf-chip.ex{background:#1a0505;color:#f87171;border-color:#3d0d0d}
+.sf-chip.ex{background:#7f1d1d;color:#fff;border-color:#dc2626;text-decoration:line-through}
 
 /* ═══ POPUP CALENDAR ═══ */
 .cal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -481,6 +481,64 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
 .back-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:7px 13px;border-radius:var(--r-md);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:5px}
 .back-btn:hover{color:var(--text)}
 
+/* v26.7 — desktop readability: larger small text (mouse/trackpad screens only) */
+@media screen and (min-width:901px) and (hover:hover) and (pointer:fine){
+  .role-logo-sub{font-size:12px}
+  .sb-logo-sub{font-size:11px}
+  .sb-section{font-size:11px}
+  .sb-badge{font-size:10px}
+  .sb-avatar{font-size:12px}
+  .sb-user-role{font-size:12px}
+  .sb-switch{font-size:12px}
+  .btn-ghost{font-size:13px}
+  .btn-red{font-size:13px}
+  .sec-hdr{font-size:11px}
+  .v-meta{font-size:12px}
+  .v-tag{font-size:11px}
+  .v-pri{font-size:11px}
+  .v-mech{font-size:12px}
+  .panel-title{font-size:11px}
+  .field label{font-size:12px}
+  .tag-btn{font-size:13px}
+  .kpi-label{font-size:11px}
+  .ov-label{font-size:11px}
+  .cam-sub{font-size:13px}
+  .photo-thumb{font-size:11px}
+  .repair-cat{font-size:11px}
+  .repair-mech{font-size:13px}
+  .ppl-btn{font-size:13px}
+  .receipt-date{font-size:12px}
+  .dl-link{font-size:13px}
+  .file-thumb-pdf-label{font-size:12px}
+  .file-thumb-pdf-icon{font-size:13px}
+  .frazer-key{font-size:13px}
+  .copy-btn{font-size:11px}
+  pre.export-pre{font-size:13px}
+  .invoice-addr{font-size:12px}
+  .invoice-cat{font-size:11px}
+  .tab-btn{font-size:13px}
+  .comment-meta{font-size:11px}
+  .mech-meta{font-size:12px}
+  .pri-hdr{font-size:13px}
+  .status-quick-btn{font-size:11px}
+  .hist-hdr,.hist-row{font-size:13px}
+  .hist-hdr{font-size:11px}
+  .stats-period-btn{font-size:12px}
+  .stat-label{font-size:10px}
+  .stat-sub{font-size:11px}
+  .dash-tab-label{font-size:11px}
+  .sf-chip{font-size:12px}
+  .cal-dow{font-size:11px}
+  .cal-time-label{font-size:11px}
+  .cal-cancel{font-size:13px}
+  .cal-confirm{font-size:13px}
+  .bnav-lbl{font-size:11px}
+  .decode-msg{font-size:13px}
+  [style*="font-size:8px"]{font-size:10px!important}
+  [style*="font-size:9px"]{font-size:11px!important}
+  [style*="font-size:10px"]{font-size:12px!important}
+  [style*="font-size:11px"]{font-size:13px!important}
+}
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:900px){
   :root{--sidebar-w:210px}
@@ -609,6 +667,20 @@ const SOURCES=ALL_STATUSES.filter(s=>s.group==='source');
 const WORK_S=ALL_STATUSES.filter(s=>s.group==='work');
 const FINISH_S=ALL_STATUSES.filter(s=>s.group==='finish');
 
+// ═══ v26.7: solid status chips (sunlight-readable) ═══
+function vinHtml(vin){
+  vin=String(vin||'');if(!vin)return'—';
+  const e=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  return vin.length<=6?`<b style="font-weight:800;color:#fff">${e(vin)}</b>`:
+    `<span style="font-weight:400">${e(vin.slice(0,-6))}</span><b style="font-weight:800;color:#fff;font-size:1.12em;letter-spacing:.5px">${e(vin.slice(-6))}</b>`;
+}
+function chipText(hex){
+  const h=(hex||'').replace('#','');if(h.length<6)return'#fff';
+  const lin=c=>{c=parseInt(c,16)/255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4)};
+  const L=0.2126*lin(h.slice(0,2))+0.7152*lin(h.slice(2,4))+0.0722*lin(h.slice(4,6));
+  return (1.05/(L+0.05))>=3?'#fff':'#0b0d12';
+}
+function chipCss(c){return `background:${c};color:${chipText(c)};border-color:${c}`;}
 const PRIS=[{id:'high',label:'High',color:'#ef4444',icon:'🔴'},{id:'medium',label:'Medium',color:'#f59e0b',icon:'🟡'},{id:'low',label:'Low',color:'#6b7280',icon:'⚫'}];
 const PMAP=Object.fromEntries(PRIS.map(p=>[p.id,p]));
 const PORDER={high:0,medium:1,low:2};
@@ -1097,17 +1169,17 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
           : (diff > 0
               ? `<span style="color:#f87171;font-size:11px">▲ ${fmt$(diff)} over order</span>`
               : `<span style="color:#34d399;font-size:11px">▼ ${fmt$(-diff)} under order</span>`);
-        matchedFooter = `<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:#9ca3af;padding-top:7px;border-top:1px solid #1e2230;margin-top:7px">
+        matchedFooter = `<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:#cdd3de;padding-top:7px;border-top:1px solid #1e2230;margin-top:7px">
           <span>↩ Matched to <span style="color:#c7d2fe">"${(matchedReceipt.description||'?').slice(0,40)}${(matchedReceipt.description||'').length>40?'…':''}"</span></span>
           ${diffStr}
-          <button data-unmatch-o="${origIdx}" style="background:transparent;border:1px solid #374151;color:#9ca3af;font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;margin-left:auto">Unmatch</button>
+          <button data-unmatch-o="${origIdx}" style="background:transparent;border:1px solid #374151;color:#cdd3de;font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;margin-left:auto">Unmatch</button>
         </div>`;
       }
       return `<div style="padding:10px 12px;border:1px solid #1e2230;${leftAccent}border-radius:8px;margin-bottom:6px;background:#0d0f14">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:9px;color:#bfdbfe;background:#1e3a8a55;padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">🚚 Ordered · ${eta}</span>
           <span style="font-size:13px;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${op.name}</span>
-          <span style="font-size:11px;color:#9ca3af;flex-shrink:0">${fmt$(orderedCost)}</span>
+          <span style="font-size:11px;color:#cdd3de;flex-shrink:0">${fmt$(orderedCost)}</span>
         </div>
         ${matchedFooter}
       </div>`;
@@ -1136,18 +1208,18 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
       let body = '';
       if(isMatched){
         body = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px solid #1e2230">
-          <span style="font-size:11px;color:#9ca3af;flex:1;min-width:0">Closes order: <span style="color:#c7d2fe">${(orderedName||'').slice(0,50)}${(orderedName||'').length>50?'…':''}</span></span>
+          <span style="font-size:11px;color:#cdd3de;flex:1;min-width:0">Closes order: <span style="color:#c7d2fe">${(orderedName||'').slice(0,50)}${(orderedName||'').length>50?'…':''}</span></span>
           <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;color:#555d73;letter-spacing:.4px;text-transform:uppercase">Mark received</span>
+            <span style="font-size:10px;color:#9aa3b8;letter-spacing:.4px;text-transform:uppercase">Mark received</span>
             <button data-toggle-recv="${ri}" data-on="${m.markReceived?'1':'0'}"
               style="font-size:11px;font-weight:700;padding:5px 11px;border-radius:6px;cursor:pointer;border:1px solid ${m.markReceived?'#16a34a':'#374151'};background:${m.markReceived?'#14532d33':'#1e2230'};color:${m.markReceived?'#bbf7d0':'#9ca3af'};font-family:inherit">${m.markReceived?'✓ Yes':'✗ No'}</button>
           </div>
-          <button data-unmatch-r="${ri}" style="font-size:10px;padding:5px 9px;border-radius:5px;background:transparent;border:1px solid #374151;color:#9ca3af;cursor:pointer">Unmatch</button>
+          <button data-unmatch-r="${ri}" style="font-size:10px;padding:5px 9px;border-radius:5px;background:transparent;border:1px solid #374151;color:#cdd3de;cursor:pointer">Unmatch</button>
         </div>`;
       } else {
         body = availableOrders.length ? `<div style="margin-top:7px;padding-top:7px;border-top:1px solid #1e2230;display:flex;align-items:center;gap:8px">
-          <span style="font-size:10px;color:#555d73;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">Match to</span>
-          <select data-match-r="${ri}" style="flex:1;font-size:11px;background:#0a0c10;border:1px solid #1e2230;border-radius:5px;padding:5px 7px;color:#9ca3af;font-family:inherit">
+          <span style="font-size:10px;color:#9aa3b8;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0">Match to</span>
+          <select data-match-r="${ri}" style="flex:1;font-size:11px;background:#0a0c10;border:1px solid #1e2230;border-radius:5px;padding:5px 7px;color:#cdd3de;font-family:inherit">
             <option value="">+ Add as new part</option>
             ${availableOrders.map(o=>`<option value="${o.origIdx}">↩ Closes: ${o.name.slice(0,50)}${o.name.length>50?'…':''}</option>`).join('')}
           </select>
@@ -1180,7 +1252,7 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
             <div style="font-size:14px;font-weight:700;color:#fff">Match receipt to pending orders?</div>
             <button id="ri-close" style="background:transparent;border:1px solid #374151;color:#fff;font-size:12px;padding:6px 11px;border-radius:6px;cursor:pointer">Cancel</button>
           </div>
-          <div style="font-size:12px;color:#9ca3af">This vehicle has <strong style="color:#bfdbfe">${orderedPending.length} ordered part${orderedPending.length!==1?'s':''}</strong> waiting. Match each receipt item — toggle ✓ Yes to mark received now.</div>
+          <div style="font-size:12px;color:#cdd3de">This vehicle has <strong style="color:#bfdbfe">${orderedPending.length} ordered part${orderedPending.length!==1?'s':''}</strong> waiting. Match each receipt item — toggle ✓ Yes to mark received now.</div>
         </div>
         <div style="flex:1;min-height:0;overflow-y:auto;padding:14px 16px">
           <div style="font-size:10px;color:#bfdbfe;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px">⏳ Pending orders on this vehicle</div>
@@ -1189,8 +1261,8 @@ function openReceiptIntent(freshV, picked, orderedPending, onDone){
           ${receiptRowHtml}
         </div>
         <div style="flex-shrink:0;padding:12px 16px;border-top:1px solid #1e2230;background:#0d0f14">
-          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#9ca3af;margin-bottom:8px;gap:8px">
-            <span style="display:flex;gap:10px;flex-wrap:wrap">${summaryParts.join('<span style="color:#374151">·</span>') || '<span style="color:#555d73">No matches yet</span>'}</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#cdd3de;margin-bottom:8px;gap:8px">
+            <span style="display:flex;gap:10px;flex-wrap:wrap">${summaryParts.join('<span style="color:#7a8499">·</span>') || '<span style="color:#9aa3b8">No matches yet</span>'}</span>
           </div>
           <div style="display:flex;gap:8px">
             <button id="ri-all-new" style="flex:1;background:#1e2230;border:1px solid #374151;color:#fff;font-size:12px;font-weight:600;padding:11px;border-radius:8px;cursor:pointer">All new parts</button>
@@ -1655,7 +1727,7 @@ function showPinPad(role){
     <div style="text-align:center;margin-bottom:28px">
       <div style="font-size:32px;margin-bottom:8px">${role.icon}</div>
       <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">${role.label}</div>
-      <div style="font-size:12px;color:#555d73">Enter your PIN to continue</div>
+      <div style="font-size:12px;color:#9aa3b8">Enter your PIN to continue</div>
     </div>
     <div id="pin-dots" style="display:flex;justify-content:center;gap:14px;margin-bottom:28px">
       ${[0,1,2,3].map(i=>`<div style="width:16px;height:16px;border-radius:50%;border:2px solid #374151;background:transparent" id="pd-${i}"></div>`).join('')}
@@ -1665,7 +1737,7 @@ function showPinPad(role){
       ${[1,2,3,4,5,6,7,8,9,'←',0,'✓'].map(k=>`
       <button onclick="pinKey('${k}')" style="background:${k==='✓'?'#C8102E':k==='←'?'#1e2230':'#161921'};border:1px solid #2a2f3f;color:#fff;font-size:${k==='←'||k==='✓'?'20':'22'}px;font-weight:600;padding:18px 0;border-radius:12px;cursor:pointer;font-family:inherit;transition:background .1s">${k}</button>`).join('')}
     </div>
-    <button onclick="document.getElementById('pin-overlay').remove()" style="width:100%;margin-top:16px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">← Back to roles</button>
+    <button onclick="document.getElementById('pin-overlay').remove()" style="width:100%;margin-top:16px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">← Back to roles</button>
   </div>`;
   document.body.appendChild(overlay);
 
@@ -1973,7 +2045,7 @@ function renderDashboard(c){
         const info=stuckInfo(v);
         return `<div class="v-row" data-vid="${v.id}" style="margin-top:10px;border-color:#7f1d1d">
           <div style="min-width:0;flex:1">
-            <div class="v-name">${v.year||''} ${v.make||''} ${v.model||''} <span style="color:#555d73;font-weight:400;font-size:12px">#${v.stockNumber||'—'}</span></div>
+            <div class="v-name">${v.year||''} ${v.make||''} ${v.model||''} <span style="color:#9aa3b8;font-weight:400;font-size:12px">#${v.stockNumber||'—'}</span></div>
             <div style="font-size:11px;color:#f87171;margin-top:3px">${info.reasons.join(' · ')}</div>
           </div>
           <div class="v-cost" style="color:#fca5a5">${daysInStage(v)}d</div>
@@ -2066,7 +2138,7 @@ function renderDashboard(c){
     activeTabDef.vehicles.forEach(v=>{html+=vRowHTML(v);});
     html+=`</div></div>`;
   } else if(activeTabDef&&!activeTabDef.vehicles.length){
-    html+=`<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:20px;text-align:center;margin-bottom:14px;color:#374151;font-size:13px">No ${activeTabDef.label.toLowerCase()} vehicles</div>`;
+    html+=`<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:20px;text-align:center;margin-bottom:14px;color:#7a8499;font-size:13px">No ${activeTabDef.label.toLowerCase()} vehicles</div>`;
   }
 
   // ══════════════════════════════════════════
@@ -2090,13 +2162,13 @@ function renderDashboard(c){
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:7px;margin-bottom:2px">
             <span style="font-size:14px;font-weight:600;color:#fff">${m.name}</span>
-            ${isActive?`<span style="font-size:10px;font-weight:700;color:#4ade80;background:#0d2a0d;border:1px solid #166534;padding:2px 7px;border-radius:20px">● ACTIVE</span>`:`<span style="font-size:10px;color:#374151;background:#161921;padding:2px 7px;border-radius:20px">IDLE</span>`}
+            ${isActive?`<span style="font-size:10px;font-weight:700;color:#4ade80;background:#0d2a0d;border:1px solid #166534;padding:2px 7px;border-radius:20px">● ACTIVE</span>`:`<span style="font-size:10px;color:#7a8499;background:#161921;padding:2px 7px;border-radius:20px">IDLE</span>`}
           </div>
-          ${isActive?`<div style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Working on <span style="color:#fff;font-weight:500">${primaryVeh.year||''} ${primaryVeh.make||''} ${primaryVeh.model||''}</span>${primaryVeh.stockNumber?` · #${primaryVeh.stockNumber}`:''}</div>
-            <div style="font-size:11px;color:#555d73;margin-top:2px">Since ${new Date(sessionStart).toLocaleTimeString()} · ${eStr}${activeSessionsAll.length>1?' · '+activeSessionsAll.length+' cars clocked':''}</div>`:
-            `<div style="font-size:12px;color:#374151">${asgn.length} car${asgn.length!==1?'s':''} assigned${hi?` · <span style="color:#f87171">${hi} high priority</span>`:''}</div>`}
+          ${isActive?`<div style="font-size:12px;color:#cdd3de;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Working on <span style="color:#fff;font-weight:500">${primaryVeh.year||''} ${primaryVeh.make||''} ${primaryVeh.model||''}</span>${primaryVeh.stockNumber?` · #${primaryVeh.stockNumber}`:''}</div>
+            <div style="font-size:11px;color:#9aa3b8;margin-top:2px">Since ${new Date(sessionStart).toLocaleTimeString()} · ${eStr}${activeSessionsAll.length>1?' · '+activeSessionsAll.length+' cars clocked':''}</div>`:
+            `<div style="font-size:12px;color:#7a8499">${asgn.length} car${asgn.length!==1?'s':''} assigned${hi?` · <span style="color:#f87171">${hi} high priority</span>`:''}</div>`}
         </div>
-        ${isActive?`<div style="text-align:right;flex-shrink:0"><div style="font-size:18px;font-weight:700;color:${m.color}">${eStr}</div><div style="font-size:10px;color:#555d73">on clock</div></div>`:''}
+        ${isActive?`<div style="text-align:right;flex-shrink:0"><div style="font-size:18px;font-weight:700;color:${m.color}">${eStr}</div><div style="font-size:10px;color:#9aa3b8">on clock</div></div>`:''}
       </div>
     </div>`;
   });
@@ -2127,7 +2199,7 @@ function renderDashboard(c){
     if(!matching.length) return;
     html+=`<div class="sec-hdr" style="margin-top:18px">
       <span style="color:${grp.color}">${grp.icon} ${grp.label}</span>
-      <span style="color:#555d73;font-weight:400">${matching.length}</span>
+      <span style="color:#9aa3b8;font-weight:400">${matching.length}</span>
     </div>`;
     html+=`<div class="v-list">`;
     matching.forEach(v=>{html+=vRowHTML(v);});
@@ -2142,7 +2214,7 @@ function renderDashboard(c){
   if(completeNotBooked.length){
     html+=`<div class="sec-hdr" style="margin-top:18px">
       <span style="color:#4ade80">✔️ Work complete — not booked</span>
-      <span style="color:#555d73;font-weight:400">${completeNotBooked.length}</span>
+      <span style="color:#9aa3b8;font-weight:400">${completeNotBooked.length}</span>
     </div>`;
     html+=`<div class="v-list">`;
     completeNotBooked.forEach(v=>{html+=vRowHTML(v);});
@@ -2162,7 +2234,7 @@ function renderDashboard(c){
   });
 
   if(!vs.length) html+=`<div class="empty"><div class="empty-icon">🚗</div><div class="empty-msg">No vehicles in recon</div><div class="empty-sub">Tap "+ Add vehicle" to get started</div></div>`;
-  else html+=`<div style="font-size:11px;color:#374151;text-align:center;margin-top:16px;padding-bottom:8px">${vs.length} vehicle${vs.length!==1?'s':''} total</div>`;
+  else html+=`<div style="font-size:11px;color:#7a8499;text-align:center;margin-top:16px;padding-bottom:8px">${vs.length} vehicle${vs.length!==1?'s':''} total</div>`;
 
   c.innerHTML=html;
   c.querySelectorAll('.v-row').forEach(row=>{
@@ -2202,12 +2274,12 @@ function renderVehicles(c){
     <input id="vs-search" value="${ST.searchQuery}" placeholder="Search VIN, stock #, make, model, year...">
     <button class="search-clear" id="vs-clear">✕</button>
   </div>
-  <div style="font-size:10px;color:#374151;margin-bottom:5px;font-weight:600;letter-spacing:.5px">TAP = INCLUDE &nbsp;·&nbsp; TAP AGAIN = EXCLUDE &nbsp;·&nbsp; TAP AGAIN = CLEAR</div>
+  <div style="font-size:10px;color:#7a8499;margin-bottom:5px;font-weight:600;letter-spacing:.5px">TAP = INCLUDE &nbsp;·&nbsp; TAP AGAIN = EXCLUDE &nbsp;·&nbsp; TAP AGAIN = CLEAR</div>
   <div class="sf-bar" id="sf-status-chips">
     ${groups.map(g=>g.statuses.map(s=>{
       const st=chipState(s.id);
       const cls=st==='in'?'sf-chip on':st==='ex'?'sf-chip ex':'sf-chip';
-      const sty=st==='in'?`background:${s.color}22;color:${s.color};border-color:${s.color}55`:st==='ex'?'':'';
+      const sty=st==='in'?`${chipCss(s.color)}`:st==='ex'?'':'';
       const prefix=st==='ex'?'✕ ':'';
       return`<button class="${cls}" data-sid="${s.id}" style="${sty}">${prefix}${s.icon} ${s.label}</button>`;
     }).join('')).join('')}
@@ -2249,13 +2321,13 @@ function renderVehicles(c){
   const anyActive=ST.vfInclude.length||ST.vfExclude.length||ST.vfMech;
 
   html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <div style="font-size:12px;color:#555d73;flex:1;min-width:0">
+    <div style="font-size:12px;color:#9aa3b8;flex:1;min-width:0">
       <span>${sorted.length} vehicle${sorted.length!==1?'s':''}</span>
       ${inclLabels.length?`<span style="color:#C8102E"> · ${inclLabels.join(' + ')}</span>`:''}
       ${exclLabels.length?`<span style="color:#f87171"> · ${exclLabels.join(', ')}</span>`:''}
       ${mechLabel?`<span style="color:#C8102E"> · ${mechLabel}</span>`:''}
     </div>
-    ${anyActive?`<button id="vf-clear-all" style="background:none;border:none;color:#374151;font-size:11px;cursor:pointer;padding:2px 8px;white-space:nowrap;flex-shrink:0">Clear all</button>`:''}
+    ${anyActive?`<button id="vf-clear-all" style="background:none;border:none;color:#7a8499;font-size:11px;cursor:pointer;padding:2px 8px;white-space:nowrap;flex-shrink:0">Clear all</button>`:''}
   </div>`;
 
   html+=`<div class="v-list">`;
@@ -2377,15 +2449,15 @@ function vRowHTML(v){
     ${photo?`<div class="v-row-photo"><img src="${photo}" loading="lazy"></div>`:`<div class="v-row-photo-empty"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M2 10L4 5h8l2 5H2z" stroke="#374151" stroke-width="1.2" fill="none"/></svg></div>`}
     <div style="min-width:0">
       <div class="v-name">${v.year||''} ${v.make||''} ${v.model||''}</div>
-      <div class="v-meta">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${mech?` · ${mech.icon} ${mech.name}`:''}${mech2?` <span style="color:#555d73">+</span> ${mech2.icon} ${mech2.name}`:''}${_stg>=1?` · <span style="color:${_stg>=7?'#f87171':'#555d73'}">${_stg}d in stage</span>`:''}</div>
+      <div class="v-meta">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${mech?` · ${mech.icon} ${mech.name}`:''}${mech2?` <span style="color:#9aa3b8">+</span> ${mech2.icon} ${mech2.name}`:''}${_stg>=1?` · <span style="color:${_stg>=7?'#f87171':'#555d73'}">${_stg}d in stage</span>`:''}</div>
       ${v.apptDate?`<div style="font-size:11px;color:#06b6d4;font-weight:600;margin-top:4px;margin-bottom:2px">📅 ${new Date(v.apptDate).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>`:''}
       <div class="v-tags">${sts.map(s=>{
         // For customer_appt: drop the calendar icon since the date row above already shows it
         const lbl = s.id==='customer_appt' ? s.label : `${s.icon} ${s.label}`;
-        return `<span class="v-tag" style="background:${s.color}18;color:${s.color};border-color:${s.color}30">${lbl}</span>`;
+        return `<span class="v-tag" style="${chipCss(s.color)}">${lbl}</span>`;
       }).join('')}${pendingC?`<span class="v-tag" style="background:#C8102E22;color:#C8102E;border-color:#C8102E33">⚠️ ${pendingC} concern${pendingC!==1?'s':''}</span>`:''}${partsBadge}${_stuck.stuck?`<span class="v-tag" style="background:#7f1d1d44;color:#fca5a5;border-color:#ef444455">⏰ stuck</span>`:''}</div>
     </div>
-    ${pri?`<div><div class="v-pri" style="background:${pri.color}18;color:${pri.color}">${pri.icon} ${pri.label}</div><div class="v-cost" style="margin-top:6px">${fmt$(cost)}</div></div>`:
+    ${pri?`<div><div class="v-pri" style="${chipCss(pri.color)}">${pri.icon} ${pri.label}</div><div class="v-cost" style="margin-top:6px">${fmt$(cost)}</div></div>`:
           `<div class="v-cost">${fmt$(cost)}</div>`}
     <svg class="v-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/></svg>
   </div>`;
@@ -2417,15 +2489,15 @@ function renderAdd(c){
       <div>
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:1px;line-height:1;margin-bottom:5px">SCAN VIN</div>
         <div style="font-size:12px;color:#f87171;font-weight:500">Camera barcode scanner</div>
-        <div style="font-size:11px;color:#555d73;margin-top:2px">Barcode · VIN plate · or type manually</div>
+        <div style="font-size:11px;color:#9aa3b8;margin-top:2px">Barcode · VIN plate · or type manually</div>
       </div>
-      <div style="margin-left:auto;color:#555d73;font-size:22px;flex-shrink:0">›</div>
+      <div style="margin-left:auto;color:#9aa3b8;font-size:22px;flex-shrink:0">›</div>
     </button>
 
     <!-- OR divider -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
       <div style="flex:1;height:1px;background:#1e2230"></div>
-      <span style="font-size:11px;color:#374151;font-weight:600">OR TYPE MANUALLY</span>
+      <span style="font-size:11px;color:#7a8499;font-weight:600">OR TYPE MANUALLY</span>
       <div style="flex:1;height:1px;background:#1e2230"></div>
     </div>
 
@@ -2461,11 +2533,11 @@ function renderAdd(c){
   <div class="panel" id="appt-panel" style="display:none">
     <div class="panel-title" style="color:#06b6d4">📅 Appointment Date & Time</div>
     <button id="av-appt-btn"
-      style="width:100%;background:#0d0f14;border:1px solid #06b6d455;border-radius:10px;padding:14px 16px;color:#374151;font-size:14px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px"
+      style="width:100%;background:#0d0f14;border:1px solid #06b6d455;border-radius:10px;padding:14px 16px;color:#7a8499;font-size:14px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px"
       onmouseover="this.style.borderColor='#06b6d4'" onmouseout="this.style.borderColor='#06b6d455'">
       <span style="font-size:20px">📅</span>
       <span id="av-appt-label">Tap to set appointment date &amp; time</span>
-      <span style="margin-left:auto;font-size:12px;color:#555d73">›</span>
+      <span style="margin-left:auto;font-size:12px;color:#9aa3b8">›</span>
     </button>
   </div>
 
@@ -2506,7 +2578,7 @@ function renderAdd(c){
       formData.statuses=formData.statuses.filter(x=>!SOURCES.map(ss=>ss.id).includes(x));
       formData.statuses.push(s.id);
       srcDiv.querySelectorAll('.tag-btn').forEach(b=>{b.classList.remove('on');b.style.cssText=''});
-      btn.classList.add('on');btn.style.cssText=`background:${s.color}22;color:${s.color};border-color:${s.color}55`;
+      btn.classList.add('on');btn.style.cssText=`${chipCss(s.color)}`;
     };
     srcDiv.appendChild(btn);
   });
@@ -2537,7 +2609,7 @@ function renderAdd(c){
     const btn=makeTagBtn(`${s.icon} ${s.label}`,formData.statuses.includes(s.id),s.color);
     btn.onclick=()=>{
       if(formData.statuses.includes(s.id)){formData.statuses=formData.statuses.filter(x=>x!==s.id);btn.classList.remove('on');btn.style.cssText='';}
-      else{formData.statuses.push(s.id);btn.classList.add('on');btn.style.cssText=`background:${s.color}22;color:${s.color};border-color:${s.color}55`;}
+      else{formData.statuses.push(s.id);btn.classList.add('on');btn.style.cssText=`${chipCss(s.color)}`;}
     };
     wsDiv.appendChild(btn);
   });
@@ -2556,7 +2628,7 @@ function renderAdd(c){
       const isSel=formData.bodyShop===sh.id;
       const div=document.createElement('div');
       div.style.cssText=`background:${isSel?'#1a0e10':'#161921'};border:1.5px solid ${isSel?RED:'#2a2f3f'};border-radius:9px;padding:13px;cursor:pointer;transition:all .15s`;
-      div.innerHTML=`<div style="font-size:13px;font-weight:600;color:${isSel?'#fff':'#9ca3af'};margin-bottom:3px">${sh.label}${isAuto?` <span style="background:${RED};color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;margin-left:4px">AUTO</span>`:''}</div><div style="font-size:11px;color:#555d73">${sh.sub}</div>`;
+      div.innerHTML=`<div style="font-size:13px;font-weight:600;color:${isSel?'#fff':'#9ca3af'};margin-bottom:3px">${sh.label}${isAuto?` <span style="background:${RED};color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;margin-left:4px">AUTO</span>`:''}</div><div style="font-size:11px;color:#9aa3b8">${sh.sub}</div>`;
       div.onclick=()=>{formData.bodyShop=sh.id;renderBodyShopBtns();};
       bDiv.appendChild(div);
     });
@@ -2677,7 +2749,7 @@ function makeTagBtn(label,active,color){
   const btn=document.createElement('button');
   btn.className='tag-btn'+(active?' on':'');
   btn.textContent=label;
-  if(active)btn.style.cssText=`background:${color}22;color:${color};border-color:${color}55`;
+  if(active)btn.style.cssText=`${chipCss(color)}`;
   return btn;
 }
 
@@ -2708,13 +2780,13 @@ function showVinExistsModal(existingVehicle, inputs){
         <div style="font-size:28px;line-height:1">⚠️</div>
         <div>
           <div style="font-size:16px;font-weight:700;color:#fbbf24;margin-bottom:4px">This VIN is already on file</div>
-          <div style="font-size:12px;color:#8896a8">${inputs.vin}</div>
+          <div style="font-size:12px;color:#b8c3d3">${inputs.vin}</div>
         </div>
       </div>
 
       <div style="background:#131824;border:1px solid #243048;border-radius:10px;padding:12px;margin-bottom:16px">
         <div style="font-size:14px;font-weight:600;color:#e8eaf2;margin-bottom:6px">${v.year||''} ${v.make||''} ${v.model||''}</div>
-        <div style="font-size:11px;color:#8896a8;line-height:1.6">
+        <div style="font-size:11px;color:#b8c3d3;line-height:1.6">
           Existing Stock&nbsp;#: <span style="color:#e8eaf2">${v.stockNumber||'—'}</span><br>
           ${visitCount} visit${visitCount!==1?'s':''} on file<br>
           Added: <span style="color:#e8eaf2">${createdStr}</span><br>
@@ -2722,7 +2794,7 @@ function showVinExistsModal(existingVehicle, inputs){
         </div>
       </div>
 
-      <div style="font-size:12px;color:#8896a8;margin-bottom:14px;line-height:1.6">
+      <div style="font-size:12px;color:#b8c3d3;margin-bottom:14px;line-height:1.6">
         You're entering Stock #<span style="color:#e8eaf2">${inputs.stock}</span>. What would you like to do?
       </div>
 
@@ -2731,12 +2803,12 @@ function showVinExistsModal(existingVehicle, inputs){
         <div style="font-size:11px;opacity:.8;font-weight:400">Attach to the existing record. Keeps all history, photos, receipts.</div>
       </button>
 
-      <button id="vin-create-separate" style="width:100%;background:#0d0f14;border:1px solid #374151;color:#9ca3af;border-radius:9px;padding:13px;font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left">
+      <button id="vin-create-separate" style="width:100%;background:#0d0f14;border:1px solid #374151;color:#cdd3de;border-radius:9px;padding:13px;font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left">
         <div style="font-weight:700;margin-bottom:2px">📄 Create as separate record</div>
         <div style="font-size:11px;opacity:.8;font-weight:400">New standalone vehicle with the same VIN (title-swap, rebuild, etc.).</div>
       </button>
 
-      <button id="vin-cancel" style="width:100%;background:transparent;border:1px solid #1e2230;color:#555d73;border-radius:9px;padding:11px;font-size:12px;font-weight:500;cursor:pointer">
+      <button id="vin-cancel" style="width:100%;background:transparent;border:1px solid #1e2230;color:#9aa3b8;border-radius:9px;padding:11px;font-size:12px;font-weight:500;cursor:pointer">
         Cancel
       </button>
     </div>
@@ -2823,7 +2895,7 @@ function openCalendar(currentVal, onConfirm){
           <div class="cal-time-label">🕐 Time</div>
           <input class="cal-time-input" type="time" id="cal-time-val" value="${hh}:${mm}" style="flex:1">
         </div>
-        <div style="padding:6px 16px 4px;font-size:12px;color:#555d73;text-align:center">
+        <div style="padding:6px 16px 4px;font-size:12px;color:#9aa3b8;text-align:center">
           Selected: <span style="color:#06b6d4;font-weight:600">${selLabel}</span>
         </div>
         <div class="cal-footer">
@@ -2883,13 +2955,13 @@ function showVinModal(){
   <div id="vm-modal" style="background:#111318;border:1px solid #2a2f3f;border-radius:18px;width:100%;max-width:480px;overflow:hidden;max-height:92vh;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:15px 20px;border-bottom:1px solid #1e2230;flex-shrink:0">
       <span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:1.5px">SCAN VIN</span>
-      <button id="vm-close-btn" style="background:#1e2230;border:none;color:#9ca3af;width:30px;height:30px;border-radius:7px;font-size:16px;cursor:pointer">✕</button>
+      <button id="vm-close-btn" style="background:#1e2230;border:none;color:#cdd3de;width:30px;height:30px;border-radius:7px;font-size:16px;cursor:pointer">✕</button>
     </div>
 
     <div style="display:flex;border-bottom:1px solid #1e2230;flex-shrink:0">
       <button id="vm-tab-cam" style="flex:1;background:#C8102E;border:none;color:#fff;padding:11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📷 Camera scan</button>
-      <button id="vm-tab-img" style="flex:1;background:transparent;border:none;color:#555d73;padding:11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-left:1px solid #1e2230">🖼 Photo / image</button>
-      <button id="vm-tab-man" style="flex:1;background:transparent;border:none;color:#555d73;padding:11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-left:1px solid #1e2230">⌨️ Manual</button>
+      <button id="vm-tab-img" style="flex:1;background:transparent;border:none;color:#9aa3b8;padding:11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-left:1px solid #1e2230">🖼 Photo / image</button>
+      <button id="vm-tab-man" style="flex:1;background:transparent;border:none;color:#9aa3b8;padding:11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-left:1px solid #1e2230">⌨️ Manual</button>
     </div>
 
     <div id="vm-body" style="overflow-y:auto;flex:1"></div>
@@ -2943,11 +3015,11 @@ function showVinModal(){
           </div>
           <div style="margin-top:12px;background:rgba(0,0,0,.55);padding:5px 14px;border-radius:20px;font-size:12px;color:rgba(255,255,255,.8)">Point at VIN barcode · hold steady</div>
         </div>
-        <div id="vm-cam-status" style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.65);text-align:center;padding:9px;font-size:12px;color:#9ca3af">Requesting camera...</div>
+        <div id="vm-cam-status" style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.65);text-align:center;padding:9px;font-size:12px;color:#cdd3de">Requesting camera...</div>
       </div>`:
       `<div style="background:#0d0f14;aspect-ratio:4/3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-bottom:1px solid #1e2230">
         <div style="width:64px;height:64px;background:#1e2230;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px">📷</div>
-        <div style="font-size:13px;color:#9ca3af;text-align:center;padding:0 20px;line-height:1.5">${!isHttps?'Live camera requires HTTPS. Use the options below to scan or enter VIN.':!hasBarcodeDetector?'Live barcode scanning needs Chrome on Android or Desktop Chrome 90+. Use options below.':'Camera not available.'}</div>
+        <div style="font-size:13px;color:#cdd3de;text-align:center;padding:0 20px;line-height:1.5">${!isHttps?'Live camera requires HTTPS. Use the options below to scan or enter VIN.':!hasBarcodeDetector?'Live barcode scanning needs Chrome on Android or Desktop Chrome 90+. Use options below.':'Camera not available.'}</div>
       </div>`}
 
       <div style="padding:14px 16px">
@@ -2958,7 +3030,7 @@ function showVinModal(){
         </div>
         <div id="vm-cam-err" style="display:none;background:#1c0f00;border:1px solid #3d2800;color:#fbbf24;border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:12px;line-height:1.5"></div>
 
-        <div style="font-size:11px;font-weight:600;color:#555d73;letter-spacing:.8px;margin-bottom:10px;text-transform:uppercase">Scan options</div>
+        <div style="font-size:11px;font-weight:600;color:#9aa3b8;letter-spacing:.8px;margin-bottom:10px;text-transform:uppercase">Scan options</div>
 
         <input type="file" id="vm-capture-input" accept="image/*" capture="environment" style="display:none">
         <input type="file" id="vm-gallery-input" accept="image/*" style="display:none">
@@ -2969,23 +3041,23 @@ function showVinModal(){
           </div>
           <div>
             <div style="font-size:14px;font-weight:600;color:#fff;margin-bottom:2px">Take photo of VIN barcode</div>
-            <div style="font-size:11px;color:#9ca3af">Opens camera · works on all phones</div>
+            <div style="font-size:11px;color:#cdd3de">Opens camera · works on all phones</div>
           </div>
         </button>
 
-        <button id="vm-gallery-btn" style="width:100%;background:#161921;border:1px solid #2a2f3f;color:#9ca3af;border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;font-family:inherit;text-align:left;transition:background .15s">
+        <button id="vm-gallery-btn" style="width:100%;background:#161921;border:1px solid #2a2f3f;color:#cdd3de;border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;font-family:inherit;text-align:left;transition:background .15s">
           <div style="width:38px;height:38px;background:#1e2230;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🖼</div>
           <div>
             <div style="font-size:14px;font-weight:600;color:#e2e4ea;margin-bottom:2px">Choose existing photo</div>
-            <div style="font-size:11px;color:#555d73">Pick from camera roll or files</div>
+            <div style="font-size:11px;color:#9aa3b8">Pick from camera roll or files</div>
           </div>
         </button>
 
-        <button id="vm-manual-btn" style="width:100%;background:#161921;border:1px solid #2a2f3f;color:#9ca3af;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;font-family:inherit;text-align:left;transition:background .15s">
+        <button id="vm-manual-btn" style="width:100%;background:#161921;border:1px solid #2a2f3f;color:#cdd3de;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;font-family:inherit;text-align:left;transition:background .15s">
           <div style="width:38px;height:38px;background:#1e2230;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">⌨️</div>
           <div>
             <div style="font-size:14px;font-weight:600;color:#e2e4ea;margin-bottom:2px">Enter VIN manually</div>
-            <div style="font-size:11px;color:#555d73">Type or paste 17-character VIN</div>
+            <div style="font-size:11px;color:#9aa3b8">Type or paste 17-character VIN</div>
           </div>
         </button>
 
@@ -3027,13 +3099,13 @@ function showVinModal(){
     <div style="padding:16px">
       <div style="position:relative;margin-bottom:14px;border-radius:10px;overflow:hidden;background:#0d0f14;border:1px solid #2a2f3f">
         <img src="${imgB64}" style="width:100%;max-height:280px;object-fit:contain;display:block;border-radius:10px">
-        <div id="vm-scan-badge" style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#9ca3af;font-size:12px;padding:5px 14px;border-radius:20px;white-space:nowrap">
+        <div id="vm-scan-badge" style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#cdd3de;font-size:12px;padding:5px 14px;border-radius:20px;white-space:nowrap">
           🔍 Scanning...
         </div>
       </div>
 
       <div id="vm-confirm-box" style="background:#111318;border:1px solid #2a2f3f;border-radius:12px;padding:16px;margin-bottom:10px">
-        <div style="font-size:11px;font-weight:600;color:#555d73;letter-spacing:.8px;margin-bottom:8px">VIN — TYPE OR CORRECT</div>
+        <div style="font-size:11px;font-weight:600;color:#9aa3b8;letter-spacing:.8px;margin-bottom:8px">VIN — TYPE OR CORRECT</div>
         <input id="vm-confirm-vin" maxlength="17"
           style="width:100%;font-size:20px;letter-spacing:3px;text-align:center;background:#0d0f14;border:1.5px solid #2a2f3f;border-radius:9px;padding:13px;color:#fff;font-family:'Courier New',Courier,monospace;margin-bottom:8px;text-transform:uppercase"
           placeholder="_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _"
@@ -3048,8 +3120,8 @@ function showVinModal(){
             btn.style.background=ok?'#C8102E':'#3d1018';
           ">
         <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-          <span id="vm-cc" style="font-size:12px;color:#555d73">0/17</span>
-          <span style="font-size:11px;color:#374151">No I · O · Q allowed</span>
+          <span id="vm-cc" style="font-size:12px;color:#9aa3b8">0/17</span>
+          <span style="font-size:11px;color:#7a8499">No I · O · Q allowed</span>
         </div>
         <button id="vm-apply" class="btn-red" style="width:100%;padding:14px;font-size:14px;font-weight:700;border-radius:9px;opacity:.35;background:#3d1018" disabled
           onclick="vmApplyConfirm()">
@@ -3060,9 +3132,9 @@ function showVinModal(){
       <div id="vm-scan-err" style="display:none;background:#1a1200;border:1px solid #3d3000;color:#fbbf24;border-radius:9px;padding:12px;font-size:13px;line-height:1.6;margin-bottom:10px"></div>
 
       <div style="display:flex;gap:8px">
-        <button style="flex:1;background:#161921;border:1px solid #2a2f3f;color:#9ca3af;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
+        <button style="flex:1;background:#161921;border:1px solid #2a2f3f;color:#cdd3de;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
           onclick="renderCamTab()">📷 Retake</button>
-        <button style="flex:1;background:#161921;border:1px solid #2a2f3f;color:#9ca3af;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
+        <button style="flex:1;background:#161921;border:1px solid #2a2f3f;color:#cdd3de;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
           onclick="setTab('man')">⌨️ Type manually</button>
       </div>
     </div>`;
@@ -3359,7 +3431,7 @@ function showVinModal(){
     const body=document.getElementById('vm-body');
     body.innerHTML=`
     <div style="padding:16px">
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:14px;text-align:center">Take a photo of the VIN barcode or VIN plate — AI will read it</div>
+      <div style="font-size:13px;color:#cdd3de;margin-bottom:14px;text-align:center">Take a photo of the VIN barcode or VIN plate — AI will read it</div>
       <input type="file" id="vm-img-input" accept="image/*" capture="environment" style="display:none">
       <input type="file" id="vm-gallery-input" accept="image/*" style="display:none">
       <button onclick="document.getElementById('vm-img-input').click()"
@@ -3373,10 +3445,10 @@ function showVinModal(){
         </div>
       </button>
       <button onclick="document.getElementById('vm-gallery-input').click()"
-        style="width:100%;background:#111318;border:1px solid #2a2f3f;color:#9ca3af;border-radius:10px;padding:12px 16px;margin-bottom:14px;cursor:pointer;font-family:inherit;font-size:13px">
+        style="width:100%;background:#111318;border:1px solid #2a2f3f;color:#cdd3de;border-radius:10px;padding:12px 16px;margin-bottom:14px;cursor:pointer;font-family:inherit;font-size:13px">
         📁 Choose from gallery
       </button>
-      <div id="vm-img-status" style="text-align:center;font-size:13px;color:#9ca3af;min-height:20px"></div>
+      <div id="vm-img-status" style="text-align:center;font-size:13px;color:#cdd3de;min-height:20px"></div>
       <div id="vm-img-preview" style="margin-top:8px"></div>
     </div>`;
 
@@ -3453,20 +3525,20 @@ function showVinModal(){
     body.innerHTML=`
     <div style="padding:18px 16px">
       <div class="field">
-        <label style="font-size:11px;font-weight:600;color:#555d73;display:block;margin-bottom:5px">VIN — 17 characters</label>
+        <label style="font-size:11px;font-weight:600;color:#9aa3b8;display:block;margin-bottom:5px">VIN — 17 characters</label>
         <input id="vm-vin" class="vin-input" maxlength="17" placeholder="– – – – – – – – – – – – – – – – –"
           style="font-size:18px;letter-spacing:3px;text-align:center;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:12px;color:#fff;width:100%;font-family:'Courier New',Courier,monospace"
           oninput="vmManUpdate(this)">
       </div>
       <div id="vm-boxes" style="display:grid;grid-template-columns:repeat(17,1fr);gap:3px;margin:8px 0 12px"></div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:#374151;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#7a8499;margin-bottom:14px">
         <span>WMI (1–3)</span><span>VDS (4–9)</span><span>VIS (10–17)</span>
       </div>
       <div id="vm-man-err" style="display:none;background:#3b0f0f;color:#fca5a5;border-radius:8px;padding:10px 13px;font-size:13px;margin-bottom:10px"></div>
       <button id="vm-man-btn" class="btn-red" style="width:100%;padding:13px;font-size:14px;font-weight:600;border-radius:9px;opacity:.4" disabled onclick="vmManDecode()">Enter 17 characters</button>
       <div style="background:#161921;border-radius:9px;padding:13px;margin-top:14px">
-        <div style="font-size:10px;font-weight:600;color:#555d73;margin-bottom:8px;letter-spacing:1px">WHERE TO FIND THE VIN</div>
-        ${['🚗 Dashboard — driver side (visible through windshield)','🚪 Door jamb sticker — driver side','📋 Title or registration document','🔧 Engine block or firewall'].map(t=>`<div style="font-size:12px;color:#374151;margin-bottom:5px">${t}</div>`).join('')}
+        <div style="font-size:10px;font-weight:600;color:#9aa3b8;margin-bottom:8px;letter-spacing:1px">WHERE TO FIND THE VIN</div>
+        ${['🚗 Dashboard — driver side (visible through windshield)','🚪 Door jamb sticker — driver side','📋 Title or registration document','🔧 Engine block or firewall'].map(t=>`<div style="font-size:12px;color:#7a8499;margin-bottom:5px">${t}</div>`).join('')}
       </div>
     </div>`;
 
@@ -3613,17 +3685,17 @@ function renderDetail(c,v){
     // ── RECEIPT SCANNER ──
     const scanPanel=document.createElement('div');scanPanel.className='panel';
     scanPanel.innerHTML=`<div class="panel-title" style="display:flex;align-items:center;gap:8px"><span>📄</span> Scan receipt with AI</div>
-    <div style="font-size:12px;color:#9ca3af;margin-bottom:12px">Photo or upload receipt → AI reads parts & costs → fills below</div>
+    <div style="font-size:12px;color:#cdd3de;margin-bottom:12px">Photo or upload receipt → AI reads parts & costs → fills below</div>
     <div id="receipt-scan-zone" style="border:1.5px dashed #2a2f3f;border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:border-color .15s"
       onclick="document.getElementById('receipt-file-input').click()"
       ondragover="event.preventDefault();this.style.borderColor='#C8102E'"
       ondragleave="this.style.borderColor='#2a2f3f'"
       ondrop="event.preventDefault();this.style.borderColor='#2a2f3f';handleReceiptDrop(event)">
       <div style="font-size:26px;margin-bottom:5px">📷</div>
-      <div style="font-size:13px;color:#9ca3af">Tap to take photo, upload image or PDF</div>
+      <div style="font-size:13px;color:#cdd3de">Tap to take photo, upload image or PDF</div>
     </div>
     <input id="receipt-file-input" type="file" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="processReceiptFile(this)">
-    <div id="receipt-scan-status" style="margin-top:10px;font-size:13px;color:#9ca3af;text-align:center;min-height:18px"></div>
+    <div id="receipt-scan-status" style="margin-top:10px;font-size:13px;color:#cdd3de;text-align:center;min-height:18px"></div>
     <div id="receipt-preview-items" style="margin-top:8px"></div>`;
     wrapper.appendChild(scanPanel);
 
@@ -3638,7 +3710,7 @@ function renderDetail(c,v){
         ${fileThumbHtml(s,{icon:'📋'})}
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sName}</div>
-          <div style="font-size:11px;color:#555d73">${fmtD(sDate)}</div>
+          <div style="font-size:11px;color:#9aa3b8">${fmtD(sDate)}</div>
         </div>
         <a class="dl-link" href="${sUrl}" download="${sName}" target="_blank" rel="noopener" style="font-size:12px">⬇ View</a>
         ${delBtn}
@@ -3646,17 +3718,17 @@ function renderDetail(c,v){
     }).join('');
     obdPanel.innerHTML=`
       <div class="panel-title" style="display:flex;align-items:center;gap:8px"><span>📋</span> OBDII scan reports</div>
-      <div style="font-size:12px;color:#9ca3af;margin-bottom:12px">Diagnostic scan PDFs · stored on this vehicle, not parsed by AI</div>
+      <div style="font-size:12px;color:#cdd3de;margin-bottom:12px">Diagnostic scan PDFs · stored on this vehicle, not parsed by AI</div>
       <div id="obd-scan-zone" style="border:1.5px dashed #2a2f3f;border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:border-color .15s"
         onclick="document.getElementById('obd-file-input').click()"
         ondragover="event.preventDefault();this.style.borderColor='#06b6d4'"
         ondragleave="this.style.borderColor='#2a2f3f'"
         ondrop="event.preventDefault();this.style.borderColor='#2a2f3f';window.handleObdScanDrop(event)">
         <div style="font-size:26px;margin-bottom:5px">📋</div>
-        <div style="font-size:13px;color:#9ca3af">Tap to upload OBDII scan PDF</div>
+        <div style="font-size:13px;color:#cdd3de">Tap to upload OBDII scan PDF</div>
       </div>
       <input id="obd-file-input" type="file" accept="application/pdf" style="display:none" onchange="window.processObdScanFile(this)">
-      <div id="obd-scan-status" style="margin-top:10px;font-size:13px;color:#9ca3af;text-align:center;min-height:18px"></div>
+      <div id="obd-scan-status" style="margin-top:10px;font-size:13px;color:#cdd3de;text-align:center;min-height:18px"></div>
       <div id="obd-scan-list" style="margin-top:8px">${obdRows}</div>`;
     wrapper.appendChild(obdPanel);
 
@@ -3739,7 +3811,7 @@ function renderDetail(c,v){
       }
       // Tracking line for ordered
       const trackingLine = (state==='ordered' && p.trackingNum)
-        ? `<div style="font-size:10px;color:#9ca3af;margin-top:2px"><span style="color:#555d73">Tracking:</span> <a href="#" onclick="window.openTrackingSearch('${(p.trackingNum||'').replace(/'/g,'')}');return false;" style="color:#60a5fa;text-decoration:none">${p.trackingNum}</a></div>`
+        ? `<div style="font-size:10px;color:#cdd3de;margin-top:2px"><span style="color:#9aa3b8">Tracking:</span> <a href="#" onclick="window.openTrackingSearch('${(p.trackingNum||'').replace(/'/g,'')}');return false;" style="color:#60a5fa;text-decoration:none">${p.trackingNum}</a></div>`
         : '';
       const noteLine = p.note
         ? `<div style="font-size:10px;color:#fbbf24;margin-top:2px;font-style:italic">📝 ${p.note}</div>`
@@ -3752,13 +3824,13 @@ function renderDetail(c,v){
               ${badge}
             </div>
             <div style="font-size:13px;color:#e2e4ea">${p.name}</div>
-            <div style="font-size:10px;color:#555d73">${p.partNum?`#${p.partNum}`:''}${p.partNum&&vName?' · ':''}${vName?`<span style="color:#818cf8">${vName}</span>`:''}</div>
+            <div style="font-size:10px;color:#9aa3b8">${p.partNum?`#${p.partNum}`:''}${p.partNum&&vName?' · ':''}${vName?`<span style="color:#818cf8">${vName}</span>`:''}</div>
             ${trackingLine}
             ${noteLine}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
             <span style="font-size:13px;font-weight:600;color:#C8102E">${fmt$(lineCost)}</span>
-            <span style="font-size:10px;color:#555d73">×${p.qty||1}</span>
+            <span style="font-size:10px;color:#9aa3b8">×${p.qty||1}</span>
           </div>
           <button class="del-btn" onclick="deletePart(${i})" style="align-self:flex-start">✕</button>
         </div>
@@ -3788,7 +3860,7 @@ function renderDetail(c,v){
       partsListHtml += groupedRows.received.join('');
     }
     if(!partsListHtml){
-      partsListHtml = '<div style="color:#374151;font-size:13px;padding:12px 0;text-align:center">No parts yet — scan a receipt or add below</div>';
+      partsListHtml = '<div style="color:#7a8499;font-size:13px;padding:12px 0;text-align:center">No parts yet — scan a receipt or add below</div>';
     }
 
     const partsVendorOptions = partsVendors.length
@@ -3847,7 +3919,7 @@ function renderDetail(c,v){
           <div style="font-size:13px;color:#e2e4ea">${l.desc}</div>
           ${vName?`<div style="font-size:10px;color:#f97316">↗ ${vName}</div>`:''}
         </div>
-        <span style="font-size:11px;color:#555d73;white-space:nowrap">${l.hours}h @ $${parseFloat(l.rate||0).toFixed(0)}/hr</span>
+        <span style="font-size:11px;color:#9aa3b8;white-space:nowrap">${l.hours}h @ $${parseFloat(l.rate||0).toFixed(0)}/hr</span>
         <span style="font-size:13px;font-weight:600;color:#C8102E">${fmt$((parseFloat(l.hours)||0)*(parseFloat(l.rate)||0))}</span>
         <button class="del-btn" onclick="deleteLaborLine(${i})">✕</button>
       </div>`;
@@ -3857,7 +3929,7 @@ function renderDetail(c,v){
       : `<option value="">No sublet shops yet — add in Vendors</option>`;
     laborPanel.innerHTML=`
       <div class="panel-title">Labor <span style="float:right;color:#C8102E">${fmt$(laborTotal)}</span></div>
-      <div id="labor-list">${laborRows||'<div style="color:#374151;font-size:13px;padding:12px 0;text-align:center">No labor logged yet</div>'}</div>
+      <div id="labor-list">${laborRows||'<div style="color:#7a8499;font-size:13px;padding:12px 0;text-align:center">No labor logged yet</div>'}</div>
       <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="field" style="grid-column:1/-1"><label>Description *</label><input id="l-desc" placeholder="e.g. Replace brake pads & rotors"></div>
         <div class="field"><label>Hours *</label><input id="l-hrs" type="number" step="0.25" min="0.25" placeholder="1.5"></div>
@@ -3874,7 +3946,7 @@ function renderDetail(c,v){
       let legHtml=`<div class="panel-title">Previous repairs <span style="float:right;color:#C8102E">${fmt$(legTotal)}</span></div>`;
       (v.repairs||[]).forEach((r,i)=>{
         legHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #1e2230">
-          <span style="font-size:11px;color:#555d73;background:#1e2230;padding:2px 7px;border-radius:5px;white-space:nowrap">${r.category}</span>
+          <span style="font-size:11px;color:#9aa3b8;background:#1e2230;padding:2px 7px;border-radius:5px;white-space:nowrap">${r.category}</span>
           <span style="flex:1;font-size:13px;color:#e2e4ea">${r.description}</span>
           <span style="font-size:13px;font-weight:600;color:#C8102E;white-space:nowrap">${fmt$(r.cost)}</span>
           <button class="del-btn" onclick="delRepair('${r.id}')">✕</button>
@@ -3889,7 +3961,7 @@ function renderDetail(c,v){
     const grandTotal=partsTotal+laborTotal+legacyTotal;
     const totDiv=document.createElement('div');
     totDiv.style.cssText='background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center';
-    totDiv.innerHTML=`<span style="font-size:13px;color:#9ca3af;font-weight:600;letter-spacing:.5px">TOTAL RECON COST</span><span style="font-size:24px;font-weight:700;color:#C8102E">${fmt$(grandTotal)}</span>`;
+    totDiv.innerHTML=`<span style="font-size:13px;color:#cdd3de;font-weight:600;letter-spacing:.5px">TOTAL RECON COST</span><span style="font-size:24px;font-weight:700;color:#C8102E">${fmt$(grandTotal)}</span>`;
     wrapper.appendChild(totDiv);
 
     el.appendChild(wrapper);
@@ -3961,7 +4033,7 @@ function renderDetail(c,v){
           </div>
           <div style="padding:16px">
             <div style="font-size:13px;color:#e2e4ea;margin-bottom:14px;padding:8px 12px;background:#0c0e13;border-radius:8px;border-left:3px solid #C8102E">
-              <strong>${p.name}</strong>${p.partNum?` <span style="color:#555d73">#${p.partNum}</span>`:''}
+              <strong>${p.name}</strong>${p.partNum?` <span style="color:#9aa3b8">#${p.partNum}</span>`:''}
             </div>
             <div class="field"><label>Expected arrival (optional)</label><input id="po-eta" type="date" value="${etaVal}" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px"></div>
             <div class="field"><label>Tracking # (optional)</label><input id="po-tracking" value="${trackingVal}" placeholder="e.g. 1Z999AA10123456784" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px;font-family:ui-monospace,monospace"></div>
@@ -4057,7 +4129,7 @@ function renderDetail(c,v){
         let h=`<div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;overflow:hidden;margin-top:6px">`;
         // Bulk-state header
         h+=`<div style="padding:8px 12px;border-bottom:1px solid #1e2230;background:#0c0e13;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:10px;color:#555d73;letter-spacing:.5px;text-transform:uppercase;font-weight:700">Mark all as</span>
+          <span style="font-size:10px;color:#9aa3b8;letter-spacing:.5px;text-transform:uppercase;font-weight:700">Mark all as</span>
           <button id="ri-bulk-recv" type="button" style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;border:1px solid #14532d;background:#14532d33;color:#bbf7d0;cursor:pointer;letter-spacing:.4px;font-family:inherit">✓ RECEIVED</button>
           <button id="ri-bulk-ord" type="button" style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;border:1px solid #1e3a8a;background:#1e3a8a33;color:#bfdbfe;cursor:pointer;letter-spacing:.4px;font-family:inherit">🚚 ORDERED</button>
         </div>`;
@@ -4074,7 +4146,7 @@ function renderDetail(c,v){
               <button type="button" data-rs-state="${i}" data-rs-state-val="received"
                 style="font-size:9px;font-weight:700;padding:4px 9px;border:none;cursor:pointer;letter-spacing:.4px;background:#14532d;color:#bbf7d0;font-family:inherit">✓ RECEIVED</button>
               <button type="button" data-rs-state="${i}" data-rs-state-val="ordered"
-                style="font-size:9px;font-weight:700;padding:4px 9px;border:none;border-left:1px solid #1e2230;cursor:pointer;letter-spacing:.4px;background:transparent;color:#555d73;font-family:inherit">🚚 ORDERED</button>
+                style="font-size:9px;font-weight:700;padding:4px 9px;border:none;border-left:1px solid #1e2230;cursor:pointer;letter-spacing:.4px;background:transparent;color:#9aa3b8;font-family:inherit">🚚 ORDERED</button>
             </div>
           </div>`;
         });
@@ -4226,7 +4298,7 @@ function renderDetail(c,v){
       if(isCurrent){
         html += '<span style="font-size:10px;background:#C8102E22;color:#C8102E;padding:2px 7px;border-radius:var(--r);letter-spacing:.5px;margin-left:6px;font-weight:700;text-transform:uppercase">Current</span>';
       } else if(!isOwn){
-        html += '<span style="font-size:10px;background:#1a2035;color:#8896a8;padding:2px 7px;border-radius:var(--r);letter-spacing:.5px;margin-left:6px;font-weight:700;text-transform:uppercase">Read-only</span>';
+        html += '<span style="font-size:10px;background:#1a2035;color:#b8c3d3;padding:2px 7px;border-radius:var(--r);letter-spacing:.5px;margin-left:6px;font-weight:700;text-transform:uppercase">Read-only</span>';
       }
       html += '</div>';
 
@@ -4255,7 +4327,7 @@ function renderDetail(c,v){
 
       if(statusLabels.length){
         html += '<div style="display:flex;flex-wrap:wrap;gap:3px">';
-        html += statusLabels.map(s=>'<span class="v-tag" style="background:'+s.color+'22;color:'+s.color+';border:1px solid '+s.color+'55">'+s.icon+' '+s.label+'</span>').join('');
+        html += statusLabels.map(s=>'<span class="v-tag" style="'+chipCss(s.color)+';border:1px solid '+s.color+'">'+s.icon+' '+s.label+'</span>').join('');
         html += '</div>';
       }
       html += '</div>';
@@ -4297,7 +4369,7 @@ function renderDetail(c,v){
         const timerId='tc-timer-'+sess.id;
         banner.innerHTML=`<div style="font-size:11px;color:#4ade80;letter-spacing:1.5px;font-weight:600">● CLOCKED IN — ${(clockedMech?.name||sess.mechId||'?').toUpperCase()}</div>
           <div id="${timerId}" style="font-size:38px;font-weight:700;color:#fff;font-family:monospace;letter-spacing:2px">${hh}:${mm}:${ss2}</div>
-          <div style="font-size:12px;color:#9ca3af">Started ${new Date(sess.start).toLocaleTimeString()}</div>
+          <div style="font-size:12px;color:#cdd3de">Started ${new Date(sess.start).toLocaleTimeString()}</div>
           ${(isManager||sess.mechId===ST.role)?`<button class="btn-red" style="margin-top:4px;padding:11px 32px;border-radius:9px;font-size:14px;font-weight:700;width:100%;max-width:240px" onclick="clockOutSession('${sess.id}')">⏹ Clock out</button>`:''}`;
         wrapper.appendChild(banner);
         const iv=setInterval(()=>{
@@ -4318,9 +4390,9 @@ function renderDetail(c,v){
       if(availMechs.length){
         const mp=document.createElement('div');
         mp.style.cssText='margin-bottom:14px';
-        mp.innerHTML=`<div style="font-size:11px;color:#555d73;letter-spacing:.8px;font-weight:600;margin-bottom:8px">CLOCK IN A MECHANIC</div>
+        mp.innerHTML=`<div style="font-size:11px;color:#9aa3b8;letter-spacing:.8px;font-weight:600;margin-bottom:8px">CLOCK IN A MECHANIC</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            ${availMechs.map(m=>`<button style="background:#111318;border:1.5px solid #2a2f3f;border-radius:10px;padding:12px 14px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-width:70px;transition:border-color .15s" onmouseover="this.style.borderColor='${m.color}'" onmouseout="this.style.borderColor='#2a2f3f'" onclick="clockInAs('${m.id}')"><span style="font-size:22px">${m.icon}</span><span style="font-size:11px">${m.name}</span><span style="font-size:10px;color:#555d73">$${m.laborRate||65}/hr</span></button>`).join('')}
+            ${availMechs.map(m=>`<button style="background:#111318;border:1.5px solid #2a2f3f;border-radius:10px;padding:12px 14px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-width:70px;transition:border-color .15s" onmouseover="this.style.borderColor='${m.color}'" onmouseout="this.style.borderColor='#2a2f3f'" onclick="clockInAs('${m.id}')"><span style="font-size:22px">${m.icon}</span><span style="font-size:11px">${m.name}</span><span style="font-size:10px;color:#9aa3b8">$${m.laborRate||65}/hr</span></button>`).join('')}
           </div>`;
         wrapper.appendChild(mp);
       }
@@ -4352,11 +4424,11 @@ function renderDetail(c,v){
     statsDiv.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px';
     statsDiv.innerHTML=`
       <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:13px;text-align:center">
-        <div style="font-size:10px;color:#555d73;margin-bottom:3px">Completed sessions</div>
+        <div style="font-size:10px;color:#9aa3b8;margin-bottom:3px">Completed sessions</div>
         <div style="font-size:20px;font-weight:700;color:#fff">${sessions.filter(s=>s.end).length}</div>
       </div>
       <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:13px;text-align:center">
-        <div style="font-size:10px;color:#555d73;margin-bottom:3px">Total hours</div>
+        <div style="font-size:10px;color:#9aa3b8;margin-bottom:3px">Total hours</div>
         <div style="font-size:20px;font-weight:700;color:#C8102E">${totalHours.toFixed(1)}h</div>
       </div>`;
     wrapper.appendChild(statsDiv);
@@ -4369,7 +4441,7 @@ function renderDetail(c,v){
     const finished=[...sessions].filter(s=>s.end).sort((a,b)=>b.start-a.start);
     if(!finished.length&&!activeSessions.length){
       const ep=document.createElement('div');
-      ep.style.cssText='color:#374151;font-size:13px;padding:14px 0;text-align:center';
+      ep.style.cssText='color:#7a8499;font-size:13px;padding:14px 0;text-align:center';
       ep.textContent='No sessions yet — clock in to start tracking time';
       wrapper.appendChild(ep);
     }
@@ -4383,11 +4455,11 @@ function renderDetail(c,v){
         <div style="width:34px;height:34px;border-radius:50%;background:${mech?.color||'#374151'}22;border:1px solid ${mech?.color||'#374151'}44;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${mech?.icon||'🔧'}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:#fff">${mech?.name||s.mechId}</div>
-          <div style="font-size:11px;color:#555d73">${new Date(s.start).toLocaleDateString()} · ${new Date(s.start).toLocaleTimeString([],'')}</div>
+          <div style="font-size:11px;color:#9aa3b8">${new Date(s.start).toLocaleDateString()} · ${new Date(s.start).toLocaleTimeString([],'')}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:14px;font-weight:700;color:#C8102E">${mins}m</div>
-          <div style="font-size:10px;color:#555d73">${hrs}h</div>
+          <div style="font-size:10px;color:#9aa3b8">${hrs}h</div>
         </div>
         ${isManager?`<button class="del-btn" onclick="deleteSession('${s.id}')">✕</button>`:''}`;
       wrapper.appendChild(row);
@@ -4485,8 +4557,8 @@ function renderDetail(c,v){
 
   function statusBadges(veh){
     const sts=(veh.statuses||[]).map(id=>SMAP[id]).filter(Boolean);
-    if(!sts.length)return`<span style="color:#555d73;font-size:13px">No status set — use Statuses tab</span>`;
-    return sts.map(s=>`<span class="v-tag" style="font-size:12px;padding:4px 12px;background:${s.color}18;color:${s.color};border-color:${s.color}30">${s.icon} ${s.label}</span>`).join('');
+    if(!sts.length)return`<span style="color:#9aa3b8;font-size:13px">No status set — use Statuses tab</span>`;
+    return sts.map(s=>`<span class="v-tag" style="font-size:12px;padding:4px 12px;${chipCss(s.color)}">${s.icon} ${s.label}</span>`).join('');
   }
 
   c.innerHTML=`
@@ -4494,9 +4566,9 @@ function renderDetail(c,v){
     <button class="back-btn" onclick="ST.view=ST.role==='manager'?'dashboard':ST.role==='sales'?'salespipeline':ST.role==='detailer'?'detailer':'mypipeline';render()">← Back</button>
     <div style="flex:1;min-width:0">
       <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:3px">${v.year||''} ${v.make||''} ${v.model||''}</div>
-      <div style="font-size:12px;color:#555d73;display:flex;gap:12px;flex-wrap:wrap">
-        <span>Stock: <strong style="color:#9ca3af">${v.stockNumber||'—'}</strong></span>
-        <span>VIN: <strong style="color:#9ca3af;font-family:'Courier New',Courier,monospace">${v.vin||'—'}</strong></span>
+      <div style="font-size:12px;color:#9aa3b8;display:flex;gap:12px;flex-wrap:wrap">
+        <span>Stock: <strong style="color:#cdd3de">${v.stockNumber||'—'}</strong></span>
+        <span>VIN: <strong style="color:#cdd3de;font-family:'Courier New',Courier,monospace">${vinHtml(v.vin)}</strong></span>
         <span>${v.color||''} · ${Number(v.mileage||0).toLocaleString()} mi</span>
         ${mech?`<span style="color:${mech.color}">${mech.icon} ${mech.name}</span>`:''}
         ${pri?`<span style="color:${pri.color}">${pri.icon} ${pri.label} priority</span>`:''}
@@ -4548,20 +4620,20 @@ function renderDetail(c,v){
             <option value="">— Unassigned —</option>
             ${getMechs().map(m=>`<option value="${m.id}" ${v.assignedTo===m.id?'selected':''}>${m.icon} ${m.name}</option>`).join('')}
           </select>` : `
-          <div style="background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 11px;color:#9ca3af;font-size:13px;display:flex;align-items:center;gap:6px">
-            ${v.assignedTo && getMMAP()[v.assignedTo] ? `<span style="color:${getMMAP()[v.assignedTo].color||'#9ca3af'}">${getMMAP()[v.assignedTo].icon} ${getMMAP()[v.assignedTo].name}</span>` : '<span style="color:#555d73">— Unassigned —</span>'}
-            <span style="margin-left:auto;font-size:10px;color:#555d73;font-style:italic">manager only</span>
+          <div style="background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 11px;color:#cdd3de;font-size:13px;display:flex;align-items:center;gap:6px">
+            ${v.assignedTo && getMMAP()[v.assignedTo] ? `<span style="color:${getMMAP()[v.assignedTo].color||'#9ca3af'}">${getMMAP()[v.assignedTo].icon} ${getMMAP()[v.assignedTo].name}</span>` : '<span style="color:#9aa3b8">— Unassigned —</span>'}
+            <span style="margin-left:auto;font-size:10px;color:#9aa3b8;font-style:italic">manager only</span>
           </div>`}
         </div>
-        <div class="field"><label>2nd mechanic <span style="color:#374151;font-weight:400">(optional)</span></label>
+        <div class="field"><label>2nd mechanic <span style="color:#7a8499;font-weight:400">(optional)</span></label>
           ${ST.role === 'manager' ? `
           <select id="ov-mech2">
             <option value="">— None —</option>
             ${getMechs().map(m=>`<option value="${m.id}" ${v.assignedTo2===m.id?'selected':''}>${m.icon} ${m.name}</option>`).join('')}
           </select>` : `
-          <div style="background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 11px;color:#9ca3af;font-size:13px;display:flex;align-items:center;gap:6px">
-            ${v.assignedTo2 && getMMAP()[v.assignedTo2] ? `<span style="color:${getMMAP()[v.assignedTo2].color||'#9ca3af'}">${getMMAP()[v.assignedTo2].icon} ${getMMAP()[v.assignedTo2].name}</span>` : '<span style="color:#555d73">— None —</span>'}
-            <span style="margin-left:auto;font-size:10px;color:#555d73;font-style:italic">manager only</span>
+          <div style="background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 11px;color:#cdd3de;font-size:13px;display:flex;align-items:center;gap:6px">
+            ${v.assignedTo2 && getMMAP()[v.assignedTo2] ? `<span style="color:${getMMAP()[v.assignedTo2].color||'#9ca3af'}">${getMMAP()[v.assignedTo2].icon} ${getMMAP()[v.assignedTo2].name}</span>` : '<span style="color:#9aa3b8">— None —</span>'}
+            <span style="margin-left:auto;font-size:10px;color:#9aa3b8;font-style:italic">manager only</span>
           </div>`}
         </div>
         <div class="field"><label>Priority</label>
@@ -4569,13 +4641,13 @@ function renderDetail(c,v){
           <select id="ov-pri">
             ${PRIS.map(p=>`<option value="${p.id}" ${(v.priority||'medium')===p.id?'selected':''}>${p.icon} ${p.label}</option>`).join('')}
           </select>` : `
-          <div style="background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 11px;color:#9ca3af;font-size:13px">
+          <div style="background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 11px;color:#cdd3de;font-size:13px">
             ${PMAP[v.priority||'medium'] ? `<span style="color:${PMAP[v.priority||'medium'].color}">${PMAP[v.priority||'medium'].icon} ${PMAP[v.priority||'medium'].label}</span>` : '—'}
           </div>`}
         </div>
       </div>
     </div>
-    <div class="field"><label style="font-size:11px;font-weight:600;color:#555d73;display:block;margin-bottom:5px">Notes</label>
+    <div class="field"><label style="font-size:11px;font-weight:600;color:#9aa3b8;display:block;margin-bottom:5px">Notes</label>
       <textarea id="ov-notes" style="background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 13px;color:#e2e4ea;width:100%;resize:vertical;min-height:80px;font-family:inherit;font-size:14px"
         onblur="save({notes:this.value})" placeholder="Vehicle notes...">${v.notes||''}</textarea>
     </div>`;
@@ -4604,7 +4676,7 @@ function renderDetail(c,v){
 
   function buildComments(el){
     const section=document.createElement('div');
-    section.innerHTML=`<div style="font-size:11px;font-weight:600;color:#555d73;letter-spacing:1px;margin:18px 0 10px;text-transform:uppercase">Comments</div>
+    section.innerHTML=`<div style="font-size:11px;font-weight:600;color:#9aa3b8;letter-spacing:1px;margin:18px 0 10px;text-transform:uppercase">Comments</div>
     <div id="comment-list">${(v.comments||[]).map(c=>`<div class="comment"><div class="comment-meta"><strong>${c.author}</strong> · ${fmtD(c.date)}</div><div class="comment-text">${c.text}</div></div>`).join('')}</div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <select id="c-author" style="width:150px;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:9px 12px;color:#e2e4ea;font-size:13px">
@@ -4628,7 +4700,7 @@ function renderDetail(c,v){
   }
 
   function buildStatusesTab(el){
-    el.innerHTML=`<p style="color:#555d73;font-size:13px;margin-bottom:18px">A vehicle can have multiple active statuses simultaneously.</p>`;
+    el.innerHTML=`<p style="color:#9aa3b8;font-size:13px;margin-bottom:18px">A vehicle can have multiple active statuses simultaneously.</p>`;
     const groups=[
       {label:'💰 Sale status',group:'sale'},
       {label:'🚗 Vehicle source',group:'source'},
@@ -4638,12 +4710,12 @@ function renderDetail(c,v){
     ];
     groups.forEach(({label,group})=>{
       const div=document.createElement('div');div.style.marginBottom='20px';
-      div.innerHTML=`<div style="font-size:10px;font-weight:600;color:#555d73;letter-spacing:1.5px;margin-bottom:10px;text-transform:uppercase">${label}</div>`;
+      div.innerHTML=`<div style="font-size:10px;font-weight:600;color:#9aa3b8;letter-spacing:1.5px;margin-bottom:10px;text-transform:uppercase">${label}</div>`;
       const row=document.createElement('div');row.style.cssText='display:flex;flex-wrap:wrap;gap:8px';
       ALL_STATUSES.filter(s=>s.group===group).forEach(s=>{
         const on=(v.statuses||[]).includes(s.id);
         const btn=makeTagBtn(`${s.icon} ${s.label} ${on?'✓':''}`,on,s.color);
-        btn.style.cssText=on?`background:${s.color}22;color:${s.color};border-color:${s.color}55;padding:10px 15px;font-size:13px`:'padding:10px 15px;font-size:13px';
+        btn.style.cssText=on?`${chipCss(s.color)};padding:10px 15px;font-size:13px`:'padding:10px 15px;font-size:13px';
         btn.onclick=()=>toggleSt(s.id);
         row.appendChild(btn);
       });
@@ -4661,9 +4733,9 @@ function renderDetail(c,v){
           onmouseover="this.style.borderColor='#06b6d4'" onmouseout="this.style.borderColor='#06b6d455'">
           <span style="font-size:20px">📅</span>
           <span>${apptVal ? new Date(apptVal).toLocaleString([], {weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Tap to set appointment date & time'}</span>
-          <span style="margin-left:auto;font-size:12px;color:#555d73">›</span>
+          <span style="margin-left:auto;font-size:12px;color:#9aa3b8">›</span>
         </button>
-        ${apptVal?`<button id="appt-clear-btn" style="width:100%;margin-top:6px;background:none;border:none;color:#374151;font-size:12px;cursor:pointer;padding:4px">✕ Clear appointment</button>`:''}`;
+        ${apptVal?`<button id="appt-clear-btn" style="width:100%;margin-top:6px;background:none;border:none;color:#7a8499;font-size:12px;cursor:pointer;padding:4px">✕ Clear appointment</button>`:''}`;
       el.appendChild(apptDiv);
       // Wire calendar button now that DOM exists
       const pickBtn=document.getElementById('appt-pick-btn');
@@ -4754,7 +4826,7 @@ function renderDetail(c,v){
       }
       grid.appendChild(wrap);
     });
-    if(!v.photos?.length){const ep=document.createElement('div');ep.style.cssText='color:#374151;font-size:12px;padding:16px 0;text-align:center;grid-column:1/-1';ep.textContent='No photos yet';grid.appendChild(ep);}
+    if(!v.photos?.length){const ep=document.createElement('div');ep.style.cssText='color:#7a8499;font-size:12px;padding:16px 0;text-align:center;grid-column:1/-1';ep.textContent='No photos yet';grid.appendChild(ep);}
     el.appendChild(grid);
   }
 
@@ -4892,7 +4964,7 @@ function renderDetail(c,v){
 
     // Initial loading placeholder
     overlay.querySelector('#ex-body').innerHTML=`
-      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px;color:#555d73;font-size:13px;text-align:center">
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px;color:#9aa3b8;font-size:13px;text-align:center">
         ⏳ Reading receipt with AI…
       </div>`;
 
@@ -4903,7 +4975,7 @@ function renderDetail(c,v){
       if(!result){
         setStatusErr('AI extraction failed');
         body.innerHTML=`
-          <div style="flex:1;padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6;display:flex;align-items:center;justify-content:center">
+          <div style="flex:1;padding:20px;text-align:center;color:#b8c3d3;font-size:13px;line-height:1.6;display:flex;align-items:center;justify-content:center">
             Could not reach the AI. The receipt file is saved, but you'll need to add parts manually.
           </div>
           <div style="flex-shrink:0;padding:14px 16px;border-top:1px solid #1e2230;background:#0d0f14">
@@ -4954,7 +5026,7 @@ function renderDetail(c,v){
         const parts = [];
         if(recv) parts.push(`<span style="color:#bbf7d0">${recv} received</span>`);
         if(ord) parts.push(`<span style="color:#bfdbfe">${ord} ordered</span>`);
-        hdr.innerHTML = parts.join(' <span style="color:#374151">·</span> ') || '<span style="color:#555d73">No items selected</span>';
+        hdr.innerHTML = parts.join(' <span style="color:#7a8499">·</span> ') || '<span style="color:#9aa3b8">No items selected</span>';
       };
 
       const renderRows = ()=>{
@@ -4980,16 +5052,16 @@ function renderDetail(c,v){
                 style="flex:1;min-width:0;background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:7px 9px;color:#e2e4ea;font-size:13px">
             </div>
             <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:8px;align-items:center;padding-left:26px;margin-bottom:8px">
-              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px">Part #</span>
+              <span style="font-size:10px;color:#9aa3b8;text-transform:uppercase;letter-spacing:.5px">Part #</span>
               <input type="text" data-ex-partnum="${i}" value="${(row.partNumber||'').replace(/"/g,'&quot;')}" placeholder="—"
-                style="grid-column:2 / span 3;background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#9ca3af;font-size:12px;font-family:ui-monospace,monospace">
-              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px">Each</span>
+                style="grid-column:2 / span 3;background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#cdd3de;font-size:12px;font-family:ui-monospace,monospace">
+              <span style="font-size:10px;color:#9aa3b8;text-transform:uppercase;letter-spacing:.5px">Each</span>
               <input type="number" step="0.01" min="0" data-ex-cost="${i}" value="${Number(row.eachCost||0).toFixed(2)}"
                 style="background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#C8102E;font-size:13px;font-weight:600;text-align:right;font-family:ui-monospace,monospace">
-              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px;text-align:center">×&nbsp;qty</span>
+              <span style="font-size:10px;color:#9aa3b8;text-transform:uppercase;letter-spacing:.5px;text-align:center">×&nbsp;qty</span>
               <input type="number" step="1" min="1" data-ex-qty="${i}" value="${row.quantity||1}"
                 style="background:#0a0c10;border:1px solid #1e2230;border-radius:6px;padding:6px 9px;color:#e2e4ea;font-size:13px;text-align:center;font-family:ui-monospace,monospace">
-              <span style="font-size:10px;color:#555d73;text-transform:uppercase;letter-spacing:.5px;text-align:right">Line</span>
+              <span style="font-size:10px;color:#9aa3b8;text-transform:uppercase;letter-spacing:.5px;text-align:right">Line</span>
               <span data-ex-line="${i}" style="font-size:13px;font-weight:700;color:#fbbf24;text-align:right;padding:6px 9px;font-family:ui-monospace,monospace">$${lineTotal.toFixed(2)}</span>
             </div>
             <div style="padding-left:26px">
@@ -5054,28 +5126,28 @@ function renderDetail(c,v){
 
       body.innerHTML = items.length ? `
         <div style="padding:12px 16px 8px;flex-shrink:0;border-bottom:1px solid #1e2230;background:#0c0e13">
-          <div style="font-size:11px;color:#8896a8;letter-spacing:.4px;line-height:1.5;margin-bottom:8px">
+          <div style="font-size:11px;color:#b8c3d3;letter-spacing:.4px;line-height:1.5;margin-bottom:8px">
             Each part's cost includes its share of tax. Set state per item below.
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="font-size:10px;color:#555d73;letter-spacing:.5px;text-transform:uppercase;font-weight:700">Mark all as</span>
+            <span style="font-size:10px;color:#9aa3b8;letter-spacing:.5px;text-transform:uppercase;font-weight:700">Mark all as</span>
             <button id="ex-bulk-recv" style="font-size:10px;font-weight:700;padding:5px 11px;border-radius:6px;border:1px solid #14532d;background:#14532d33;color:#bbf7d0;cursor:pointer;letter-spacing:.4px;font-family:inherit">✓ RECEIVED</button>
             <button id="ex-bulk-ord" style="font-size:10px;font-weight:700;padding:5px 11px;border-radius:6px;border:1px solid #1e3a8a;background:#1e3a8a33;color:#bfdbfe;cursor:pointer;letter-spacing:.4px;font-family:inherit">🚚 ORDERED</button>
-            <span id="ex-bulk-summary" style="margin-left:auto;font-size:11px;color:#9ca3af"></span>
+            <span id="ex-bulk-summary" style="margin-left:auto;font-size:11px;color:#cdd3de"></span>
           </div>
         </div>
         <div id="ex-rows" style="flex:1;min-height:0;overflow-y:auto;padding:14px 16px 0;-webkit-overflow-scrolling:touch"></div>
         <div style="flex-shrink:0;padding:10px 16px 14px;border-top:1px solid #1e2230;background:#0d0f14">
           <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px 10px">
-            <div style="font-size:11px;color:#555d73;text-transform:uppercase;letter-spacing:.6px">Selected total</div>
+            <div style="font-size:11px;color:#9aa3b8;text-transform:uppercase;letter-spacing:.6px">Selected total</div>
             <div id="ex-total" style="font-size:15px;font-weight:700;color:#fbbf24;font-family:ui-monospace,monospace">—</div>
           </div>
           <button id="ex-add" style="width:100%;background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">✓ Add selected parts</button>
         </div>
       ` : `
-        <div style="padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.5;flex:1">
+        <div style="padding:20px;text-align:center;color:#b8c3d3;font-size:13px;line-height:1.5;flex:1">
           No auto parts detected in this receipt.<br>
-          <span style="color:#555d73;font-size:11px">You can still confirm — the receipt file is saved.</span>
+          <span style="color:#9aa3b8;font-size:11px">You can still confirm — the receipt file is saved.</span>
         </div>
         <div style="flex-shrink:0;padding:14px 16px;border-top:1px solid #1e2230;background:#0d0f14">
           <button id="ex-add" style="width:100%;background:#1e2230;border:1px solid #374151;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer">✓ Done</button>
@@ -5122,7 +5194,7 @@ function renderDetail(c,v){
       const body=overlay.querySelector('#ex-body');
       if(body){
         body.innerHTML=`
-          <div style="flex:1;padding:20px;text-align:center;color:#8896a8;font-size:13px;line-height:1.6;display:flex;align-items:center;justify-content:center">
+          <div style="flex:1;padding:20px;text-align:center;color:#b8c3d3;font-size:13px;line-height:1.6;display:flex;align-items:center;justify-content:center">
             <div>${e.message}<br><br>The receipt file is saved, but no parts were extracted.</div>
           </div>
           <div style="flex-shrink:0;padding:14px 16px;border-top:1px solid #1e2230;background:#0d0f14">
@@ -5179,7 +5251,7 @@ function renderCamera(c){
     <input type="file" id="lib-input" accept="image/*" multiple style="display:none" onchange="camPhotoCapture(this)">
     <button class="btn-ghost" style="width:100%;padding:10px;border-radius:8px;font-size:13px;margin-bottom:14px" onclick="document.getElementById('lib-input').click()">📁 Choose from photo library</button>
     <div class="photo-grid" id="cam-photo-grid"></div>
-    <div id="cam-link-note" style="font-size:12px;color:#555d73;margin-top:8px">Photos captured here can be attached to a vehicle from the vehicle detail screen.</div>
+    <div id="cam-link-note" style="font-size:12px;color:#9aa3b8;margin-top:8px">Photos captured here can be attached to a vehicle from the vehicle detail screen.</div>
   </div>
   <div class="panel">
     <div class="panel-title">Scan receipt</div>
@@ -5191,7 +5263,7 @@ function renderCamera(c){
     <input type="file" id="receipt-cam" accept="image/*,application/pdf" capture="environment" style="display:none">
     <input type="file" id="receipt-file" accept="image/*,application/pdf" multiple style="display:none">
     <button class="btn-ghost" style="width:100%;padding:10px;border-radius:8px;font-size:13px;margin-bottom:8px" onclick="document.getElementById('receipt-file').click()">📄 Upload PDF or image file</button>
-    <div style="font-size:12px;color:#555d73">Receipts are saved directly to vehicles from the vehicle detail → Receipts tab.</div>
+    <div style="font-size:12px;color:#9aa3b8">Receipts are saved directly to vehicles from the vehicle detail → Receipts tab.</div>
   </div>
   </div>`;
 
@@ -5305,7 +5377,7 @@ function renderCompleted(c){
   const receiptsCount=vehicles.filter(v=>(v.statuses||[]).includes('receipts_in')).length;
   html+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     <div style="background:#111318;border:1px solid #1e2230;border-radius:9px;padding:10px 14px;flex:1;min-width:80px;text-align:center">
-      <div style="font-size:10px;color:#374151;font-weight:600;margin-bottom:3px">COMPLETED</div>
+      <div style="font-size:10px;color:#7a8499;font-weight:600;margin-bottom:3px">COMPLETED</div>
       <div style="font-size:20px;font-weight:700;color:#fff">${vehicles.length}</div>
     </div>
     <div style="background:#111318;border:1px solid ${isManager?'#818cf833':'#34d39933'};border-radius:9px;padding:10px 14px;flex:1;min-width:80px;text-align:center">
@@ -5338,17 +5410,17 @@ function renderCompleted(c){
     html+=`<div style="background:#111318;border:1px solid ${isBooked?'#818cf844':hasReceipts?'#34d39933':'#1e2230'};border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='repairs';render()">
       <div style="display:flex;align-items:flex-start;gap:12px">
         ${v.photos?.[0]?`<img src="${photoUrl(v.photos[0])}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">`:
-          `<div style="width:56px;height:56px;background:#1e2230;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#374151;font-size:18px">🚗</div>`}
+          `<div style="width:56px;height:56px;background:#1e2230;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#7a8499;font-size:18px">🚗</div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px">${v.year||''} ${v.make||''} ${v.model||''}</div>
-          <div style="font-size:11px;color:#555d73;margin-bottom:6px">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${assignedMech?` · ${assignedMech.icon} ${assignedMech.name}`:''}</div>
+          <div style="font-size:11px;color:#9aa3b8;margin-bottom:6px">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${assignedMech?` · ${assignedMech.icon} ${assignedMech.name}`:''}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
             ${isBooked?'<span style="font-size:11px;background:#818cf822;color:#818cf8;border:1px solid #818cf833;padding:2px 8px;border-radius:20px;font-weight:600">📒 Booked</span>':'<span style="font-size:11px;background:#f8717122;color:#f87171;border:1px solid #f8717133;padding:2px 8px;border-radius:20px;font-weight:600">⚠️ Not booked</span>'}
             ${hasReceipts?'<span style="font-size:11px;background:#34d39922;color:#34d399;border:1px solid #34d39933;padding:2px 8px;border-radius:20px;font-weight:600">🧾 Receipts in</span>':'<span style="font-size:11px;background:#f8717122;color:#f87171;border:1px solid #f8717133;padding:2px 8px;border-radius:20px;font-weight:600">📋 Receipts needed</span>'}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:13px;font-weight:700;color:#C8102E">${fmt$(cost)}</div>
-            <div style="font-size:11px;color:#555d73">${totalHrs.toFixed(1)}h labor · ${fmtD(v.updatedAt)}</div>
+            <div style="font-size:11px;color:#9aa3b8">${totalHrs.toFixed(1)}h labor · ${fmtD(v.updatedAt)}</div>
           </div>
         </div>
       </div>
@@ -5362,7 +5434,7 @@ function renderCompleted(c){
           ${hasReceipts?'🧾 Receipts in ✓':'🧾 Mark receipts in'}
         </button>`}
         <button onclick="event.stopPropagation();ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='repairs';render()"
-          style="padding:9px 14px;border-radius:8px;border:1px solid #2a2f3f;background:transparent;color:#9ca3af;font-size:12px;cursor:pointer">Details →</button>
+          style="padding:9px 14px;border-radius:8px;border:1px solid #2a2f3f;background:transparent;color:#cdd3de;font-size:12px;cursor:pointer">Details →</button>
       </div>
     </div>`;
   });
@@ -5379,9 +5451,9 @@ function renderHistory(c){
     (v.make||'').toLowerCase().includes(q)||(v.model||'').toLowerCase().includes(q)||(v.year||'').toString().includes(q)
   ):ST.vehicles;
   const sorted=[...filtered].sort((a,b)=>b.updatedAt-a.updatedAt);
-  html+=`<div style="font-size:12px;color:#555d73;margin-bottom:12px">${sorted.length} vehicle${sorted.length!==1?'s':''}</div>`;
+  html+=`<div style="font-size:12px;color:#9aa3b8;margin-bottom:12px">${sorted.length} vehicle${sorted.length!==1?'s':''}</div>`;
   html+=`<div style="background:#111318;border:1px solid #1e2230;border-radius:10px;overflow:hidden">
-    <div class="hist-hdr" style="color:#555d73;font-size:10px;font-weight:600;letter-spacing:.5px">
+    <div class="hist-hdr" style="color:#9aa3b8;font-size:10px;font-weight:600;letter-spacing:.5px">
       <div>Vehicle</div><div>Stock #</div><div>Last 6 VIN</div><div>Statuses</div><div>Recon $</div><div>Updated</div><div></div>
     </div>`;
   sorted.forEach(v=>{
@@ -5389,11 +5461,11 @@ function renderHistory(c){
     const cost=(v.repairs||[]).reduce((a,r)=>a+Number(r.cost||0),0);
     html+=`<div class="hist-row" data-vid="${v.id}" style="cursor:pointer">
       <div style="font-weight:600;color:#e2e4ea;font-size:13px">${v.year||''} ${v.make||''} ${v.model||''}</div>
-      <div style="color:#9ca3af;font-size:12px">${v.stockNumber||'—'}</div>
-      <div><code style="background:#161921;padding:2px 6px;border-radius:4px;font-size:11px;font-family:'Courier New',Courier,monospace;color:#9ca3af">${(v.vin||'------').slice(-6)}</code></div>
-      <div style="display:flex;flex-wrap:wrap;gap:3px">${sts.map(s=>`<span style="font-size:10px;background:${s.color}18;color:${s.color};border-radius:6px;padding:1px 6px;font-weight:600">${s.icon} ${s.label}</span>`).join('')}</div>
+      <div style="color:#cdd3de;font-size:12px">${v.stockNumber||'—'}</div>
+      <div><code style="background:#161921;padding:2px 6px;border-radius:4px;font-size:11px;font-family:'Courier New',Courier,monospace;color:#cdd3de">${(v.vin||'------').slice(-6)}</code></div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px">${sts.map(s=>`<span style="font-size:10px;${chipCss(s.color)};border-radius:6px;padding:1px 6px;font-weight:600">${s.icon} ${s.label}</span>`).join('')}</div>
       <div style="color:${RED};font-weight:700;font-size:13px">${fmt$(cost)}</div>
-      <div style="color:#555d73;font-size:12px">${fmtD(v.updatedAt)}</div>
+      <div style="color:#9aa3b8;font-size:12px">${fmtD(v.updatedAt)}</div>
       <div><button class="btn-ghost" style="font-size:11px;padding:5px 10px">View →</button></div>
     </div>`;
   });
@@ -5457,8 +5529,8 @@ function renderMechDashboard(c, mechId){
         </div>
         <div style="flex:1;min-width:0">
           <div style="font-size:16px;font-weight:700;color:#fff">${mech.name}</div>
-          <div style="font-size:11px;color:#9ca3af;margin-top:2px">
-            ${isActive ? `<span style="color:#4ade80;font-weight:700">● ON CLOCK</span> · ${activeSessions.length} car${activeSessions.length!==1?'s':''} active` : '<span style="color:#374151">IDLE</span>'}
+          <div style="font-size:11px;color:#cdd3de;margin-top:2px">
+            ${isActive ? `<span style="color:#4ade80;font-weight:700">● ON CLOCK</span> · ${activeSessions.length} car${activeSessions.length!==1?'s':''} active` : '<span style="color:#7a8499">IDLE</span>'}
             · $${mech.laborRate||65}/hr
           </div>
         </div>
@@ -5539,7 +5611,7 @@ function renderMechDashboard(c, mechId){
     matching.forEach(v => matchedIds.add(v.id));
     html += `<div class="sec-hdr" style="margin-top:18px">
       <span style="color:${sec.color}">${sec.icon} ${sec.label}</span>
-      <span style="color:#555d73;font-weight:400">${matching.length}</span>
+      <span style="color:#9aa3b8;font-weight:400">${matching.length}</span>
     </div>`;
     html += `<div class="v-list">`;
     matching.forEach(v => { html += vRowHTML(v); });
@@ -5550,15 +5622,15 @@ function renderMechDashboard(c, mechId){
   const otherVs = sortBySubOrder(vs.filter(v => !matchedIds.has(v.id)));
   if(otherVs.length){
     html += `<div class="sec-hdr" style="margin-top:18px">
-      <span style="color:#9ca3af">📋 Other</span>
-      <span style="color:#555d73;font-weight:400">${otherVs.length}</span>
+      <span style="color:#cdd3de">📋 Other</span>
+      <span style="color:#9aa3b8;font-weight:400">${otherVs.length}</span>
     </div>`;
     html += `<div class="v-list">`;
     otherVs.forEach(v => { html += vRowHTML(v); });
     html += `</div>`;
   }
 
-  html += `<div style="font-size:11px;color:#374151;text-align:center;margin-top:16px;padding-bottom:8px">${vs.length} vehicle${vs.length!==1?'s':''} on your pipeline</div>`;
+  html += `<div style="font-size:11px;color:#7a8499;text-align:center;margin-top:16px;padding-bottom:8px">${vs.length} vehicle${vs.length!==1?'s':''} on your pipeline</div>`;
 
   c.innerHTML = html;
   c.querySelectorAll('.v-row').forEach(row => {
@@ -5603,15 +5675,15 @@ function renderMechPipeline(c){
       }
     }
     return`<div class="vehicle-card-grid" data-vid="${v.id}">
-      ${v.photos?.[0]?`<div class="vcg-img"><img src="${photoUrl(v.photos[0])}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#374151;font-size:12px">No photo</div>`}
+      ${v.photos?.[0]?`<div class="vcg-img"><img src="${photoUrl(v.photos[0])}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#7a8499;font-size:12px">No photo</div>`}
       <div class="vcg-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:14px;font-weight:600;color:#fff;flex:1;min-width:0">${v.year||''} ${v.make||''} ${v.model||''}</div>
-          <span class="v-pri" style="background:${pri.color}18;color:${pri.color};font-size:10px;flex-shrink:0">${pri.icon} ${pri.label}</span>
+          <span class="v-pri" style="${chipCss(pri.color)};font-size:10px;flex-shrink:0">${pri.icon} ${pri.label}</span>
         </div>
-        <div style="font-size:11px;color:#555d73;margin-bottom:6px">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${!mechId?` · <span style="color:${assignedMech?assignedMech.color:'#374151'}">${assignedMech?assignedMech.icon+' '+assignedMech.name:'— Unassigned'}</span>`:''}</div>
+        <div style="font-size:11px;color:#9aa3b8;margin-bottom:6px">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${!mechId?` · <span style="color:${assignedMech?assignedMech.color:'#374151'}">${assignedMech?assignedMech.icon+' '+assignedMech.name:'— Unassigned'}</span>`:''}</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-          ${(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean).map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border:1px solid ${s.color}55">${s.icon} ${s.label}</span>`).join('')||'<span style="font-size:10px;color:#374151">No status set</span>'}
+          ${(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean).map(s=>`<span class="v-tag" style="${chipCss(s.color)};border:1px solid ${s.color}">${s.icon} ${s.label}</span>`).join('')||'<span style="font-size:10px;color:#7a8499">No status set</span>'}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="font-size:13px;font-weight:700;color:${RED}">${fmt$(cost)}</span>
@@ -5651,7 +5723,7 @@ function renderMechPipeline(c){
       <div class="mech-avatar" style="background:${mech.color}22;font-size:24px">${mech.icon}</div>
       <div>
         <div style="font-size:16px;font-weight:600;color:#fff">${mech.name}</div>
-        <div style="font-size:13px;color:#9ca3af">${mine.length} assigned · ${mine.filter(v=>v.priority==='high').length} high priority</div>
+        <div style="font-size:13px;color:#cdd3de">${mine.length} assigned · ${mine.filter(v=>v.priority==='high').length} high priority</div>
       </div>
     </div>`;
 
@@ -5687,17 +5759,17 @@ function renderMechPipeline(c){
           if(days < 0) etaStr = `<span style="color:#f87171;font-weight:600">⚠ Late ${Math.abs(days)}d</span>`;
           else if(days === 0) etaStr = `<span style="color:#fbbf24;font-weight:600">📦 Today</span>`;
           else if(days === 1) etaStr = `<span style="color:#34d399;font-weight:600">📦 Tomorrow</span>`;
-          else etaStr = `<span style="color:#9ca3af">📦 ${days}d</span>`;
+          else etaStr = `<span style="color:#cdd3de">📦 ${days}d</span>`;
         } else if(item.state === 'ordered'){
-          etaStr = `<span style="color:#555d73">No ETA</span>`;
+          etaStr = `<span style="color:#9aa3b8">No ETA</span>`;
         }
         html += `<div onclick="ST.selectedId='${veh.id}';ST.view='detail';ST.activeTab='repairs';render()" style="padding:9px 12px;border-bottom:1px solid #1e2230;cursor:pointer">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
             ${stateBadge}
             <span style="font-size:12px;font-weight:600;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
-            <span style="font-size:11px;color:#9ca3af;flex-shrink:0">${etaStr}</span>
+            <span style="font-size:11px;color:#cdd3de;flex-shrink:0">${etaStr}</span>
           </div>
-          <div style="font-size:10px;color:#555d73">🚗 ${yMM}</div>
+          <div style="font-size:10px;color:#9aa3b8">🚗 ${yMM}</div>
         </div>`;
       });
       html += `</div></div>`;
@@ -5747,7 +5819,7 @@ function renderMechPipeline(c){
         <div style="display:flex;align-items:center;gap:8px;padding:8px 0;margin-bottom:8px;border-bottom:2px solid ${color}33">
           <span style="font-size:15px">${icon}</span>
           <span style="font-size:13px;font-weight:700;color:${color}">${label}</span>
-          <span style="margin-left:auto;font-size:11px;color:#555d73">${vehicles.length}</span>
+          <span style="margin-left:auto;font-size:11px;color:#9aa3b8">${vehicles.length}</span>
         </div>
         <div class="v-list">${vehicles.map(v=>vRowHTML(v)).join('')}</div>
       </div>`;
@@ -5805,11 +5877,11 @@ function renderMechPipeline(c){
           <div style="width:36px;height:36px;border-radius:50%;background:${m.color}22;border:2px solid ${m.color}44;display:flex;align-items:center;justify-content:center;font-size:18px">${m.icon}</div>
           <div>
             <div style="font-size:15px;font-weight:700;color:#fff">${m.name}</div>
-            <div style="font-size:11px;color:#555d73">${mvs.length} vehicle${mvs.length!==1?'s':''} · $${m.laborRate||65}/hr</div>
+            <div style="font-size:11px;color:#9aa3b8">${mvs.length} vehicle${mvs.length!==1?'s':''} · $${m.laborRate||65}/hr</div>
           </div>
-          <div style="margin-left:auto;font-size:11px;color:#555d73">${mvs.filter(v=>v.priority==='high').length} high priority</div>
+          <div style="margin-left:auto;font-size:11px;color:#9aa3b8">${mvs.filter(v=>v.priority==='high').length} high priority</div>
         </div>
-        ${mvs.length?`<div class="v-list">${mvs.map(v=>vRowHTML(v)).join('')}</div>`:`<div style="text-align:center;font-size:13px;color:#374151;padding:16px 0">No vehicles assigned</div>`}
+        ${mvs.length?`<div class="v-list">${mvs.map(v=>vRowHTML(v)).join('')}</div>`:`<div style="text-align:center;font-size:13px;color:#7a8499;padding:16px 0">No vehicles assigned</div>`}
       </div>`;
     });
 
@@ -5819,7 +5891,7 @@ function renderMechPipeline(c){
           <div style="width:36px;height:36px;border-radius:50%;background:#37415122;border:2px solid #37415144;display:flex;align-items:center;justify-content:center;font-size:18px">🚗</div>
           <div>
             <div style="font-size:15px;font-weight:700;color:#fff">Not Assigned</div>
-            <div style="font-size:11px;color:#555d73">${unassigned.length} vehicle${unassigned.length!==1?'s':''}</div>
+            <div style="font-size:11px;color:#9aa3b8">${unassigned.length} vehicle${unassigned.length!==1?'s':''}</div>
           </div>
         </div>
         <div class="v-list">${unassigned.map(v=>vRowHTML(v)).join('')}</div>
@@ -5889,24 +5961,24 @@ function renderDetailerQueue(c){
     .sort((a,b)=>(PORDER[a.priority||'low']||2)-(PORDER[b.priority||'low']||2));
 
   if(!queue.length){
-    c.innerHTML=`<div class="mechanic-header"><div class="mech-avatar" style="background:#1e1535;font-size:24px">🧹</div><div><div style="font-size:16px;font-weight:600;color:#fff">Detailer</div><div style="font-size:13px;color:#9ca3af">Ready to clean queue</div></div></div>
+    c.innerHTML=`<div class="mechanic-header"><div class="mech-avatar" style="background:#1e1535;font-size:24px">🧹</div><div><div style="font-size:16px;font-weight:600;color:#fff">Detailer</div><div style="font-size:13px;color:#cdd3de">Ready to clean queue</div></div></div>
     <div class="empty"><div class="empty-icon">✨</div><div class="empty-msg">Clean queue is empty</div><div class="empty-sub">Vehicles marked "Ready to clean" will appear here</div></div>`;
     return;
   }
 
-  let html=`<div class="mechanic-header"><div class="mech-avatar" style="background:#1e1535;font-size:24px">🧹</div><div><div style="font-size:16px;font-weight:600;color:#fff">Detailer</div><div style="font-size:13px;color:#9ca3af">${queue.length} vehicle${queue.length!==1?'s':''} waiting to be cleaned</div></div></div>
+  let html=`<div class="mechanic-header"><div class="mech-avatar" style="background:#1e1535;font-size:24px">🧹</div><div><div style="font-size:16px;font-weight:600;color:#fff">Detailer</div><div style="font-size:13px;color:#cdd3de">${queue.length} vehicle${queue.length!==1?'s':''} waiting to be cleaned</div></div></div>
   <div class="grid-cards">`;
   queue.forEach(v=>{
     const pri=PMAP[v.priority||'medium'];
     html+=`<div class="vehicle-card-grid">
-      ${v.photos?.[0]?`<div class="vcg-img"><img src="${photoUrl(v.photos[0])}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#374151;font-size:12px">No photo</div>`}
+      ${v.photos?.[0]?`<div class="vcg-img"><img src="${photoUrl(v.photos[0])}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`:`<div class="vcg-img" style="display:flex;align-items:center;justify-content:center;color:#7a8499;font-size:12px">No photo</div>`}
       <div class="vcg-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:14px;font-weight:600;color:#fff">${v.year||''} ${v.make||''} ${v.model||''}</div>
-          <span class="v-pri" style="background:${pri.color}18;color:${pri.color};font-size:10px">${pri.icon} ${pri.label}</span>
+          <span class="v-pri" style="${chipCss(pri.color)};font-size:10px">${pri.icon} ${pri.label}</span>
         </div>
-        <div style="font-size:11px;color:#555d73;margin-bottom:8px">#${v.stockNumber||'—'} · ${v.color||''}</div>
-        ${v.notes?`<div style="font-size:11px;color:#9ca3af;margin-bottom:10px;font-style:italic">"${v.notes.slice(0,100)}"</div>`:''}
+        <div style="font-size:11px;color:#9aa3b8;margin-bottom:8px">#${v.stockNumber||'—'} · ${v.color||''}</div>
+        ${v.notes?`<div style="font-size:11px;color:#cdd3de;margin-bottom:10px;font-style:italic">"${v.notes.slice(0,100)}"</div>`:''}
         <div style="display:flex;gap:8px">
           <button class="out-btn" style="font-size:12px;padding:8px 12px" data-view="${v.id}">View details</button>
           <button class="btn-red" style="flex:1;padding:10px;font-size:12px;font-weight:600;border-radius:8px" data-done="${v.id}">✅ Done — mark for sale</button>
@@ -6145,7 +6217,7 @@ function renderDigest(c){
   setTopbar('☀️ Daily digest','');
   const items=digestData();
   const today=new Date().toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});
-  let html=`<div style="font-size:12px;color:#555d73;margin-bottom:16px">${today} · ${isMech?getMMAP()[ST.role].name+"'s lane":'Whole shop'}</div>`;
+  let html=`<div style="font-size:12px;color:#9aa3b8;margin-bottom:16px">${today} · ${isMech?getMMAP()[ST.role].name+"'s lane":'Whole shop'}</div>`;
   if(!items.length){
     html+=`<div class="empty"><div class="empty-icon">🎉</div><div class="empty-msg">Nothing needs attention</div><div class="empty-sub">No inspections due, no late parts, nothing stuck</div></div>`;
   } else {
@@ -6185,7 +6257,7 @@ function maybeShowDailyDigest(){
       <div style="padding:16px 20px">
         ${items.map(it=>`<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #16181f"><span style="font-size:19px">${it.icon}</span><div style="font-size:13px;color:#d1d5db">${it.label}</div></div>`).join('')}
         <button onclick="this.closest('div[style*=fixed]').remove();ST.view='digest';render()" style="width:100%;margin-top:16px;background:#C8102E;border:none;color:#fff;font-size:14px;font-weight:700;padding:12px;border-radius:9px;cursor:pointer">Open digest →</button>
-        <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Dismiss</button>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Dismiss</button>
       </div>
     </div>`;
     document.body.appendChild(overlay);
@@ -6220,8 +6292,8 @@ function renderBoard(c){
   let html=`<div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #1e2230">
     <span style="font-size:22px">📺</span>
     <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:.5px">AUTOMOTIVE CONNECTION — SHOP BOARD</div>
-    <div style="margin-left:auto;font-size:13px;color:#555d73" id="board-clock">${now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · auto-refreshes</div>
-    <button onclick="document.body.classList.remove('board-mode');ST.view='dashboard';render()" style="background:#1e2230;border:1px solid #2a2f3f;color:#9ca3af;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer">✕ Exit</button>
+    <div style="margin-left:auto;font-size:13px;color:#9aa3b8" id="board-clock">${now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · auto-refreshes</div>
+    <button onclick="document.body.classList.remove('board-mode');ST.view='dashboard';render()" style="background:#1e2230;border:1px solid #2a2f3f;color:#cdd3de;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer">✕ Exit</button>
   </div>
   <div style="display:flex;gap:12px;padding:16px;overflow-x:auto;align-items:flex-start;min-height:calc(100vh - 70px)">`;
 
@@ -6231,7 +6303,7 @@ function renderBoard(c){
       <div style="padding:11px 13px;border-bottom:2px solid ${col.color}44;display:flex;align-items:center;gap:8px">
         <span style="font-size:16px">${col.icon}</span>
         <span style="font-size:13px;font-weight:800;color:${col.color};letter-spacing:.5px;text-transform:uppercase">${col.label}</span>
-        <span style="margin-left:auto;font-size:13px;font-weight:700;color:#555d73">${cvs.length}</span>
+        <span style="margin-left:auto;font-size:13px;font-weight:700;color:#9aa3b8">${cvs.length}</span>
       </div>
       <div style="padding:9px">`;
     if(!cvs.length){
@@ -6244,7 +6316,7 @@ function renderBoard(c){
       const d=daysInStage(v);
       html+=`<div style="background:#111318;border:1px solid ${stuck?'#ef4444':'#1e2230'};border-radius:9px;padding:9px 11px;margin-bottom:7px${stuck?';animation:boardPulse 2s ease-in-out infinite':''}">
         <div style="font-size:12.5px;font-weight:700;color:#e2e4ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.year||''} ${v.make||''} ${v.model||''}</div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#555d73">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#9aa3b8">
           <span>#${v.stockNumber||'—'}</span>
           ${mech?`<span title="${mech.name}">${mech.icon}</span>`:''}
           ${mech2?`<span title="${mech2.name}">${mech2.icon}</span>`:''}
@@ -6292,7 +6364,7 @@ function renderSalesFind(c){
       <div class="empty-msg">No vehicles found</div>
       <div class="empty-sub">Try a different stock #, VIN, or name</div></div>`;
   } else {
-    html+=`<div style="font-size:11px;color:#555d73;margin-bottom:8px">${matches.length} match${matches.length!==1?'es':''}</div><div class="v-list">`;
+    html+=`<div style="font-size:11px;color:#9aa3b8;margin-bottom:8px">${matches.length} match${matches.length!==1?'es':''}</div><div class="v-list">`;
     matches.forEach(v=>{
       const sts=(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean);
       const photo=photoUrl(v.photos&&v.photos[0]);
@@ -6302,7 +6374,7 @@ function renderSalesFind(c){
         <div style="min-width:0;flex:1">
           <div class="v-name">${v.year||''} ${v.make||''} ${v.model||''}</div>
           <div class="v-meta">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${visitCount>1?` · ${visitCount} visits`:''}</div>
-          <div class="v-tags">${sts.map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border-color:${s.color}33">${s.icon||''} ${s.label}</span>`).join('')}</div>
+          <div class="v-tags">${sts.map(s=>`<span class="v-tag" style="${chipCss(s.color)}">${s.icon||''} ${s.label}</span>`).join('')}</div>
         </div>
         <button data-sfservice="${v.id}" style="background:#3b82f6;border:none;color:#fff;font-size:12px;font-weight:700;padding:9px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;flex-shrink:0">🔧 Enter for service</button>
       </div>`;
@@ -6340,12 +6412,12 @@ function openSalesVehicleInfoModal(vehicleId){
     ${photo?`<div style="height:160px;overflow:hidden"><img src="${photo}" style="width:100%;height:100%;object-fit:cover"></div>`:''}
     <div style="padding:20px">
       <div style="font-size:17px;font-weight:700;color:#fff">${v.year||''} ${v.make||''} ${v.model||''}</div>
-      <div style="font-size:12px;color:#9ca3af;margin-top:4px">Stock #${v.stockNumber||'—'}</div>
-      <div style="font-size:12px;color:#9ca3af;margin-top:2px;font-family:monospace">VIN: ${v.vin||'—'}</div>
-      <div style="font-size:12px;color:#9ca3af;margin-top:2px">Last checked in: ${lastIn}${visits.length>1?` · ${visits.length} visits total`:''}</div>
-      <div class="v-tags" style="margin-top:10px">${sts.map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border-color:${s.color}33">${s.icon||''} ${s.label}</span>`).join('')||'<span style="font-size:12px;color:#555d73">No status tags</span>'}</div>
+      <div style="font-size:12px;color:#cdd3de;margin-top:4px">Stock #${v.stockNumber||'—'}</div>
+      <div style="font-size:12px;color:#cdd3de;margin-top:2px;font-family:monospace">VIN: ${vinHtml(v.vin)}</div>
+      <div style="font-size:12px;color:#cdd3de;margin-top:2px">Last checked in: ${lastIn}${visits.length>1?` · ${visits.length} visits total`:''}</div>
+      <div class="v-tags" style="margin-top:10px">${sts.map(s=>`<span class="v-tag" style="${chipCss(s.color)}">${s.icon||''} ${s.label}</span>`).join('')||'<span style="font-size:12px;color:#9aa3b8">No status tags</span>'}</div>
       <button onclick="this.closest('div[style*=fixed]').remove();openSalesServiceCheckinModal('${v.id}')" style="width:100%;margin-top:18px;background:#3b82f6;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">🔧 Enter for service</button>
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Close</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Close</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -6368,14 +6440,14 @@ function openSalesServiceCheckinModal(vehicleId){
   <div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:420px">
     <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:700;color:#fff">🔧 Enter for service</div>
     <div style="padding:20px">
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:16px">${v.year||''} ${v.make||''} ${v.model||''} · #${v.stockNumber||'—'} · VIN ...${(v.vin||'------').slice(-6)}</div>
-      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin-bottom:8px">WHAT DOES IT NEED? *</label>
+      <div style="font-size:13px;color:#cdd3de;margin-bottom:16px">${v.year||''} ${v.make||''} ${v.model||''} · #${v.stockNumber||'—'} · VIN ...${(v.vin||'------').slice(-6)}</div>
+      <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:8px">WHAT DOES IT NEED? *</label>
       <textarea id="sfc-desc" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:11px 13px;color:#e2e4ea;font-size:14px;min-height:90px;resize:vertical;font-family:inherit" placeholder="Describe the customer's issue / work requested…"></textarea>
-      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin:14px 0 8px">APPOINTMENT DATE (optional)</label>
+      <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin:14px 0 8px">APPOINTMENT DATE (optional)</label>
       <input id="sfc-appt" type="date" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:11px 13px;color:#e2e4ea;font-size:14px">
-      <div style="font-size:11px;color:#555d73;margin-top:14px;line-height:1.5">This starts a new service visit. The manager will review and assign a mechanic.</div>
+      <div style="font-size:11px;color:#9aa3b8;margin-top:14px;line-height:1.5">This starts a new service visit. The manager will review and assign a mechanic.</div>
       <button onclick="submitSalesServiceCheckin('${vehicleId}',this)" style="width:100%;margin-top:14px;background:#3b82f6;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Check in for service →</button>
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -6418,16 +6490,16 @@ function openAddToQueueModal(vehicleId){
   <div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:420px">
     <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:700;color:#fff">🔧 Add to work queue</div>
     <div style="padding:20px">
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:16px">${v.year||''} ${v.make||''} ${v.model||''} · #${v.stockNumber||'—'}</div>
-      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin-bottom:8px">ASSIGN TO MECHANIC</label>
+      <div style="font-size:13px;color:#cdd3de;margin-bottom:16px">${v.year||''} ${v.make||''} ${v.model||''} · #${v.stockNumber||'—'}</div>
+      <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:8px">ASSIGN TO MECHANIC</label>
       <select id="queue-mech" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:11px 13px;color:#e2e4ea;font-size:14px;margin-bottom:12px">
         <option value="">— Choose mechanic —</option>
         ${getMechs().map(m=>`<option value="${m.id}">${m.icon} ${m.name}</option>`).join('')}
       </select>
-      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin-bottom:8px">WORK DESCRIPTION</label>
+      <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:8px">WORK DESCRIPTION</label>
       <textarea id="queue-desc" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:11px 13px;color:#e2e4ea;font-size:14px;min-height:80px;resize:vertical;font-family:inherit" placeholder="Describe the work needed..."></textarea>
       <button onclick="submitAddToQueue('${vehicleId}',this)" style="width:100%;margin-top:14px;background:#3b82f6;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Send to work queue →</button>
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -6478,17 +6550,17 @@ function salePendingCardHTML(v, isSales){
         <div style="font-size:11px;color:#92400e">#${v.stockNumber||'—'} · 🔴 High priority</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:11px;color:#555d73">${concerns.length} concern${concerns.length!==1?'s':''}</div>
+        <div style="font-size:11px;color:#9aa3b8">${concerns.length} concern${concerns.length!==1?'s':''}</div>
         ${pendingC.length?`<div style="font-size:10px;color:#f59e0b;font-weight:600">${pendingC.length} awaiting approval</div>`:'<div style="font-size:10px;color:#4ade80;font-weight:600">All reviewed ✓</div>'}
       </div>
     </div>
     <div style="padding:12px 16px">
-      ${concerns.length===0?`<div style="font-size:12px;color:#555d73;margin-bottom:10px;font-style:italic">No concerns logged yet.</div>`:''}
+      ${concerns.length===0?`<div style="font-size:12px;color:#9aa3b8;margin-bottom:10px;font-style:italic">No concerns logged yet.</div>`:''}
       ${concerns.map(con=>`
         <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1e2230">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;color:#e2e4ea;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${con.description}</div>
-            <div style="font-size:10px;color:#555d73;margin-top:1px">By ${con.addedBy} · ${fmtD(con.createdAt)}</div>
+            <div style="font-size:10px;color:#9aa3b8;margin-top:1px">By ${con.addedBy} · ${fmtD(con.createdAt)}</div>
           </div>
           ${con.status==='pending'?`<span style="background:#1a1200;color:#f59e0b;border:1px solid #f59e0b33;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap">⏳ Pending</span>`:''}
           ${con.status==='approved'?`<span style="background:#0a1f0f;color:#4ade80;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap">✓ Approved</span>`:''}
@@ -6498,7 +6570,7 @@ function salePendingCardHTML(v, isSales){
         ${isSales?`
           <button data-add-concern="${v.id}" style="flex:1;background:#1a1200;border:1px dashed #f59e0b55;color:#f59e0b;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">+ Add concern</button>
           <button data-add-queue="${v.id}" style="flex:1;background:#1e3a5f;border:1px solid #3b82f633;color:#93c5fd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">🔧 Add to work queue</button>
-        `:`<button onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='concerns';render()" style="flex:1;background:#161921;border:1px solid #2a2f3f;color:#9ca3af;border-radius:8px;padding:9px;font-size:12px;cursor:pointer">View details →</button>`}
+        `:`<button onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='concerns';render()" style="flex:1;background:#161921;border:1px solid #2a2f3f;color:#cdd3de;border-radius:8px;padding:9px;font-size:12px;cursor:pointer">View details →</button>`}
       </div>
     </div>
   </div>`;
@@ -6511,12 +6583,12 @@ function openAddConcernModal(vehicleId){
   <div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:460px;overflow:hidden">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e2230">
       <span style="font-size:16px;font-weight:700;color:#fbbf24">🤝 Add customer concern</span>
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:#1e2230;border:none;color:#9ca3af;width:30px;height:30px;border-radius:7px;font-size:16px;cursor:pointer">✕</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:#1e2230;border:none;color:#cdd3de;width:30px;height:30px;border-radius:7px;font-size:16px;cursor:pointer">✕</button>
     </div>
     <div style="padding:20px">
-      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin-bottom:6px">CUSTOMER CONCERN</label>
+      <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:6px">CUSTOMER CONCERN</label>
       <textarea id="concern-text" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:11px 13px;color:#e2e4ea;font-size:14px;resize:vertical;min-height:100px;font-family:inherit" placeholder="Describe what the customer reported (e.g. 'AC not blowing cold', 'scratch on rear bumper', 'tire pressure light on')..."></textarea>
-      <div style="font-size:11px;color:#374151;margin-top:6px">This will be submitted to the manager for approval before any work is done.</div>
+      <div style="font-size:11px;color:#7a8499;margin-top:6px">This will be submitted to the manager for approval before any work is done.</div>
       <button onclick="submitConcern('${vehicleId}',this)" style="width:100%;margin-top:14px;background:#f59e0b;border:none;color:#000;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Submit concern for approval →</button>
     </div>
   </div>`;
@@ -6595,8 +6667,8 @@ function renderApprovals(c){
       <div style="display:flex;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;color:#e2e4ea;font-weight:500;margin-bottom:3px;line-height:1.5">${con.description}</div>
-          <div style="font-size:11px;color:#555d73">By ${con.addedBy} · ${fmtD(con.createdAt)}${con.reviewedAt?` · reviewed ${fmtD(con.reviewedAt)}`:''}</div>
-          ${con.managerNote?`<div style="font-size:11px;color:#9ca3af;margin-top:4px;font-style:italic">Note: ${con.managerNote}</div>`:''}
+          <div style="font-size:11px;color:#9aa3b8">By ${con.addedBy} · ${fmtD(con.createdAt)}${con.reviewedAt?` · reviewed ${fmtD(con.reviewedAt)}`:''}</div>
+          ${con.managerNote?`<div style="font-size:11px;color:#cdd3de;margin-top:4px;font-style:italic">Note: ${con.managerNote}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
           ${isPending?`
@@ -6643,7 +6715,7 @@ function renderApprovals(c){
       <div style="padding:12px 16px;border-bottom:1px solid #1e2230;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='concerns';render()">
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.year||''} ${v.make||''} ${v.model||''}</div>
-          <div style="font-size:11px;color:#555d73">#${v.stockNumber||'—'} · ${concerns.length} concern${concerns.length!==1?'s':''} · tap to open →</div>
+          <div style="font-size:11px;color:#9aa3b8">#${v.stockNumber||'—'} · ${concerns.length} concern${concerns.length!==1?'s':''} · tap to open →</div>
         </div>
         ${badge}
       </div>
@@ -6661,7 +6733,7 @@ function renderApprovals(c){
 
   // ═══ Section 2: Reviewed ═══
   if(allReviewed.length){
-    html+=`<div style="font-size:11px;font-weight:700;color:#555d73;letter-spacing:1px;margin:${needsApproval.length?'22px':'0'} 0 10px;text-transform:uppercase">✓ Reviewed · ${allReviewed.length} vehicle${allReviewed.length!==1?'s':''} · newest first</div>`;
+    html+=`<div style="font-size:11px;font-weight:700;color:#9aa3b8;letter-spacing:1px;margin:${needsApproval.length?'22px':'0'} 0 10px;text-transform:uppercase">✓ Reviewed · ${allReviewed.length} vehicle${allReviewed.length!==1?'s':''} · newest first</div>`;
     allReviewed.forEach(v=>{ html += vehicleCard(v, 'reviewed'); });
   }
 
@@ -6733,13 +6805,13 @@ function openAssignConcernModal(vehicleId, concernId){
   <div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:400px;overflow:hidden">
     <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:600;color:#fff">Approve & assign mechanic</div>
     <div style="padding:20px">
-      <label style="display:block;font-size:11px;font-weight:600;color:#555d73;margin-bottom:10px">ASSIGN TO</label>
+      <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:10px">ASSIGN TO</label>
       ${getMechs().map(m=>`
         <button onclick="approveConcernWithMech('${vehicleId}','${concernId}','${m.id}',this)"
           style="width:100%;background:#161921;border:1px solid #2a2f3f;color:#e2e4ea;border-radius:9px;padding:13px 16px;margin-bottom:8px;text-align:left;cursor:pointer;font-size:14px;font-weight:500">
           ${m.icon} ${m.name}
         </button>`).join('')}
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;background:transparent;border:1px solid #2a2f3f;color:#555d73;border-radius:9px;padding:10px;margin-top:4px;cursor:pointer;font-size:13px">Cancel</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;border-radius:9px;padding:10px;margin-top:4px;cursor:pointer;font-size:13px">Cancel</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -6788,7 +6860,7 @@ function buildConcernsTab(el, v, save){
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <div>
       <div style="font-size:14px;font-weight:600;color:#fff">Customer concerns</div>
-      <div style="font-size:12px;color:#555d73;margin-top:2px">${concerns.length} logged · ${concerns.filter(c=>c.status==='pending').length} pending approval</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-top:2px">${concerns.length} logged · ${concerns.filter(c=>c.status==='pending').length} pending approval</div>
     </div>
     <button id="add-concern-btn" style="background:#f59e0b;border:none;color:#000;font-size:12px;font-weight:700;padding:8px 14px;border-radius:8px;cursor:pointer">+ Add concern</button>
   </div>
@@ -6803,7 +6875,7 @@ function buildConcernsTab(el, v, save){
       <div style="display:flex;align-items:flex-start;gap:10px">
         <div style="flex:1">
           <div style="font-size:13px;color:#e2e4ea;font-weight:500;margin-bottom:4px">${con.description}</div>
-          <div style="font-size:11px;color:#555d73">By ${con.addedBy} · ${fmtD(con.createdAt)}</div>
+          <div style="font-size:11px;color:#9aa3b8">By ${con.addedBy} · ${fmtD(con.createdAt)}</div>
           ${con.status==='approved'&&con.assignedTo?`<div style="font-size:11px;color:#4ade80;margin-top:3px">✓ Approved · assigned to ${getMMAP()[con.assignedTo]?.name||''}</div>`:''}
           ${con.status==='rejected'&&con.managerNote?`<div style="font-size:11px;color:#f87171;margin-top:3px">✕ Rejected: ${con.managerNote}</div>`:''}
         </div>
@@ -6865,7 +6937,7 @@ function renderPartsPipeline(c){
 
   c.innerHTML = `
     <div style="margin-bottom:14px">
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Track parts that aren't yet received \u00b7 ETAs, vendor, tracking, and overdue alerts</div>
+      <div style="font-size:13px;color:#cdd3de;margin-bottom:10px">Track parts that aren't yet received \u00b7 ETAs, vendor, tracking, and overdue alerts</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${chip('all','All', all.length, '#C8102E')}
         ${chip('ordered','🚚 Ordered', orderedCount, '#1e40af')}
@@ -6876,15 +6948,15 @@ function renderPartsPipeline(c){
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
       <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div style="font-size:10px;color:#555d73;letter-spacing:.5px">PENDING TOTAL</div>
+        <div style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">PENDING TOTAL</div>
         <div style="font-size:22px;font-weight:700;color:#C8102E;margin-top:4px">${fmt$(totalValue)}</div>
       </div>
       <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div style="font-size:10px;color:#555d73;letter-spacing:.5px">🚚 ORDERED</div>
+        <div style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">🚚 ORDERED</div>
         <div style="font-size:22px;font-weight:700;color:#bfdbfe;margin-top:4px">${orderedCount}</div>
       </div>
       <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div style="font-size:10px;color:#555d73;letter-spacing:.5px">📋 NEEDED</div>
+        <div style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">📋 NEEDED</div>
         <div style="font-size:22px;font-weight:700;color:#fed7aa;margin-top:4px">${neededCount}</div>
       </div>
       ${lateCount ? `<div style="background:#7f1d1d22;border:1px solid #7f1d1d66;border-radius:10px;padding:14px">
@@ -6905,13 +6977,13 @@ function renderPartsPipeline(c){
   const host = c.querySelector('#pp-list-host');
   if(!filtered.length){
     if(!all.length){
-      host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:40px 20px;text-align:center;color:#555d73">
+      host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:40px 20px;text-align:center;color:#9aa3b8">
         <div style="font-size:36px;margin-bottom:8px;opacity:.4">✅</div>
-        <div style="font-size:13px;color:#9ca3af">No parts pending</div>
-        <div style="font-size:11px;margin-top:4px;color:#374151">Parts in 'Needed' or 'Ordered' state will appear here</div>
+        <div style="font-size:13px;color:#cdd3de">No parts pending</div>
+        <div style="font-size:11px;margin-top:4px;color:#7a8499">Parts in 'Needed' or 'Ordered' state will appear here</div>
       </div>`;
     } else {
-      host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#555d73;font-size:13px">No parts match this filter.</div>`;
+      host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#9aa3b8;font-size:13px">No parts match this filter.</div>`;
     }
     return;
   }
@@ -6934,13 +7006,13 @@ function renderPartsPipeline(c){
       <div onclick="ST.selectedId='${veh.id}';ST.view='detail';ST.activeTab='repairs';render()" style="padding:11px 14px;border-bottom:1px solid #1e2230;background:#0c0e13;cursor:pointer;display:flex;align-items:center;gap:10px">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚗 ${yMM}</div>
-          <div style="font-size:11px;color:#555d73">${stockStr} · ${grp.items.length} part${grp.items.length!==1?'s':''} pending</div>
+          <div style="font-size:11px;color:#9aa3b8">${stockStr} · ${grp.items.length} part${grp.items.length!==1?'s':''} pending</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:13px;font-weight:700;color:#C8102E">${fmt$(grpTotal)}</div>
-          <div style="font-size:10px;color:#555d73">value pending</div>
+          <div style="font-size:10px;color:#9aa3b8">value pending</div>
         </div>
-        <span style="font-size:14px;color:#374151;flex-shrink:0">›</span>
+        <span style="font-size:14px;color:#7a8499;flex-shrink:0">›</span>
       </div>
       <div>`;
     grp.items.forEach(item=>{
@@ -6957,9 +7029,9 @@ function renderPartsPipeline(c){
           if(days < 0) etaStr = `<span style="color:#f87171;font-weight:600">⚠ Late · ${Math.abs(days)}d ago</span>`;
           else if(days === 0) etaStr = `<span style="color:#fbbf24;font-weight:600">📦 Today</span>`;
           else if(days === 1) etaStr = `<span style="color:#34d399;font-weight:600">📦 Tomorrow</span>`;
-          else etaStr = `<span style="color:#9ca3af">📦 ${dateLabel} (${days}d)</span>`;
+          else etaStr = `<span style="color:#cdd3de">📦 ${dateLabel} (${days}d)</span>`;
         } else if(item.daysSinceOrdered != null){
-          etaStr = `<span style="color:#555d73">Ordered ${item.daysSinceOrdered}d ago · No ETA</span>`;
+          etaStr = `<span style="color:#9aa3b8">Ordered ${item.daysSinceOrdered}d ago · No ETA</span>`;
         }
       }
       const trackingBtn = (item.state === 'ordered' && p.trackingNum)
@@ -6975,7 +7047,7 @@ function renderPartsPipeline(c){
             <span style="font-size:13px;font-weight:600;color:#e2e4ea;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
             <span style="font-size:12px;font-weight:700;color:#C8102E;flex-shrink:0">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#9ca3af;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#cdd3de;flex-wrap:wrap">
             ${item.vendorName?`<span style="color:#818cf8">↗ ${item.vendorName}</span>`:''}
             ${etaStr}
             ${trackingBtn}
@@ -6984,7 +7056,7 @@ function renderPartsPipeline(c){
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
             <button class="ppl-btn ppl-receive" data-vid="${veh.id}" data-pidx="${item.partIdx}" title="Mark as received" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;border:1px solid #9a341688;background:#78350f33;color:#fdba74;cursor:pointer;font-family:inherit">📦 Mark received</button>
             ${item.state === 'ordered'
-              ? `<button class="ppl-btn ppl-edit-eta" data-vid="${veh.id}" data-pidx="${item.partIdx}" title="Edit ETA / Tracking" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;border:1px solid #2a2f3f;background:#1e2230;color:#9ca3af;cursor:pointer;font-family:inherit">✎ Edit ETA / Tracking</button>`
+              ? `<button class="ppl-btn ppl-edit-eta" data-vid="${veh.id}" data-pidx="${item.partIdx}" title="Edit ETA / Tracking" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;border:1px solid #2a2f3f;background:#1e2230;color:#cdd3de;cursor:pointer;font-family:inherit">✎ Edit ETA / Tracking</button>`
               : `<button class="ppl-btn ppl-mark-ordered" data-vid="${veh.id}" data-pidx="${item.partIdx}" title="Mark as ordered" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;border:1px solid #1e40af88;background:#1e3a8a33;color:#bfdbfe;cursor:pointer;font-family:inherit">🚚 Order this</button>`
             }
           </div>
@@ -7044,7 +7116,7 @@ window.openOrderDialogStandalone = function(vid, pidx, onSaved){
       </div>
       <div style="padding:16px">
         <div style="font-size:13px;color:#e2e4ea;margin-bottom:14px;padding:8px 12px;background:#0c0e13;border-radius:8px;border-left:3px solid #C8102E">
-          <strong>${p.name}</strong>${p.partNum?` <span style="color:#555d73">#${p.partNum}</span>`:''}
+          <strong>${p.name}</strong>${p.partNum?` <span style="color:#9aa3b8">#${p.partNum}</span>`:''}
         </div>
         <div class="field"><label>Expected arrival (optional)</label><input id="pos-eta" type="date" value="${etaVal}" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px"></div>
         <div class="field"><label>Tracking # (optional)</label><input id="pos-tracking" value="${trackingVal}" placeholder="e.g. 1Z999AA10123456784" style="width:100%;background:#0a0c10;border:1px solid #1e2230;border-radius:8px;padding:9px 10px;color:#e2e4ea;font-size:13px;font-family:ui-monospace,monospace"></div>
@@ -7092,7 +7164,7 @@ function renderVendors(c){
 
   c.innerHTML = `
     <div style="margin-bottom:14px">
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Track parts suppliers and sublet shops · view historical spend per vendor</div>
+      <div style="font-size:13px;color:#cdd3de;margin-bottom:10px">Track parts suppliers and sublet shops · view historical spend per vendor</div>
       <div style="display:flex;gap:8px;border-bottom:1px solid #1e2230;margin-bottom:18px">
         <button class="vtab-btn ${kind==='parts'?'active':''}" data-kind="parts">🔩 Parts suppliers (${getVendors('parts').length})</button>
         <button class="vtab-btn ${kind==='sublet'?'active':''}" data-kind="sublet">🏭 Sublet shops (${getVendors('sublet').length})</button>
@@ -7126,10 +7198,10 @@ function renderVendors(c){
   // Build list
   const host = c.querySelector('#vendor-list-host');
   if(!vendors.length){
-    host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#555d73">
+    host.innerHTML = `<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#9aa3b8">
       <div style="font-size:36px;margin-bottom:8px;opacity:.5">${kind==='parts'?'🔩':'🏭'}</div>
       <div style="font-size:13px">No ${kind==='parts'?'parts suppliers':'sublet shops'} yet</div>
-      <div style="font-size:11px;margin-top:4px;color:#374151">Add one above to start tracking spend</div>
+      <div style="font-size:11px;margin-top:4px;color:#7a8499">Add one above to start tracking spend</div>
     </div>`;
   } else {
     // Sort by total spend desc
@@ -7142,22 +7214,22 @@ function renderVendors(c){
         <div style="display:flex;align-items:flex-start;gap:12px">
           <div style="flex:1;min-width:0">
             <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">${vn.name}</div>
-            <div style="font-size:11px;color:#555d73;display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+            <div style="font-size:11px;color:#9aa3b8;display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">
               ${vn.contact?`<span>👤 ${vn.contact}</span>`:''}
-              ${vn.phone?`<span>📞 <a href="tel:${vn.phone}" style="color:#9ca3af;text-decoration:none">${vn.phone}</a></span>`:''}
-              ${vn.email?`<span>✉ <a href="mailto:${vn.email}" style="color:#9ca3af;text-decoration:none">${vn.email}</a></span>`:''}
+              ${vn.phone?`<span>📞 <a href="tel:${vn.phone}" style="color:#cdd3de;text-decoration:none">${vn.phone}</a></span>`:''}
+              ${vn.email?`<span>✉ <a href="mailto:${vn.email}" style="color:#cdd3de;text-decoration:none">${vn.email}</a></span>`:''}
               ${vn.address?`<span>📍 ${vn.address}</span>`:''}
             </div>
-            ${vn.notes?`<div style="font-size:12px;color:#9ca3af;background:#0c0e13;border:1px solid #1e2230;border-radius:6px;padding:7px 10px;margin-top:6px">${vn.notes}</div>`:''}
+            ${vn.notes?`<div style="font-size:12px;color:#cdd3de;background:#0c0e13;border:1px solid #1e2230;border-radius:6px;padding:7px 10px;margin-top:6px">${vn.notes}</div>`:''}
           </div>
           <div style="text-align:right;flex-shrink:0">
-            <div style="font-size:10px;color:#555d73;margin-bottom:2px">HISTORICAL SPEND</div>
+            <div style="font-size:10px;color:#9aa3b8;margin-bottom:2px">HISTORICAL SPEND</div>
             <div style="font-size:20px;font-weight:700;color:#C8102E">${fmt$(sp.total)}</div>
-            <div style="font-size:10px;color:#555d73">${sp.count} line item${sp.count!==1?'s':''}</div>
+            <div style="font-size:10px;color:#9aa3b8">${sp.count} line item${sp.count!==1?'s':''}</div>
           </div>
         </div>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2230;display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn-ghost vn-edit" data-id="${vn.id}" style="font-size:12px;padding:7px 12px;border-radius:7px;background:#1e2230;border:1px solid #2a2f3f;color:#9ca3af;cursor:pointer">Edit</button>
+          <button class="btn-ghost vn-edit" data-id="${vn.id}" style="font-size:12px;padding:7px 12px;border-radius:7px;background:#1e2230;border:1px solid #2a2f3f;color:#cdd3de;cursor:pointer">Edit</button>
           <button class="vn-del" data-id="${vn.id}" data-name="${vn.name.replace(/"/g,'&quot;')}" style="font-size:12px;padding:7px 12px;border-radius:7px;background:#7f1d1d22;border:1px solid #7f1d1d66;color:#fca5a5;cursor:pointer">Delete</button>
         </div>
       </div>`;
@@ -7364,9 +7436,9 @@ function renderAnalytics(c){
   ];
 
   function tableHtml(rows, label){
-    if(!rows.length) return `<div style="color:#374151;font-size:13px;padding:14px 0;text-align:center">No data in this range</div>`;
+    if(!rows.length) return `<div style="color:#7a8499;font-size:13px;padding:14px 0;text-align:center">No data in this range</div>`;
     return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="border-bottom:1px solid #2a2f3f;color:#9ca3af;text-align:left">
+      <thead><tr style="border-bottom:1px solid #2a2f3f;color:#cdd3de;text-align:left">
         <th style="padding:8px 10px;font-weight:600;font-size:11px;letter-spacing:.5px">${label.toUpperCase()}</th>
         <th style="padding:8px 10px;font-weight:600;font-size:11px;text-align:right">VISITS</th>
         <th style="padding:8px 10px;font-weight:600;font-size:11px;text-align:right">AVG COST</th>
@@ -7377,10 +7449,10 @@ function renderAnalytics(c){
       <tbody>${rows.map(r=>`
         <tr style="border-bottom:1px solid #1e2230">
           <td style="padding:9px 10px;color:#e2e4ea">${r.label}</td>
-          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${r.count}</td>
-          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${fmt$(r.avgCost)}</td>
-          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${r.avgDays.toFixed(1)}</td>
-          <td style="padding:9px 10px;text-align:right;color:#9ca3af">${r.avgHours.toFixed(1)}</td>
+          <td style="padding:9px 10px;text-align:right;color:#cdd3de">${r.count}</td>
+          <td style="padding:9px 10px;text-align:right;color:#cdd3de">${fmt$(r.avgCost)}</td>
+          <td style="padding:9px 10px;text-align:right;color:#cdd3de">${r.avgDays.toFixed(1)}</td>
+          <td style="padding:9px 10px;text-align:right;color:#cdd3de">${r.avgHours.toFixed(1)}</td>
           <td style="padding:9px 10px;text-align:right;color:#C8102E;font-weight:600">${fmt$(r.costSum)}</td>
         </tr>`).join('')}</tbody>
     </table></div>`;
@@ -7388,7 +7460,7 @@ function renderAnalytics(c){
 
   c.innerHTML = `
     <div style="margin-bottom:14px">
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Recon spend, cycle time, and labor across completed visits</div>
+      <div style="font-size:13px;color:#cdd3de;margin-bottom:10px">Recon spend, cycle time, and labor across completed visits</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${rangeBtns.map(b=>`<button class="an-range ${_analyticsRange===b.id?'active':''}" data-range="${b.id}" style="font-size:12px;padding:7px 14px;border-radius:7px;background:${_analyticsRange===b.id?'#C8102E':'#1e2230'};border:1px solid ${_analyticsRange===b.id?'#C8102E':'#2a2f3f'};color:#fff;cursor:pointer">${b.label}</button>`).join('')}
       </div>
@@ -7396,23 +7468,23 @@ function renderAnalytics(c){
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px">
       <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">COMPLETED VISITS</div>
+        <div class="ov-label" style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">COMPLETED VISITS</div>
         <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${totalCount}</div>
       </div>
       <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">TOTAL RECON SPEND</div>
+        <div class="ov-label" style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">TOTAL RECON SPEND</div>
         <div class="ov-val" style="font-size:22px;font-weight:700;color:#C8102E;margin-top:4px">${fmt$(totalCost)}</div>
       </div>
       <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">AVG PER VEHICLE</div>
+        <div class="ov-label" style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">AVG PER VEHICLE</div>
         <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${fmt$(avgCost)}</div>
       </div>
       <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">AVG CYCLE TIME</div>
+        <div class="ov-label" style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">AVG CYCLE TIME</div>
         <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${avgCycle.toFixed(1)}d</div>
       </div>
       <div class="ov-card" style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:14px">
-        <div class="ov-label" style="font-size:10px;color:#555d73;letter-spacing:.5px">TOTAL LABOR HRS</div>
+        <div class="ov-label" style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">TOTAL LABOR HRS</div>
         <div class="ov-val" style="font-size:22px;font-weight:700;color:#fff;margin-top:4px">${totalHours.toFixed(1)}</div>
       </div>
     </div>
@@ -7428,9 +7500,9 @@ function renderAnalytics(c){
             return new Date(parseInt(y), parseInt(mo)-1, 1).toLocaleDateString('en-US',{month:'short'});
           })();
           return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
-            <div style="font-size:9px;color:#9ca3af;white-space:nowrap">${fmt$(m.cost)}</div>
+            <div style="font-size:9px;color:#cdd3de;white-space:nowrap">${fmt$(m.cost)}</div>
             <div title="${monthLabel} · ${m.count} visits · ${fmt$(m.cost)}" style="width:100%;max-width:40px;height:${h}px;background:linear-gradient(to top,#C8102E,#C8102E66);border-radius:4px 4px 0 0"></div>
-            <div style="font-size:10px;color:#555d73">${monthLabel}</div>
+            <div style="font-size:10px;color:#9aa3b8">${monthLabel}</div>
           </div>`;
         }).join('')}
       </div>
@@ -7452,10 +7524,10 @@ function renderAnalytics(c){
     </div>
 
     ${totalCount===0 ? `
-    <div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#555d73">
+    <div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:30px 20px;text-align:center;color:#9aa3b8">
       <div style="font-size:36px;margin-bottom:8px;opacity:.5">📊</div>
       <div style="font-size:13px">No completed visits in this range</div>
-      <div style="font-size:11px;margin-top:4px;color:#374151">Vehicles marked work complete, ready for sale, or sold will appear here</div>
+      <div style="font-size:11px;margin-top:4px;color:#7a8499">Vehicles marked work complete, ready for sale, or sold will appear here</div>
     </div>` : ''}
   `;
 
@@ -7504,7 +7576,7 @@ function renderSettings(c){
     ${ST.masterPinUnlocked ? `
     <div class="panel">
       <div class="panel-title">ROLE PINS</div>
-      <div style="font-size:12px;color:#555d73;margin-bottom:14px">Each role has a 4-digit PIN required at login.</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:14px">Each role has a 4-digit PIN required at login.</div>
 
       ${[
         {id:'manager',label:'Manager / Dealer',icon:'👔'},
@@ -7524,16 +7596,16 @@ function renderSettings(c){
     ` : `
     <div class="panel">
       <div class="panel-title">🔒 ROLE PINS — LOCKED</div>
-      <div style="font-size:13px;color:#8896a8;line-height:1.6;padding:14px 12px;background:#0d0f14;border:1px dashed #2a2f3f;border-radius:9px;text-align:center">
+      <div style="font-size:13px;color:#b8c3d3;line-height:1.6;padding:14px 12px;background:#0d0f14;border:1px dashed #2a2f3f;border-radius:9px;text-align:center">
         Role PIN settings are protected.<br>
-        <span style="color:#555d73;font-size:12px">Scroll down and unlock with the Master PIN to view and edit.</span>
+        <span style="color:#9aa3b8;font-size:12px">Scroll down and unlock with the Master PIN to view and edit.</span>
       </div>
     </div>
     `}
 
     <div class="panel">
       <div class="panel-title">MECHANICS</div>
-      <div style="font-size:12px;color:#555d73;margin-bottom:14px">Edit mechanic names and PINs, or add new mechanics.</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:14px">Edit mechanic names and PINs, or add new mechanics.</div>
 
       <div id="mech-list">
         ${mechs.map((m,i)=>`
@@ -7545,19 +7617,19 @@ function renderSettings(c){
               onchange="updateMechName('${m.id}',this.value)">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
               ${ST.masterPinUnlocked ? `
-              <span style="font-size:11px;color:#555d73;flex-shrink:0">PIN:</span>
+              <span style="font-size:11px;color:#9aa3b8;flex-shrink:0">PIN:</span>
               <input type="tel" maxlength="4" value="${SETTINGS.pins[m.id]||'0000'}"
                 style="width:68px;text-align:center;font-size:15px;letter-spacing:4px;background:#0d0f14;border:1px solid #2a2f3f;border-radius:7px;padding:6px;color:#fff;font-family:'Courier New',monospace"
                 oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
                 onchange="SETTINGS.pins['${m.id}']=this.value.padStart(4,'0');saveSettings();toast('PIN updated')">
               ` : `
-              <span style="font-size:11px;color:#555d73;flex-shrink:0;font-style:italic">🔒 PIN hidden</span>
+              <span style="font-size:11px;color:#9aa3b8;flex-shrink:0;font-style:italic">🔒 PIN hidden</span>
               `}
-              <span style="font-size:11px;color:#555d73;flex-shrink:0;margin-left:6px">$/hr:</span>
+              <span style="font-size:11px;color:#9aa3b8;flex-shrink:0;margin-left:6px">$/hr:</span>
               <input type="number" min="0" max="999" step="1" value="${m.laborRate||65}"
                 style="width:64px;background:#0d0f14;border:1px solid #2a2f3f;border-radius:7px;padding:6px 8px;color:#C8102E;font-size:14px;font-weight:600"
                 onchange="updateMechField('${m.id}','laborRate',parseFloat(this.value)||0);toast('Rate saved')">
-              <span style="font-size:11px;color:#555d73;flex-shrink:0;margin-left:6px">Auto out:</span>
+              <span style="font-size:11px;color:#9aa3b8;flex-shrink:0;margin-left:6px">Auto out:</span>
               <input type="time" value="${m.clockOut||'17:30'}"
                 style="background:#0d0f14;border:1px solid #2a2f3f;border-radius:7px;padding:6px 8px;color:#fff;font-size:12px"
                 onchange="updateMechField('${m.id}','clockOut',this.value);toast('Clock-out time saved')">
@@ -7567,24 +7639,24 @@ function renderSettings(c){
         </div>`).join('')}
       </div>
 
-      ${ST.masterPinUnlocked ? `<button onclick="addMech()" style="width:100%;margin-top:14px;background:#1e2230;border:1px dashed #374151;color:#9ca3af;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer">+ Add mechanic</button>` : `<div style="width:100%;margin-top:14px;background:#0d0f14;border:1px dashed #2a2f3f;color:#555d73;border-radius:9px;padding:12px;font-size:12px;font-weight:500;text-align:center;font-style:italic">🔒 Unlock to add or remove mechanics</div>`}
+      ${ST.masterPinUnlocked ? `<button onclick="addMech()" style="width:100%;margin-top:14px;background:#1e2230;border:1px dashed #374151;color:#cdd3de;border-radius:9px;padding:12px;font-size:13px;font-weight:500;cursor:pointer">+ Add mechanic</button>` : `<div style="width:100%;margin-top:14px;background:#0d0f14;border:1px dashed #2a2f3f;color:#9aa3b8;border-radius:9px;padding:12px;font-size:12px;font-weight:500;text-align:center;font-style:italic">🔒 Unlock to add or remove mechanics</div>`}
     </div>
 
     <div class="panel">
       <div class="panel-title">SALES TAX</div>
-      <div style="font-size:12px;color:#555d73;margin-bottom:12px">Applied to invoice totals. Set 0 to disable.</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:12px">Applied to invoice totals. Set 0 to disable.</div>
       <div style="display:flex;align-items:center;gap:12px">
-        <label style="font-size:13px;color:#9ca3af;flex-shrink:0">Tax rate</label>
+        <label style="font-size:13px;color:#cdd3de;flex-shrink:0">Tax rate</label>
         <input type="number" min="0" max="25" step="0.1" value="${SETTINGS.taxRate||0}"
           style="width:90px;background:#0d0f14;border:1px solid #2a2f3f;border-radius:7px;padding:8px 11px;color:#C8102E;font-size:16px;font-weight:700"
           onchange="SETTINGS.taxRate=parseFloat(this.value)||0;saveSettings();toast('Tax rate saved')">
-        <span style="font-size:16px;color:#9ca3af">%</span>
+        <span style="font-size:16px;color:#cdd3de">%</span>
       </div>
     </div>
 
     <div class="panel">
       <div class="panel-title">🔐 DESTRUCTIVE ACTIONS</div>
-      <div style="font-size:12px;color:#555d73;margin-bottom:12px">Delete buttons for vehicles, visits, photos, and receipts are hidden by default. Unlock with the Master PIN to show them for this session. Lock again or close the browser to re-hide.</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:12px">Delete buttons for vehicles, visits, photos, and receipts are hidden by default. Unlock with the Master PIN to show them for this session. Lock again or close the browser to re-hide.</div>
       <div id="master-pin-status" style="font-size:12px;font-weight:600;padding:10px 12px;border-radius:8px;margin-bottom:10px;text-align:center;letter-spacing:.5px;text-transform:uppercase;${ST.masterPinUnlocked?'background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7':'background:#1a0d0d;border:1px solid #f8717155;color:#fca5a5'}">
         ${ST.masterPinUnlocked?'🔓 UNLOCKED — delete buttons visible':'🔒 LOCKED — delete buttons hidden'}
       </div>
@@ -7595,13 +7667,13 @@ function renderSettings(c){
 
     <div class="panel">
       <div class="panel-title">STORAGE MIGRATION</div>
-      <div style="font-size:12px;color:#555d73;margin-bottom:12px">Move existing photos and receipts out of the database and into Firebase Storage. This fixes the 1&nbsp;MB Firestore limit and prevents silent data loss. Safe — original data stays until upload is confirmed.</div>
-      <div id="storage-migration-stats" style="font-size:12px;color:#9ca3af;margin-bottom:12px;font-family:'Courier New',monospace"></div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:12px">Move existing photos and receipts out of the database and into Firebase Storage. This fixes the 1&nbsp;MB Firestore limit and prevents silent data loss. Safe — original data stays until upload is confirmed.</div>
+      <div id="storage-migration-stats" style="font-size:12px;color:#cdd3de;margin-bottom:12px;font-family:'Courier New',monospace"></div>
       <button id="btn-migrate-storage" onclick="startStorageMigration()"
         style="width:100%;background:#0b3d25;border:1px solid #10b98155;color:#6ee7b7;border-radius:9px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px">
         🚀 Migrate photos &amp; receipts to Storage
       </button>
-      <div id="storage-migration-progress" style="display:none;background:#0d0f14;border:1px solid #1e2230;border-radius:8px;padding:10px 12px;max-height:260px;overflow-y:auto;font-family:'Courier New',monospace;font-size:11px;color:#9ca3af;line-height:1.6"></div>
+      <div id="storage-migration-progress" style="display:none;background:#0d0f14;border:1px solid #1e2230;border-radius:8px;padding:10px 12px;max-height:260px;overflow-y:auto;font-family:'Courier New',monospace;font-size:11px;color:#cdd3de;line-height:1.6"></div>
     </div>
 
     <div class="panel">
@@ -7838,7 +7910,7 @@ function showMasterPinPad(onSuccess){
     <div style="text-align:center;margin-bottom:28px">
       <div style="font-size:32px;margin-bottom:8px">🔐</div>
       <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">Master PIN</div>
-      <div style="font-size:12px;color:#555d73">Required to enable destructive actions</div>
+      <div style="font-size:12px;color:#9aa3b8">Required to enable destructive actions</div>
     </div>
     <div id="mpin-dots" style="display:flex;justify-content:center;gap:14px;margin-bottom:28px">
       ${[0,1,2,3].map(i=>`<div style="width:16px;height:16px;border-radius:50%;border:2px solid #374151;background:transparent" id="mpd-${i}"></div>`).join('')}
@@ -7848,7 +7920,7 @@ function showMasterPinPad(onSuccess){
       ${[1,2,3,4,5,6,7,8,9,'←',0,'✓'].map(k=>`
       <button onclick="mpinKey('${k}')" style="background:${k==='✓'?'#C8102E':k==='←'?'#1e2230':'#161921'};border:1px solid #2a2f3f;color:#fff;font-size:${k==='←'||k==='✓'?'20':'22'}px;font-weight:600;padding:18px 0;border-radius:12px;cursor:pointer;font-family:inherit">${k}</button>`).join('')}
     </div>
-    <button onclick="document.getElementById('master-pin-overlay').remove()" style="width:100%;margin-top:16px;background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">Cancel</button>
+    <button onclick="document.getElementById('master-pin-overlay').remove()" style="width:100%;margin-top:16px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">Cancel</button>
   </div>`;
   document.body.appendChild(overlay);
 
@@ -7996,7 +8068,7 @@ function showBrowserPrompt(){
     </div>
 
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#fff;margin-bottom:8px">OPEN IN CHROME</div>
-    <div style="font-size:14px;color:#9ca3af;text-align:center;line-height:1.6;max-width:320px;margin-bottom:28px">
+    <div style="font-size:14px;color:#cdd3de;text-align:center;line-height:1.6;max-width:320px;margin-bottom:28px">
       This app uses the camera and barcode scanner. For the best experience — including VIN scanning — please open it in <strong style="color:#fff">Google Chrome</strong>.
     </div>
 
@@ -8005,13 +8077,13 @@ function showBrowserPrompt(){
        style="display:block;width:100%;max-width:320px;background:#4285F4;border:none;color:#fff;font-size:15px;font-weight:700;padding:16px;border-radius:12px;text-align:center;text-decoration:none;margin-bottom:12px;font-family:inherit">
       Open in Chrome →
     </a>
-    <div style="font-size:12px;color:#555d73;text-align:center;max-width:300px;line-height:1.5;margin-bottom:24px">
+    <div style="font-size:12px;color:#9aa3b8;text-align:center;max-width:300px;line-height:1.5;margin-bottom:24px">
       If Chrome doesn't open: install Google Chrome from the App Store, then tap the link above again.
     </div>
     ` : `
     <div style="background:#111318;border:1px solid #2a2f3f;border-radius:12px;padding:16px 20px;max-width:320px;width:100%;margin-bottom:24px">
-      <div style="font-size:11px;font-weight:600;color:#555d73;letter-spacing:.8px;margin-bottom:10px">HOW TO OPEN IN CHROME</div>
-      <div style="font-size:13px;color:#9ca3af;line-height:1.7">
+      <div style="font-size:11px;font-weight:600;color:#9aa3b8;letter-spacing:.8px;margin-bottom:10px">HOW TO OPEN IN CHROME</div>
+      <div style="font-size:13px;color:#cdd3de;line-height:1.7">
         1. Copy this page's address<br>
         2. Open <strong style="color:#fff">Google Chrome</strong><br>
         3. Paste the address and go
@@ -8020,7 +8092,7 @@ function showBrowserPrompt(){
     `}
 
     <button onclick="this.closest('div[style*=fixed]').remove();render();"
-      style="background:transparent;border:1px solid #2a2f3f;color:#555d73;font-size:13px;padding:12px 24px;border-radius:9px;cursor:pointer;font-family:inherit;max-width:320px;width:100%">
+      style="background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:12px 24px;border-radius:9px;cursor:pointer;font-family:inherit;max-width:320px;width:100%">
       Continue anyway (limited features)
     </button>
   `;
