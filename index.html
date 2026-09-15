@@ -8146,6 +8146,9 @@ window.showSyncStatus = function(){
   if(pendingCount > 0){
     msg += '\n' + pendingCount + ' record(s) saved locally only — not yet in cloud.\n';
   }
+  if(window._lastSyncError){
+    msg += '\n─── LAST ERROR ───\n' + window._lastSyncError + '\n';
+  }
   alert(msg);
 };
 
@@ -8194,6 +8197,7 @@ async function saveToFirestore(vehicles) {
   } catch(e) {
     setSyncStatus('err');
     console.error('Firestore save failed:', e);
+    window._lastSyncError = 'SAVE: ' + (e&&e.code?e.code+' — ':'') + (e&&e.message?e.message:String(e));
     setPendingIds((vehicles||[]).map(v=>v.id));
     _syncFailReason = (e && e.code==='permission-denied') ? 'permission' : 'error';
     updateSyncBanner();
@@ -8254,6 +8258,7 @@ async function ensurePerVehicleCloud(){
     toast('✓ Cloud storage upgraded — size limit removed');
   }catch(e){
     console.error('Per-vehicle cloud migration failed:', e);
+    window._lastSyncError = 'MIGRATION: ' + (e&&e.code?e.code+' — ':'') + (e&&e.message?e.message:String(e));
   }
 }
 
@@ -8276,9 +8281,13 @@ function updateSyncBanner(){
     b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#7f1d1d;color:#fecaca;font-size:12px;font-weight:700;padding:8px 40px 8px 12px;text-align:center;border-bottom:2px solid #ef4444;line-height:1.4;cursor:pointer';
     b.onclick=()=>{
       if(_syncFailReason==='oversize'){ ST.view='settings'; render(); return; }
-      // Any other failure: tap = retry sync now
+      // Any other failure: tap = retry sync now, then surface the error
       toast('Retrying cloud sync…');
-      if(typeof saveToFirestore==='function' && ST.vehicles) saveToFirestore(ST.vehicles);
+      if(typeof saveToFirestore==='function' && ST.vehicles){
+        saveToFirestore(ST.vehicles).then(()=>{
+          setTimeout(()=>{ if(pendingUnsyncedIds.size>0 && window._lastSyncError){ alert('Sync still failing.\n\n'+window._lastSyncError); } },800);
+        });
+      }
     };
     document.body.appendChild(b);
   }
@@ -8369,6 +8378,8 @@ function subscribeToFirestore() {
     }, err => {
       setSyncStatus('err');
       console.error('Firestore subscription error:', err);
+      window._lastSyncError = 'SUBSCRIBE: ' + (err&&err.code?err.code+' — ':'') + (err&&err.message?err.message:String(err));
+      updateSyncBanner();
     });
 }
 
