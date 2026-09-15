@@ -8291,7 +8291,7 @@ function updateSyncBanner(){
     };
     document.body.appendChild(b);
   }
-  b.textContent=msg;
+  b.innerHTML=msg + (window._lastSyncError?`<div style="font-weight:400;font-size:11px;color:#fca5a5;margin-top:3px;font-family:monospace;word-break:break-all">${String(window._lastSyncError).replace(/</g,'&lt;')}</div>`:'');
 }
 
 // Subscribe to real-time updates from Firestore (per-vehicle collection)
