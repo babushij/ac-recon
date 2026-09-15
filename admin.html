@@ -197,7 +197,7 @@ a{text-decoration:none;color:inherit}
 .v-meta{font-size:10px;color:var(--text3);margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase;font-weight:600}
 .v-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
 .v-tag{
-  font-size:9px;padding:3px 7px;border-radius:var(--r);font-weight:800;
+  font-size:9px;padding:3px 7px;border-radius:var(--r);font-weight:700;
   border:1px solid transparent;letter-spacing:.6px;text-transform:uppercase
 }
 .v-pri{font-size:9px;font-weight:700;padding:3px 7px;border-radius:var(--r);letter-spacing:.6px;white-space:nowrap;text-transform:uppercase}
@@ -432,7 +432,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
 .sf-chip{display:inline-flex;align-items:center;gap:3px;padding:4px 9px;border-radius:var(--r);border:1px solid var(--border2);background:var(--surface2);font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;transition:all .1s;white-space:nowrap;letter-spacing:.5px;text-transform:uppercase}
 .sf-chip:hover{border-color:var(--border3);color:var(--text2)}
 .sf-chip.on{color:#fff}
-.sf-chip.ex{background:#7f1d1d;color:#fff;border-color:#dc2626;text-decoration:line-through}
+.sf-chip.ex{background:#1a0505;color:#f87171;border-color:#3d0d0d}
 
 /* ═══ POPUP CALENDAR ═══ */
 .cal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -667,20 +667,12 @@ const SOURCES=ALL_STATUSES.filter(s=>s.group==='source');
 const WORK_S=ALL_STATUSES.filter(s=>s.group==='work');
 const FINISH_S=ALL_STATUSES.filter(s=>s.group==='finish');
 
-// ═══ v26.7: solid status chips (sunlight-readable) ═══
 function vinHtml(vin){
   vin=String(vin||'');if(!vin)return'—';
   const e=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   return vin.length<=6?`<b style="font-weight:800;color:#fff">${e(vin)}</b>`:
     `<span style="font-weight:400">${e(vin.slice(0,-6))}</span><b style="font-weight:800;color:#fff;font-size:1.12em;letter-spacing:.5px">${e(vin.slice(-6))}</b>`;
 }
-function chipText(hex){
-  const h=(hex||'').replace('#','');if(h.length<6)return'#fff';
-  const lin=c=>{c=parseInt(c,16)/255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4)};
-  const L=0.2126*lin(h.slice(0,2))+0.7152*lin(h.slice(2,4))+0.0722*lin(h.slice(4,6));
-  return (1.05/(L+0.05))>=3?'#fff':'#0b0d12';
-}
-function chipCss(c){return `background:${c};color:${chipText(c)};border-color:${c}`;}
 const PRIS=[{id:'high',label:'High',color:'#ef4444',icon:'🔴'},{id:'medium',label:'Medium',color:'#f59e0b',icon:'🟡'},{id:'low',label:'Low',color:'#6b7280',icon:'⚫'}];
 const PMAP=Object.fromEntries(PRIS.map(p=>[p.id,p]));
 const PORDER={high:0,medium:1,low:2};
@@ -2279,7 +2271,7 @@ function renderVehicles(c){
     ${groups.map(g=>g.statuses.map(s=>{
       const st=chipState(s.id);
       const cls=st==='in'?'sf-chip on':st==='ex'?'sf-chip ex':'sf-chip';
-      const sty=st==='in'?`${chipCss(s.color)}`:st==='ex'?'':'';
+      const sty=st==='in'?`background:${s.color}22;color:${s.color};border-color:${s.color}55`:st==='ex'?'':'';
       const prefix=st==='ex'?'✕ ':'';
       return`<button class="${cls}" data-sid="${s.id}" style="${sty}">${prefix}${s.icon} ${s.label}</button>`;
     }).join('')).join('')}
@@ -2454,10 +2446,10 @@ function vRowHTML(v){
       <div class="v-tags">${sts.map(s=>{
         // For customer_appt: drop the calendar icon since the date row above already shows it
         const lbl = s.id==='customer_appt' ? s.label : `${s.icon} ${s.label}`;
-        return `<span class="v-tag" style="${chipCss(s.color)}">${lbl}</span>`;
+        return `<span class="v-tag" style="background:${s.color}18;color:${s.color};border-color:${s.color}30">${lbl}</span>`;
       }).join('')}${pendingC?`<span class="v-tag" style="background:#C8102E22;color:#C8102E;border-color:#C8102E33">⚠️ ${pendingC} concern${pendingC!==1?'s':''}</span>`:''}${partsBadge}${_stuck.stuck?`<span class="v-tag" style="background:#7f1d1d44;color:#fca5a5;border-color:#ef444455">⏰ stuck</span>`:''}</div>
     </div>
-    ${pri?`<div><div class="v-pri" style="${chipCss(pri.color)}">${pri.icon} ${pri.label}</div><div class="v-cost" style="margin-top:6px">${fmt$(cost)}</div></div>`:
+    ${pri?`<div><div class="v-pri" style="background:${pri.color}18;color:${pri.color}">${pri.icon} ${pri.label}</div><div class="v-cost" style="margin-top:6px">${fmt$(cost)}</div></div>`:
           `<div class="v-cost">${fmt$(cost)}</div>`}
     <svg class="v-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/></svg>
   </div>`;
@@ -2578,7 +2570,7 @@ function renderAdd(c){
       formData.statuses=formData.statuses.filter(x=>!SOURCES.map(ss=>ss.id).includes(x));
       formData.statuses.push(s.id);
       srcDiv.querySelectorAll('.tag-btn').forEach(b=>{b.classList.remove('on');b.style.cssText=''});
-      btn.classList.add('on');btn.style.cssText=`${chipCss(s.color)}`;
+      btn.classList.add('on');btn.style.cssText=`background:${s.color}22;color:${s.color};border-color:${s.color}55`;
     };
     srcDiv.appendChild(btn);
   });
@@ -2609,7 +2601,7 @@ function renderAdd(c){
     const btn=makeTagBtn(`${s.icon} ${s.label}`,formData.statuses.includes(s.id),s.color);
     btn.onclick=()=>{
       if(formData.statuses.includes(s.id)){formData.statuses=formData.statuses.filter(x=>x!==s.id);btn.classList.remove('on');btn.style.cssText='';}
-      else{formData.statuses.push(s.id);btn.classList.add('on');btn.style.cssText=`${chipCss(s.color)}`;}
+      else{formData.statuses.push(s.id);btn.classList.add('on');btn.style.cssText=`background:${s.color}22;color:${s.color};border-color:${s.color}55`;}
     };
     wsDiv.appendChild(btn);
   });
@@ -2749,7 +2741,7 @@ function makeTagBtn(label,active,color){
   const btn=document.createElement('button');
   btn.className='tag-btn'+(active?' on':'');
   btn.textContent=label;
-  if(active)btn.style.cssText=`${chipCss(color)}`;
+  if(active)btn.style.cssText=`background:${color}22;color:${color};border-color:${color}55`;
   return btn;
 }
 
@@ -4327,7 +4319,7 @@ function renderDetail(c,v){
 
       if(statusLabels.length){
         html += '<div style="display:flex;flex-wrap:wrap;gap:3px">';
-        html += statusLabels.map(s=>'<span class="v-tag" style="'+chipCss(s.color)+';border:1px solid '+s.color+'">'+s.icon+' '+s.label+'</span>').join('');
+        html += statusLabels.map(s=>'<span class="v-tag" style="background:'+s.color+'22;color:'+s.color+';border:1px solid '+s.color+'55">'+s.icon+' '+s.label+'</span>').join('');
         html += '</div>';
       }
       html += '</div>';
@@ -4558,7 +4550,7 @@ function renderDetail(c,v){
   function statusBadges(veh){
     const sts=(veh.statuses||[]).map(id=>SMAP[id]).filter(Boolean);
     if(!sts.length)return`<span style="color:#9aa3b8;font-size:13px">No status set — use Statuses tab</span>`;
-    return sts.map(s=>`<span class="v-tag" style="font-size:12px;padding:4px 12px;${chipCss(s.color)}">${s.icon} ${s.label}</span>`).join('');
+    return sts.map(s=>`<span class="v-tag" style="font-size:12px;padding:4px 12px;background:${s.color}18;color:${s.color};border-color:${s.color}30">${s.icon} ${s.label}</span>`).join('');
   }
 
   c.innerHTML=`
@@ -4715,7 +4707,7 @@ function renderDetail(c,v){
       ALL_STATUSES.filter(s=>s.group===group).forEach(s=>{
         const on=(v.statuses||[]).includes(s.id);
         const btn=makeTagBtn(`${s.icon} ${s.label} ${on?'✓':''}`,on,s.color);
-        btn.style.cssText=on?`${chipCss(s.color)};padding:10px 15px;font-size:13px`:'padding:10px 15px;font-size:13px';
+        btn.style.cssText=on?`background:${s.color}22;color:${s.color};border-color:${s.color}55;padding:10px 15px;font-size:13px`:'padding:10px 15px;font-size:13px';
         btn.onclick=()=>toggleSt(s.id);
         row.appendChild(btn);
       });
@@ -5463,7 +5455,7 @@ function renderHistory(c){
       <div style="font-weight:600;color:#e2e4ea;font-size:13px">${v.year||''} ${v.make||''} ${v.model||''}</div>
       <div style="color:#cdd3de;font-size:12px">${v.stockNumber||'—'}</div>
       <div><code style="background:#161921;padding:2px 6px;border-radius:4px;font-size:11px;font-family:'Courier New',Courier,monospace;color:#cdd3de">${(v.vin||'------').slice(-6)}</code></div>
-      <div style="display:flex;flex-wrap:wrap;gap:3px">${sts.map(s=>`<span style="font-size:10px;${chipCss(s.color)};border-radius:6px;padding:1px 6px;font-weight:600">${s.icon} ${s.label}</span>`).join('')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px">${sts.map(s=>`<span style="font-size:10px;background:${s.color}18;color:${s.color};border-radius:6px;padding:1px 6px;font-weight:600">${s.icon} ${s.label}</span>`).join('')}</div>
       <div style="color:${RED};font-weight:700;font-size:13px">${fmt$(cost)}</div>
       <div style="color:#9aa3b8;font-size:12px">${fmtD(v.updatedAt)}</div>
       <div><button class="btn-ghost" style="font-size:11px;padding:5px 10px">View →</button></div>
@@ -5679,11 +5671,11 @@ function renderMechPipeline(c){
       <div class="vcg-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:14px;font-weight:600;color:#fff;flex:1;min-width:0">${v.year||''} ${v.make||''} ${v.model||''}</div>
-          <span class="v-pri" style="${chipCss(pri.color)};font-size:10px;flex-shrink:0">${pri.icon} ${pri.label}</span>
+          <span class="v-pri" style="background:${pri.color}18;color:${pri.color};font-size:10px;flex-shrink:0">${pri.icon} ${pri.label}</span>
         </div>
         <div style="font-size:11px;color:#9aa3b8;margin-bottom:6px">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${!mechId?` · <span style="color:${assignedMech?assignedMech.color:'#374151'}">${assignedMech?assignedMech.icon+' '+assignedMech.name:'— Unassigned'}</span>`:''}</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-          ${(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean).map(s=>`<span class="v-tag" style="${chipCss(s.color)};border:1px solid ${s.color}">${s.icon} ${s.label}</span>`).join('')||'<span style="font-size:10px;color:#7a8499">No status set</span>'}
+          ${(v.statuses||[]).map(id=>SMAP[id]).filter(Boolean).map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border:1px solid ${s.color}55">${s.icon} ${s.label}</span>`).join('')||'<span style="font-size:10px;color:#7a8499">No status set</span>'}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="font-size:13px;font-weight:700;color:${RED}">${fmt$(cost)}</span>
@@ -5975,7 +5967,7 @@ function renderDetailerQueue(c){
       <div class="vcg-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:14px;font-weight:600;color:#fff">${v.year||''} ${v.make||''} ${v.model||''}</div>
-          <span class="v-pri" style="${chipCss(pri.color)};font-size:10px">${pri.icon} ${pri.label}</span>
+          <span class="v-pri" style="background:${pri.color}18;color:${pri.color};font-size:10px">${pri.icon} ${pri.label}</span>
         </div>
         <div style="font-size:11px;color:#9aa3b8;margin-bottom:8px">#${v.stockNumber||'—'} · ${v.color||''}</div>
         ${v.notes?`<div style="font-size:11px;color:#cdd3de;margin-bottom:10px;font-style:italic">"${v.notes.slice(0,100)}"</div>`:''}
@@ -6374,7 +6366,7 @@ function renderSalesFind(c){
         <div style="min-width:0;flex:1">
           <div class="v-name">${v.year||''} ${v.make||''} ${v.model||''}</div>
           <div class="v-meta">#${v.stockNumber||'—'} · ...${(v.vin||'------').slice(-6)}${visitCount>1?` · ${visitCount} visits`:''}</div>
-          <div class="v-tags">${sts.map(s=>`<span class="v-tag" style="${chipCss(s.color)}">${s.icon||''} ${s.label}</span>`).join('')}</div>
+          <div class="v-tags">${sts.map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border-color:${s.color}33">${s.icon||''} ${s.label}</span>`).join('')}</div>
         </div>
         <button data-sfservice="${v.id}" style="background:#3b82f6;border:none;color:#fff;font-size:12px;font-weight:700;padding:9px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;flex-shrink:0">🔧 Enter for service</button>
       </div>`;
@@ -6415,7 +6407,7 @@ function openSalesVehicleInfoModal(vehicleId){
       <div style="font-size:12px;color:#cdd3de;margin-top:4px">Stock #${v.stockNumber||'—'}</div>
       <div style="font-size:12px;color:#cdd3de;margin-top:2px;font-family:monospace">VIN: ${vinHtml(v.vin)}</div>
       <div style="font-size:12px;color:#cdd3de;margin-top:2px">Last checked in: ${lastIn}${visits.length>1?` · ${visits.length} visits total`:''}</div>
-      <div class="v-tags" style="margin-top:10px">${sts.map(s=>`<span class="v-tag" style="${chipCss(s.color)}">${s.icon||''} ${s.label}</span>`).join('')||'<span style="font-size:12px;color:#9aa3b8">No status tags</span>'}</div>
+      <div class="v-tags" style="margin-top:10px">${sts.map(s=>`<span class="v-tag" style="background:${s.color}22;color:${s.color};border-color:${s.color}33">${s.icon||''} ${s.label}</span>`).join('')||'<span style="font-size:12px;color:#9aa3b8">No status tags</span>'}</div>
       <button onclick="this.closest('div[style*=fixed]').remove();openSalesServiceCheckinModal('${v.id}')" style="width:100%;margin-top:18px;background:#3b82f6;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">🔧 Enter for service</button>
       <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Close</button>
     </div>
