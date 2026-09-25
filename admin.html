@@ -4533,7 +4533,7 @@ function renderDetail(c,v){
 
   setTopbar(`${v.year||''} ${v.make||''} ${v.model||''}`,
     `<button class="out-btn" onclick="ST.view='invoice';render()">🧾 Invoice</button>
-     ${ST.masterPinUnlocked?`<button class="danger-btn" onclick="if(confirm('Delete this vehicle?')){ST.vehicles=ST.vehicles.filter(x=>x.id!=='${v.id}');save();toast('Removed');ST.view='dashboard';render()}">🗑</button>`:''}`);
+     ${ST.masterPinUnlocked?`<button class="danger-btn" onclick="if(confirm('Delete this vehicle?')){markExplicitDelete('${v.id}');ST.vehicles=ST.vehicles.filter(x=>x.id!=='${v.id}');save();toast('Removed');ST.view='dashboard';render()}">🗑</button>`:''}`);
 
   function refreshDetail(){
     const cur=ST.vehicles.find(x=>x.id===v.id)||v;
@@ -8121,6 +8121,19 @@ try{
   const saved=JSON.parse(localStorage.getItem(PENDING_SYNC_KEY)||'[]');
   if(Array.isArray(saved)) pendingUnsyncedIds=new Set(saved);
 }catch(e){}
+// ═══ v26.9 SAFETY: cloud deletes happen ONLY for vehicles a user explicitly deleted ═══
+// Incident 2026-09-25: a partial snapshot made the app believe 236 vehicles had
+// vanished; it pruned them locally and then deleted them from the cloud.
+// Absence is no longer treated as deletion — only this explicit list is.
+const EXPLICIT_DELETE_KEY='acrecon_explicit_deletes_v1';
+let explicitDeleteIds=new Set();
+try{ const s=JSON.parse(localStorage.getItem(EXPLICIT_DELETE_KEY)||'[]'); if(Array.isArray(s)) explicitDeleteIds=new Set(s); }catch(e){}
+function persistExplicitDeletes(){ try{localStorage.setItem(EXPLICIT_DELETE_KEY,JSON.stringify([...explicitDeleteIds]));}catch(e){} }
+function markExplicitDelete(id){ if(!id) return; explicitDeleteIds.add(id); persistExplicitDeletes(); }
+window.markExplicitDelete=markExplicitDelete;
+// Max vehicles a single snapshot/save may remove. Real cross-device deletes are
+// one at a time; anything bigger is a partial snapshot, not a real deletion.
+const MAX_SILENT_REMOVALS=3;
 function persistPendingIds(){
   try{localStorage.setItem(PENDING_SYNC_KEY,JSON.stringify([...pendingUnsyncedIds]));}catch(e){}
 }
@@ -8242,7 +8255,21 @@ async function saveToFirestore(vehicles) {
       }
       if(lastPushedJson.get(v.id) !== json) changed.push({id:v.id, json});
     }
-    const removed = [...lastPushedJson.keys()].filter(id=>!currentIds.has(id));
+    // v26.9: only vehicles explicitly deleted by a user are removed from the cloud.
+    const missing = [...lastPushedJson.keys()].filter(id=>!currentIds.has(id));
+    const removed = missing.filter(id=>explicitDeleteIds.has(id));
+    const unexplained = missing.filter(id=>!explicitDeleteIds.has(id));
+    if(unexplained.length){
+      // Vehicles vanished locally without a user delete — refuse to touch them in
+      // the cloud; forget our copy so the next snapshot re-adopts the cloud version.
+      console.error('SAFETY: '+unexplained.length+' vehicle(s) missing locally without explicit delete — NOT deleting from cloud:', unexplained.slice(0,10));
+      unexplained.forEach(id=>lastPushedJson.delete(id));
+    }
+    if(removed.length > MAX_SILENT_REMOVALS){
+      console.error('SAFETY: refusing to delete '+removed.length+' vehicles in one save (limit '+MAX_SILENT_REMOVALS+')');
+      toast('⚠ Blocked a bulk delete of '+removed.length+' vehicles — reload and retry one at a time','err');
+      removed.length = 0;
+    }
 
     if(!changed.length && !removed.length){
       clearPendingIds(); _syncFailReason=null; updateSyncBanner(); setSyncStatus('ok');
@@ -8260,7 +8287,8 @@ async function saveToFirestore(vehicles) {
       await batch.commit();
     }
     changed.forEach(c=>lastPushedJson.set(c.id, c.json));
-    removed.forEach(id=>lastPushedJson.delete(id));
+    removed.forEach(id=>{ lastPushedJson.delete(id); explicitDeleteIds.delete(id); });
+    if(removed.length) persistExplicitDeletes();
 
     clearPendingIds(); _syncFailReason=null; updateSyncBanner(); setSyncStatus('ok');
     console.log(`Firestore save OK ✅ (${changed.length} vehicle${changed.length!==1?'s':''} updated${removed.length?', '+removed.length+' removed':''})`);
@@ -8388,6 +8416,18 @@ function subscribeToFirestore() {
           return;
         }
         const prev = ST.vehicles || [];
+        const fromCache = !!(snap.metadata && snap.metadata.fromCache);
+
+        // v26.9 SAFETY: decide up front whether this snapshot may remove anything.
+        // A cache-only snapshot, or one that would drop many vehicles at once,
+        // is treated as partial: local vehicles are kept, nothing is pruned.
+        const localIdsNow = new Set(prev.filter(v=>v&&v.id).map(v=>v.id));
+        const wouldDrop = [...localIdsNow].filter(id=>!cloudJsonById.has(id) && lastPushedJson.has(id) && !pendingUnsyncedIds.has(id));
+        let allowPrune = !fromCache && wouldDrop.length <= MAX_SILENT_REMOVALS;
+        if(wouldDrop.length && !allowPrune){
+          console.error('SAFETY: snapshot ('+(fromCache?'from cache':'server')+', '+snap.docs.length+' docs) would remove '+wouldDrop.length+' local vehicles — ignoring removals');
+          window._lastSyncError='GUARD: blocked removal of '+wouldDrop.length+' vehicles from a '+(fromCache?'cached':'partial')+' snapshot at '+new Date().toLocaleTimeString();
+        }
 
         // PROTECTION: per-vehicle newest-updatedAt merge (local wins ties and
         // pending-unsynced) — prevents snapshot echoes from wiping fresh edits.
@@ -8400,7 +8440,8 @@ function subscribeToFirestore() {
           if(!cloudV){
             // Local-only. If cloud previously knew it (lastPushedJson) it was
             // deleted on another device — drop it unless pending here.
-            if(lastPushedJson.has(id) && !pendingUnsyncedIds.has(id)) return;
+            if(allowPrune && lastPushedJson.has(id) && !pendingUnsyncedIds.has(id)) return;
+            if(!allowPrune) lastPushedJson.delete(id); // keep it; let a later save re-push it
             merged.push(localV);
             return;
           }
