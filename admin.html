@@ -577,6 +577,33 @@ body.board-mode #topbar{display:none!important}
 body.board-mode #bottom-nav{display:none!important}
 body.board-mode #content{padding:0!important;max-width:none!important}
 body.board-mode .main{margin-left:0!important}
+
+/* ═══ TOPBAR BACK BUTTON (stays visible on phones, unlike .btn-ghost) ═══ */
+.tb-back{background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:12px;font-weight:600;padding:7px 12px;border-radius:var(--r-md);min-height:36px;cursor:pointer;white-space:nowrap}
+.tb-back:hover{border-color:var(--border3);background:var(--surface3)}
+/* ═══ ACQUIRED DRILL-DOWN ═══ */
+.acq-count{background:none;border:none;padding:0;color:#fff;font-size:32px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:var(--font-num);min-height:36px}
+.acq-count:hover{color:#fca5a5}
+.acq-arrow{font-size:20px;color:var(--text4);font-weight:400;margin-top:-4px}
+.acq-count:hover .acq-arrow{color:#fca5a5}
+.acq-bar{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:8px;overflow-x:auto}
+.acq-note{font-size:11px;color:var(--text3);margin-bottom:10px}
+/* ═══ NEEDS FILING ═══ */
+.fl-head{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin:0 0 10px}
+.fl-row{width:100%;text-align:left;display:flex;align-items:center;gap:12px;padding:12px 14px;margin:0 0 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);color:var(--text);cursor:pointer;min-height:64px;font-family:inherit}
+.fl-row.flagged{background:#180508;border-color:#5c1420}
+.fl-row.onfile{border-color:#1e3a5f}
+.fl-badge{width:40px;height:40px;flex-shrink:0;border-radius:var(--r-lg);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.4px}
+.fl-banner{padding:12px;margin:0 0 14px;border:1px solid;border-radius:var(--r-xl)}
+.fl-receipt{display:flex;align-items:center;gap:12px;padding:12px;margin:0 0 18px;background:var(--surface);border:1px dashed var(--border3);border-radius:var(--r-xl)}
+.fl-line{padding:12px;margin:0 0 10px;background:var(--surface);border:1px solid;border-radius:var(--r-xl)}
+.fl-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.fl-btn{min-height:44px;background:var(--surface2);border:1px solid var(--border3);border-radius:var(--r-lg);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.fl-btn:hover{background:var(--surface3)}
+.fl-assigned{display:flex;align-items:center;gap:10px;margin-top:12px;padding:8px 8px 8px 12px;border:1px solid;border-radius:var(--r-lg)}
+.fl-link{min-height:44px;padding:0 10px;background:transparent;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.fl-footer{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:12px 14px;margin:8px -16px -16px;background:var(--surface);border-top:1px solid var(--border)}
+.fl-footer .btn-red{min-height:44px;padding:0 20px;font-size:13px}
 </style>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -1422,6 +1449,12 @@ function fileThumbHtml(entry, opts){
       <span class="file-thumb-pdf-icon">${opts.icon||'📄'}</span>
     </div>`;
   }
+  if(/\.html?$/i.test(name) || entry.source==='invoice'){
+    return `<div class="file-thumb pdf" title="${safeName}" ${onclick}>
+      <span class="file-thumb-pdf-label">EMAIL</span>
+      <span class="file-thumb-pdf-icon">📧</span>
+    </div>`;
+  }
   // Image
   return `<div class="file-thumb" title="${safeName}" ${onclick}>
     <img src="${safeUrl}" alt="${safeName}" loading="lazy" onerror="this.style.display='none';this.parentElement.innerHTML='<span style=\\'font-size:22px\\'>🖼</span>'">
@@ -1612,6 +1645,7 @@ function load(){
   if(firebaseReady){
     ensurePerVehicleCloud().finally(()=>subscribeToFirestore());
     subscribeToSettings();
+    try{subscribeToInvoices();}catch(e){console.warn('invoices subscribe:',e);}
   }
 }
 
@@ -1807,6 +1841,7 @@ function buildSidebar(){
     {id:'salespipeline',label:'Sale pending / Sold',icon:saleIcon()},
     {section:'WORKFLOW'},
     {id:'partspipeline',label:'Parts pipeline',icon:partsIcon(),badge:getAllPendingParts().length},
+    {id:'filing',label:'Needs filing',icon:filingIcon(),badge:filingCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
     {id:'board',label:'Shop board (TV)',icon:tvIcon()},
     {section:'RECORDS'},
@@ -1935,6 +1970,8 @@ function renderContent(){
     case 'vendors':      renderVendors(c);break;
     case 'analytics':    renderAnalytics(c);break;
     case 'partspipeline':renderPartsPipeline(c);break;
+    case 'filing':       renderFiling(c);break;
+    case 'acquired':     renderAcquired(c);break;
     case 'settings':     renderSettings(c);break;
     default:             renderDashboard(c);
   }
@@ -1943,6 +1980,22 @@ function renderContent(){
 // ═══════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════
+// Start timestamp of a dashboard period ('today'|'week'|'month'|'year'|'all'), shared by the dashboard tiles and the acquired drill-down.
+function periodStartTs(period){
+  const sod=new Date();sod.setHours(0,0,0,0);
+  const todayStart=sod.getTime();
+  if(period==='today') return todayStart;
+  if(period==='week')  return todayStart-((new Date().getDay())*86400000);
+  if(period==='month') return new Date(new Date().getFullYear(),new Date().getMonth(),1).getTime();
+  if(period==='year')  return new Date(new Date().getFullYear(),0,1).getTime();
+  return 0;
+}
+const PERIOD_LABELS={today:'Today',week:'This week',month:'This month',year:'Year to date',all:'All time'};
+function acquiredInPeriod(period){
+  const start=periodStartTs(period);
+  return ST.vehicles.filter(v=>(v.createdAt||0)>=start);
+}
+
 function renderDashboard(c){
   setTopbar('Dashboard',`<button class="btn-red" onclick="ST.view='add';render()">+ Add vehicle</button>`);
   const vs=ST.vehicles;
@@ -1977,11 +2030,8 @@ function renderDashboard(c){
   }
 
   function filterByPeriod(vArr,period){
-    if(period==='today')    return vArr.filter(v=>v.createdAt>=todayStart);
-    if(period==='week')     return vArr.filter(v=>v.createdAt>=weekStart);
-    if(period==='month')    return vArr.filter(v=>v.createdAt>=monthStart);
-    if(period==='year')     return vArr.filter(v=>v.createdAt>=yearStart);
-    return vArr; // all time
+    const start=periodStartTs(period);
+    return vArr.filter(v=>(v.createdAt||0)>=start);
   }
 
   // Store active period in ST
@@ -2074,8 +2124,8 @@ function renderDashboard(c){
       <div style="display:flex;gap:0;margin-bottom:10px">
         <div style="flex:1;padding-right:14px;border-right:1px solid var(--border)">
           <div style="font-size:9px;color:var(--text3);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px">Vehicles</div>
-          <div style="font-size:32px;font-weight:800;color:#fff;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1">${stats.count}</div>
-          <div style="font-size:9px;color:var(--text4);margin-top:3px">${vs.length} total in system</div>
+          <button class="acq-count" title="See these vehicles" onclick="ST.acqPeriod=ST.dashPeriod;ST.acqInclude=[];ST.acqExclude=[];ST.acqMech='';ST.acqQuery='';ST.view='acquired';render()">${stats.count}<span class="acq-arrow">›</span></button>
+          <div style="font-size:9px;color:var(--text4);margin-top:3px">${vs.length} total in system · tap to list</div>
         </div>
         <div style="flex:1;padding:0 14px;border-right:1px solid var(--border)">
           <div style="font-size:9px;color:var(--text3);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px">Recon cost</div>
@@ -2238,11 +2288,32 @@ function renderDashboard(c){
 // ═══════════════════════════════════════════════
 // ALL VEHICLES
 // ═══════════════════════════════════════════════
-function renderVehicles(c){
+// Dashboard drill-down: the vehicles acquired in the selected period, with the All Vehicles filter bar.
+function renderAcquired(c){
+  const period=ST.acqPeriod||ST.dashPeriod||'today';
+  renderVehicles(c,{
+    period,
+    title:'Acquired · '+(PERIOD_LABELS[period]||period),
+    vehicles:acquiredInPeriod(period),
+    back:()=>{ST.view='dashboard';render();},
+    // the drill-down keeps its own filter state so All Vehicles is unaffected
+    state:{include:'acqInclude',exclude:'acqExclude',mech:'acqMech',query:'acqQuery'}
+  });
+}
+
+function renderVehicles(c,scope){
   const canAdd = ST.role === 'manager';
-  setTopbar('All vehicles', canAdd ? `<button class="btn-red" onclick="ST.view='add';render()">+ Add</button>` : '');
-  if(!ST.vfInclude) ST.vfInclude=[];
-  if(!ST.vfExclude) ST.vfExclude=[];
+  const F = scope&&scope.state ? scope.state : {include:'vfInclude',exclude:'vfExclude',mech:'vfMech',query:'searchQuery'};
+  if(!ST[F.include]) ST[F.include]=[];
+  if(!ST[F.exclude]) ST[F.exclude]=[];
+  if(ST[F.query]==null) ST[F.query]='';
+  const rerender=()=>scope?renderVehicles(c,scope):renderVehicles(c);
+  if(scope){
+    setTopbar(scope.title, `<button class="tb-back" id="acq-back">‹ Dashboard</button>`);
+    document.getElementById('acq-back').onclick=scope.back;
+  } else {
+    setTopbar('All vehicles', canAdd ? `<button class="btn-red" onclick="ST.view='add';render()">+ Add</button>` : '');
+  }
 
   const groups=[
     {label:'Sale',   statuses:ALL_STATUSES.filter(s=>s.group==='sale')},
@@ -2255,15 +2326,21 @@ function renderVehicles(c){
   const mechOptions=getMechs().map(m=>`<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
 
   function chipState(sid){
-    if(ST.vfInclude.includes(sid)) return 'in';
-    if(ST.vfExclude.includes(sid)) return 'ex';
+    if(ST[F.include].includes(sid)) return 'in';
+    if(ST[F.exclude].includes(sid)) return 'ex';
     return 'off';
   }
 
-  let html=`
+  let html='';
+  if(scope){
+    const periods=[['today','Today'],['week','Week'],['month','Month'],['year','YTD'],['all','All time']];
+    html+=`<div class="acq-bar">${periods.map(([id,l])=>`<button class="stats-period-btn${scope.period===id?' active':''}" data-period="${id}">${l}</button>`).join('')}</div>
+    <div class="acq-note">${scope.vehicles.length} vehicle${scope.vehicles.length!==1?'s':''} acquired ${(PERIOD_LABELS[scope.period]||'').toLowerCase()} · filters below apply within this group</div>`;
+  }
+  html+=`
   <div class="search-wrap">
     <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#555d73" stroke-width="1.4"/><line x1="10" y1="10" x2="13" y2="13" stroke="#555d73" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <input id="vs-search" value="${ST.searchQuery}" placeholder="Search VIN, stock #, make, model, year...">
+    <input id="vs-search" value="${ST[F.query]}" placeholder="Search VIN, stock #, make, model, year...">
     <button class="search-clear" id="vs-clear">✕</button>
   </div>
   <div style="font-size:10px;color:#7a8499;margin-bottom:5px;font-weight:600;letter-spacing:.5px">TAP = INCLUDE &nbsp;·&nbsp; TAP AGAIN = EXCLUDE &nbsp;·&nbsp; TAP AGAIN = CLEAR</div>
@@ -2277,7 +2354,7 @@ function renderVehicles(c){
     }).join('')).join('')}
   </div>
   <div style="display:flex;gap:7px;margin-bottom:10px">
-    <select id="vf-mech" style="flex:1;background:#111318;border:1px solid #2a2f3f;border-radius:8px;padding:8px 10px;color:${ST.vfMech?'#fff':'#555d73'};font-size:12px;font-weight:600">
+    <select id="vf-mech" style="flex:1;background:#111318;border:1px solid #2a2f3f;border-radius:8px;padding:8px 10px;color:${ST[F.mech]?'#fff':'#555d73'};font-size:12px;font-weight:600">
       <option value="">All mechanics</option>
       <option value="__none__">— Not assigned</option>
       ${mechOptions}
@@ -2285,8 +2362,8 @@ function renderVehicles(c){
   </div>`;
 
   // ── Apply filters ──
-  const q=ST.searchQuery.trim().toLowerCase();
-  let filtered=ST.vehicles;
+  const q=ST[F.query].trim().toLowerCase();
+  let filtered=scope&&scope.vehicles?scope.vehicles:ST.vehicles;
 
   if(q) filtered=filtered.filter(v=>
     (v.vin||'').toLowerCase().includes(q)||(v.vin||'').slice(-6).toLowerCase().includes(q)||
@@ -2294,23 +2371,23 @@ function renderVehicles(c){
     (v.model||'').toLowerCase().includes(q)||(v.year||'').toString().includes(q)
   );
   // Include filter: vehicle must have ALL included statuses
-  if(ST.vfInclude.length) filtered=filtered.filter(v=>
-    ST.vfInclude.every(sid=>(v.statuses||[]).includes(sid))
+  if(ST[F.include].length) filtered=filtered.filter(v=>
+    ST[F.include].every(sid=>(v.statuses||[]).includes(sid))
   );
   // Exclude filter: vehicle must have NONE of the excluded statuses
-  if(ST.vfExclude.length) filtered=filtered.filter(v=>
-    ST.vfExclude.every(sid=>!(v.statuses||[]).includes(sid))
+  if(ST[F.exclude].length) filtered=filtered.filter(v=>
+    ST[F.exclude].every(sid=>!(v.statuses||[]).includes(sid))
   );
-  if(ST.vfMech==='__none__') filtered=filtered.filter(v=>!v.assignedTo);
-  else if(ST.vfMech) filtered=filtered.filter(v=>v.assignedTo===ST.vfMech||v.assignedTo2===ST.vfMech);
+  if(ST[F.mech]==='__none__') filtered=filtered.filter(v=>!v.assignedTo);
+  else if(ST[F.mech]) filtered=filtered.filter(v=>v.assignedTo===ST[F.mech]||v.assignedTo2===ST[F.mech]);
 
   const sorted=[...filtered].sort((a,b)=>b.updatedAt-a.updatedAt);
 
   // Active filter summary
-  const inclLabels=ST.vfInclude.map(sid=>SMAP[sid]).filter(Boolean).map(s=>`${s.icon} ${s.label}`);
-  const exclLabels=ST.vfExclude.map(sid=>SMAP[sid]).filter(Boolean).map(s=>`✕ ${s.label}`);
-  const mechLabel=ST.vfMech==='__none__'?'Not assigned':(ST.vfMech?getMMAP()[ST.vfMech]?.name:'');
-  const anyActive=ST.vfInclude.length||ST.vfExclude.length||ST.vfMech;
+  const inclLabels=ST[F.include].map(sid=>SMAP[sid]).filter(Boolean).map(s=>`${s.icon} ${s.label}`);
+  const exclLabels=ST[F.exclude].map(sid=>SMAP[sid]).filter(Boolean).map(s=>`✕ ${s.label}`);
+  const mechLabel=ST[F.mech]==='__none__'?'Not assigned':(ST[F.mech]?getMMAP()[ST[F.mech]]?.name:'');
+  const anyActive=ST[F.include].length||ST[F.exclude].length||ST[F.mech];
 
   html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
     <div style="font-size:12px;color:#9aa3b8;flex:1;min-width:0">
@@ -2333,35 +2410,35 @@ function renderVehicles(c){
   c.querySelectorAll('#sf-status-chips .sf-chip').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const sid=btn.dataset.sid;
-      const inI=ST.vfInclude.indexOf(sid);
-      const exI=ST.vfExclude.indexOf(sid);
+      const inI=ST[F.include].indexOf(sid);
+      const exI=ST[F.exclude].indexOf(sid);
       if(inI>=0){
         // was included → move to excluded
-        ST.vfInclude.splice(inI,1);
-        ST.vfExclude.push(sid);
+        ST[F.include].splice(inI,1);
+        ST[F.exclude].push(sid);
       } else if(exI>=0){
         // was excluded → clear
-        ST.vfExclude.splice(exI,1);
+        ST[F.exclude].splice(exI,1);
       } else {
         // was off → include
-        ST.vfInclude.push(sid);
+        ST[F.include].push(sid);
       }
-      renderVehicles(c);
+      rerender();
     });
   });
 
   const mSel=c.querySelector('#vf-mech');
-  if(mSel){ mSel.value=ST.vfMech||''; mSel.onchange=()=>{ST.vfMech=mSel.value;renderVehicles(c);}; }
+  if(mSel){ mSel.value=ST[F.mech]||''; mSel.onchange=()=>{ST[F.mech]=mSel.value;rerender();}; }
 
   const clearAll=c.querySelector('#vf-clear-all');
-  if(clearAll) clearAll.onclick=()=>{ST.vfInclude=[];ST.vfExclude=[];ST.vfMech='';ST.searchQuery='';renderVehicles(c);};
+  if(clearAll) clearAll.onclick=()=>{ST[F.include]=[];ST[F.exclude]=[];ST[F.mech]='';ST[F.query]='';rerender();};
 
   const si=c.querySelector('#vs-search');
   if(si){
     si.oninput=e=>{
-      ST.searchQuery=e.target.value;
+      ST[F.query]=e.target.value;
       const cursorPos=si.selectionStart;
-      renderVehicles(c);
+      rerender();
       // Restore focus and cursor position after re-render
       const newSi=c.querySelector('#vs-search');
       if(newSi){
@@ -2372,11 +2449,12 @@ function renderVehicles(c){
   }
 
   const sc=c.querySelector('#vs-clear');
-  if(sc) sc.onclick=()=>{ST.searchQuery='';ST.vfInclude=[];ST.vfExclude=[];ST.vfMech='';renderVehicles(c);};
+  if(sc) sc.onclick=()=>{ST[F.query]='';ST[F.include]=[];ST[F.exclude]=[];ST[F.mech]='';rerender();};
 
   c.querySelectorAll('.v-row').forEach(row=>{
     row.onclick=()=>{ST.selectedId=row.dataset.vid;ST.view='detail';ST.activeTab='overview';render();};
   });
+  c.querySelectorAll('.acq-bar [data-period]').forEach(b=>b.onclick=()=>{ST.acqPeriod=b.dataset.period;ST.dashPeriod=b.dataset.period;render();});
 }
 
 // ─── WORKFLOW AGING / STUCK DETECTION ───
@@ -7530,6 +7608,287 @@ function renderAnalytics(c){
     };
   });
 }
+
+// ═══════════════════════════════════════
+// NEEDS FILING — vendor invoices imported by the ac-recon-mail Worker (v27)
+// Reads shops/automotive_connection/invoices (status 'needs_filing'); each line is
+// filed to a vehicle (parts added to its current visit + the emailed receipt copy
+// attached) or to Shop (tools / supplies). Invoices that look like they were already
+// scanned in by hand get an "Already on file" suggestion: attach the email receipt
+// to that car without adding duplicate parts.
+// Nothing here deletes anything; vehicle writes go through writeToCurrentVisit + save().
+// ═══════════════════════════════════════
+let INV={list:[],loaded:false,error:null,unsub:null,sel:null,draft:{},busy:false};
+const invoicesCol=()=>db.collection('shops').doc('automotive_connection').collection('invoices');
+
+function tsMs(t){
+  if(!t) return null;
+  if(typeof t==='number') return t;
+  if(typeof t.toDate==='function') return t.toDate().getTime();
+  if(typeof t.seconds==='number') return t.seconds*1000;
+  const d=new Date(t); return isNaN(d)?null:d.getTime();
+}
+function normInvoice(id,d){
+  const lines=(Array.isArray(d.lines)?d.lines:[]).map((l,i)=>({...l,idx:(typeof l.idx==='number'?l.idx:i)}));
+  return {...d,id,lines,invoiceMs:tsMs(d.invoiceDate)||tsMs(d.createdAt)||Date.now()};
+}
+function subscribeToInvoices(){
+  if(!db) return;
+  if(INV.unsub){try{INV.unsub();}catch(e){}}
+  INV.unsub=invoicesCol().where('status','==','needs_filing').onSnapshot(snap=>{
+    INV.list=snap.docs.map(d=>normInvoice(d.id,d.data()));
+    INV.list.sort((a,b)=>(b.flag?1:0)-(a.flag?1:0)||(b.invoiceMs-a.invoiceMs));
+    INV.loaded=true;INV.error=null;
+    if(INV.sel&&!INV.list.some(i=>i.id===INV.sel)) INV.sel=null;
+    if(ST.view==='filing') render(); else if(ST.role==='manager'){try{buildSidebar();}catch(e){}}
+  },err=>{
+    console.warn('Invoices subscription error:',err);
+    INV.error=err;INV.loaded=true;
+    if(ST.view==='filing') render();
+  });
+}
+function filingCount(){return INV.list.length;}
+const invEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const invMoney=n=>'$'+(Math.round((parseFloat(n)||0)*100)/100).toFixed(2);
+const vehName=v=>`${v.year||''} ${v.make||''} ${v.model||''}`.replace(/\s+/g,' ').trim()||'(no name)';
+const vehLast6=v=>String(v.vin||'').slice(-6).toUpperCase();
+function vehIsActive(v){const cv=currentVisit(v);return !(cv&&(cv.statuses||[]).includes('booked'));}
+function getDraft(inv){
+  if(!INV.draft[inv.id]) INV.draft[inv.id]={assign:{},onFileDismissed:false};
+  return INV.draft[inv.id];
+}
+
+// ── "Already on file?" — compare invoice lines against parts already on vehicles (scanned in by hand) ──
+function findOnFile(inv){
+  const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const words=s=>new Set(String(s||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2));
+  let best=null;
+  for(const v of ST.vehicles){
+    const parts=[],receipts=[];
+    (v.visits&&v.visits.length?v.visits:[v]).forEach(vi=>{(vi.parts||[]).forEach(p=>parts.push(p));(vi.receipts||[]).forEach(r=>receipts.push(r));});
+    if(!parts.length) continue;
+    let matched=0,strong=0;
+    inv.lines.forEach(l=>{
+      const pn=norm(l.partNumber);const lw=words(l.description);const cost=parseFloat(l.eachCost)||0;
+      const hit=parts.find(p=>{
+        if(pn&&pn.length>=4&&norm(p.partNum)===pn) return true;
+        if(cost>0&&Math.abs((parseFloat(p.cost)||0)-cost)<0.015){
+          const pw=words(p.name);let common=0;lw.forEach(w=>{if(pw.has(w))common++;});
+          return common>=2||(common>=1&&lw.size<=2);
+        }
+        return false;
+      });
+      if(hit){matched++;if(pn&&pn.length>=4&&norm(hit.partNum)===pn)strong++;}
+    });
+    if(!matched) continue;
+    const nearReceipt=receipts.some(r=>Math.abs((r.date||r.uploadedAt||0)-inv.invoiceMs)<10*86400000);
+    const ok=strong>0||matched>=Math.max(1,Math.ceil(inv.lines.length/2));
+    const score=matched+(strong?1:0)+(nearReceipt?0.5:0);
+    if(ok&&(!best||score>best.score)) best={v,matched,strong,nearReceipt,score};
+  }
+  return best;
+}
+
+// ── Vendor id for parts rows (creates the vendor in Settings the first time) ──
+function ensurePartsVendor(name){
+  if(!name) return '';
+  const hit=getVendors('parts').find(x=>(x.name||'').trim().toLowerCase()===name.trim().toLowerCase());
+  if(hit) return hit.id;
+  const made=addVendor('parts',{name});
+  return made?made.id:'';
+}
+
+// ── Filing: write parts + receipt copy to vehicles, mark invoice filed ──
+async function fileInvoice(inv,mode){
+  // mode: 'sort' (lines assigned in draft) | {attachTo: vehicleId} (already on file: receipt only, no parts)
+  if(INV.busy) return;
+  const draft=getDraft(inv);
+  const byVeh={};const shopIdx=[];
+  const assignOf={};
+  if(mode&&mode.attachTo){
+    inv.lines.forEach(l=>{assignOf[l.idx]={kind:'vehicle',vehicleId:mode.attachTo};});
+  } else {
+    inv.lines.forEach(l=>{const a=draft.assign[l.idx];if(!a) throw new Error('Every line needs a vehicle or Shop');assignOf[l.idx]=a;});
+  }
+  inv.lines.forEach(l=>{const a=assignOf[l.idx];if(a.kind==='shop')shopIdx.push(l.idx);else(byVeh[a.vehicleId]=byVeh[a.vehicleId]||[]).push(l);});
+  const vendorId=ensurePartsVendor(inv.vendorName);
+  INV.busy=true;
+  try{
+    let touched=0;
+    for(const vid of Object.keys(byVeh)){
+      const v=getV(vid);if(!v) throw new Error('Vehicle not found: '+vid);
+      if(!(mode&&mode.attachTo)){
+        const newParts=[...(v.parts||[]),...byVeh[vid].map(l=>({
+          name:l.description||'',partNum:l.partNumber||'',cost:parseFloat(l.eachCost)||0,qty:parseInt(l.quantity)||1,
+          vendor:vendorId,state:'received',receivedDate:inv.invoiceMs,source:'invoice',invoiceId:inv.id,orderNumber:inv.orderNumber||''
+        }))];
+        writeToCurrentVisit(v,'parts',newParts);
+        syncPartsStatus(v);
+      }
+      if(inv.receipt&&inv.receipt.url){
+        const have=(v.receipts||[]).some(r=>r&&r.path===inv.receipt.path);
+        if(!have) writeToCurrentVisit(v,'receipts',[...(v.receipts||[]),{
+          url:inv.receipt.url,path:inv.receipt.path||'',uploadedAt:inv.receipt.uploadedAt||Date.now(),
+          name:inv.receipt.name||(inv.vendorName+' email receipt.html'),date:inv.invoiceMs,source:'invoice',invoiceId:inv.id
+        }]);
+      }
+      touched++;
+    }
+    if(touched) save();
+    const lines=inv.lines.map(l=>{const o={};Object.keys(l).forEach(k=>{if(l[k]!==undefined)o[k]=l[k];});o.assign=assignOf[l.idx];return o;});
+    await invoicesCol().doc(inv.id).set({
+      status:'filed',filedAt:firebase.firestore.FieldValue.serverTimestamp(),filedBy:ST.role||'manager',
+      filedMode:(mode&&mode.attachTo)?'attach_existing':'parts_added',
+      lines,vehicleIds:Object.keys(byVeh),shopLineCount:shopIdx.length
+    },{merge:true});
+    delete INV.draft[inv.id];
+    INV.sel=null;
+    const n=Object.keys(byVeh).length;
+    toast((mode&&mode.attachTo)?'Receipt attached to '+vehName(getV(mode.attachTo)):`Filed · ${n} vehicle${n!==1?'s':''}${shopIdx.length?` · ${shopIdx.length} shop line${shopIdx.length!==1?'s':''}`:''}`);
+  }catch(e){
+    console.error('File invoice failed:',e);
+    toast('Filing failed: '+(e.message||e),'err');
+  }finally{INV.busy=false;render();}
+}
+
+// ── Vehicle picker modal (search by last 6 of VIN, stock #, year/make/model) ──
+function openVehiclePicker(title,subtitle,onPick){
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;display:flex;align-items:flex-end;justify-content:center';
+  overlay.innerHTML=`<div style="background:#0e1117;border:1px solid #243048;border-radius:14px 14px 0 0;width:100%;max-width:560px;max-height:82vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;padding:12px 10px 4px 16px">
+      <div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:700;color:#fff">${invEsc(title)}</div><div style="font-size:12px;color:#8a9ab0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${invEsc(subtitle||'')}</div></div>
+      <button id="vp-close" style="width:44px;height:44px;background:transparent;border:none;color:#b8c3d3;font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:6px 16px 8px"><input id="vp-q" type="search" placeholder="Last 6 of VIN, stock #, or model" autocomplete="off" style="width:100%;height:44px;padding:0 12px;background:#131824;border:1px solid #243048;border-radius:6px;color:#eef0f6;font-size:15px"></div>
+    <label style="display:flex;align-items:center;gap:8px;padding:0 16px 8px;font-size:12px;color:#8a9ab0;cursor:pointer"><input id="vp-all" type="checkbox"> Include completed / sold vehicles</label>
+    <div id="vp-list" style="overflow-y:auto;padding:0 16px 24px"></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const close=()=>overlay.remove();
+  overlay.querySelector('#vp-close').onclick=close;
+  overlay.onclick=e=>{if(e.target===overlay)close();};
+  const q=overlay.querySelector('#vp-q'),all=overlay.querySelector('#vp-all'),list=overlay.querySelector('#vp-list');
+  const tagFor=v=>{
+    const cv=currentVisit(v);const st=(cv&&cv.statuses)||[];
+    if(st.includes('booked')) return ['Completed','#1a2035','#8a9ab0'];
+    if(st.includes('parts')) return ['Waiting on parts','#2a1a06','#fbbf24'];
+    if((cv&&cv.assignedTo)||v.assignedTo) return ['In shop','#0b1a2e','#7cb4f5'];
+    return ['Active','#052e1f','#4ade80'];
+  };
+  const draw=()=>{
+    const s=q.value.trim().toLowerCase();
+    let rows=ST.vehicles.filter(v=>all.checked||vehIsActive(v));
+    if(s) rows=rows.filter(v=>(`${vehName(v)} ${v.stockNumber||''} ${v.vin||''}`).toLowerCase().includes(s));
+    rows.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    rows=rows.slice(0,60);
+    if(!rows.length){list.innerHTML=`<div style="padding:24px 0;text-align:center;font-size:13px;color:#8a9ab0">No vehicle matches.</div>`;return;}
+    list.innerHTML=rows.map(v=>{const [t,bg,fg]=tagFor(v);return `<button data-id="${invEsc(v.id)}" style="width:100%;text-align:left;display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 0 8px;background:#131824;border:1px solid #1a2035;border-radius:8px;color:#eef0f6;cursor:pointer;min-height:56px;font-family:inherit">
+      <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${invEsc(vehName(v))}</div>
+      <div style="font-size:11px;color:#8a9ab0;margin-top:3px">#${invEsc(v.stockNumber||'—')} · VIN …<b style="color:#fff;font-weight:800;letter-spacing:.5px;font-family:'Courier New',monospace">${invEsc(vehLast6(v))}</b></div></div>
+      <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;white-space:nowrap;background:${bg};color:${fg}">${t}</span></button>`;}).join('');
+    list.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>{close();onPick(b.getAttribute('data-id'));});
+  };
+  q.oninput=draw;all.onchange=draw;draw();
+  setTimeout(()=>q.focus(),50);
+}
+
+// ── Screens ──
+function renderFiling(c){
+  if(ST.role!=='manager'){c.innerHTML='<div class="empty"><div class="empty-msg">Manager access only</div></div>';return;}
+  const inv=INV.sel?INV.list.find(i=>i.id===INV.sel):null;
+  if(inv) return renderFilingDetail(c,inv);
+  INV.sel=null;
+  setTopbar('Needs filing',`<button class="btn-ghost" onclick="INV.list.forEach(i=>delete INV.draft[i.id]);render()" title="Clear unsaved choices">Reset</button>`);
+  if(INV.error){
+    const code=INV.error.code||'';
+    c.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-msg">Can't read invoices</div><div class="empty-sub" style="color:#f87171;font-family:monospace;font-size:12px">${invEsc(code+' '+(INV.error.message||''))}</div>${code==='permission-denied'?'<div class="empty-sub">Firestore rules need to allow reads and writes on <code>shops/automotive_connection/invoices</code>, the same as vehicles.</div>':''}</div>`;
+    return;
+  }
+  if(!INV.loaded){c.innerHTML='<div class="empty"><div class="empty-msg">Loading invoices…</div></div>';return;}
+  if(!INV.list.length){
+    c.innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">All caught up</div><div class="empty-sub">Every vendor invoice is filed to a vehicle or Shop. New eBay / RockAuto orders show up here within the hour.</div></div>`;
+    return;
+  }
+  const flagged=INV.list.filter(i=>i.flag);
+  const rest=INV.list.filter(i=>!i.flag);
+  const onFile=[],normal=[];
+  rest.forEach(i=>{const d=getDraft(i);const m=d.onFileDismissed?null:findOnFile(i);if(m){i._onFile=m;onFile.push(i);}else{i._onFile=null;normal.push(i);}});
+  const row=(i,extra,cls)=>{
+    const d=getDraft(i);const done=i.lines.filter(l=>d.assign[l.idx]).length;
+    const badgeBg=i.vendor==='ebay'?'#1d4ed8':i.vendor==='rockauto'?'#4b5563':'#b91c1c';
+    return `<button class="fl-row ${cls||''}" onclick="INV.sel='${invEsc(i.id)}';render()">
+      <div class="fl-badge" style="background:${badgeBg}">${invEsc((i.vendor||'inv').slice(0,4).toUpperCase())}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:600"><span>${invEsc(i.vendorName||i.vendor)}${i.orderNumber?` <span style="color:#8a9ab0;font-weight:400">#${invEsc(i.orderNumber)}</span>`:''}</span><span style="font-variant-numeric:tabular-nums">${invMoney(i.total)}</span></div>
+        <div style="font-size:12px;color:#b8c3d3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${extra}</div>
+        <div style="font-size:11px;color:#8a9ab0;margin-top:2px">${fmtD(i.invoiceMs)} · ${i.lines.length} line${i.lines.length!==1?'s':''} · ${done} sorted</div>
+      </div><span style="color:#64758d;font-size:18px">›</span></button>`;
+  };
+  let html=`<p style="margin:0 0 16px;font-size:12px;line-height:1.5;color:#8a9ab0">Vendor invoices the mail agent couldn't tie to a vehicle. Open one, sort every line to a car or to Shop, then file it.</p>`;
+  if(flagged.length){
+    html+=`<div class="fl-head" style="color:#f87171">⚠ Flagged · ${flagged.length}</div>`+flagged.map(i=>row(i,`<span style="color:#fca5a5">${invEsc(i.flag&&(i.flag.message||i.flag))}</span>`,'flagged')).join('');
+  }
+  if(onFile.length){
+    html+=`<div class="fl-head" style="color:#7cb4f5;margin-top:${flagged.length?18:0}px">Looks already on file · ${onFile.length}</div>`+onFile.map(i=>row(i,`Matches parts on <b style="color:#eef0f6">${invEsc(vehName(i._onFile.v))}</b> #${invEsc(i._onFile.v.stockNumber||'—')} · ${i._onFile.matched} of ${i.lines.length} line${i.lines.length!==1?'s':''}`,'onfile')).join('');
+  }
+  if(normal.length){
+    html+=`<div class="fl-head" style="margin-top:${(flagged.length||onFile.length)?18:0}px">No VIN on invoice · ${normal.length}</div>`+normal.map(i=>row(i,invEsc(i.lines.map(l=>l.description).join(', ')))).join('');
+  }
+  c.innerHTML=html;
+}
+
+function renderFilingDetail(c,inv){
+  const d=getDraft(inv);
+  setTopbar((inv.vendorName||'Invoice')+(inv.orderNumber?' #'+inv.orderNumber:''),`<button class="tb-back" onclick="INV.sel=null;render()">‹ Needs filing</button>`);
+  const onFile=d.onFileDismissed?null:findOnFile(inv);
+  const suggested=inv.suggestedVehicleId?getV(inv.suggestedVehicleId):null;
+  const done=inv.lines.filter(l=>d.assign[l.idx]).length;
+  const canFile=done===inv.lines.length&&inv.lines.length>0;
+  const line=l=>{
+    const a=d.assign[l.idx];const v=a&&a.kind==='vehicle'?getV(a.vehicleId):null;
+    let state='';
+    if(!a) state=`<div class="fl-choice"><button class="fl-btn" data-act="veh" data-idx="${l.idx}">🚗 Vehicle</button><button class="fl-btn" data-act="shop" data-idx="${l.idx}">🔧 Shop</button></div>`;
+    else if(a.kind==='shop') state=`<div class="fl-assigned" style="background:#2a1a06;border-color:#6b4410"><div style="flex:1"><div style="font-size:13px;font-weight:600">Shop — tools &amp; supplies</div><div style="font-size:11px;color:#d6b98a">Not tied to a vehicle</div></div><button class="fl-link" data-act="clear" data-idx="${l.idx}" style="color:#fbbf24">Change</button></div>`;
+    else state=`<div class="fl-assigned" style="background:#0b1a2e;border-color:#1e3a5f"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v?invEsc(vehName(v)):'(vehicle missing)'}</div><div style="font-size:11px;color:#8a9ab0">${v?`#${invEsc(v.stockNumber||'—')} · VIN …<b style="color:#fff;font-weight:800;font-family:'Courier New',monospace">${invEsc(vehLast6(v))}</b>`:''}</div></div><button class="fl-link" data-act="clear" data-idx="${l.idx}" style="color:#7cb4f5">Change</button></div>`;
+    return `<div class="fl-line" style="border-color:${a?'#1a2035':'#2e3d56'}">
+      <div style="display:flex;justify-content:space-between;gap:10px"><div style="min-width:0"><div style="font-size:14px;font-weight:600">${invEsc(l.description)}</div><div style="font-size:11px;color:#8a9ab0;margin-top:3px;font-family:'Courier New',monospace">${invEsc(l.partNumber||'—')} · qty ${parseInt(l.quantity)||1} · ${invMoney(l.eachCost)} ea</div></div><div style="font-size:14px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums">${invMoney(l.lineTotal!=null?l.lineTotal:(l.eachCost*(l.quantity||1)))}</div></div>${state}</div>`;
+  };
+  const totals=[['Subtotal',inv.subtotal],['Shipping',inv.shipping],['Tax',inv.tax]].filter(x=>x[1]!=null&&x[1]!==0).map(x=>`<span>${x[0]} ${invMoney(x[1])}</span>`).join(' · ');
+  c.innerHTML=`
+    ${inv.flag?`<div class="fl-banner" style="background:#180508;border-color:#5c1420"><div style="font-size:13px;font-weight:700;color:#fca5a5">⚠ ${invEsc(inv.flag.message||inv.flag)}</div>${inv.flag.note?`<div style="font-size:12px;color:#b8c3d3;margin-top:3px">${invEsc(inv.flag.note)}</div>`:''}</div>`:''}
+    ${onFile?`<div class="fl-banner" style="background:#0b1a2e;border-color:#1e3a5f">
+      <div style="font-size:13px;font-weight:700;color:#7cb4f5">Looks already on file</div>
+      <div style="font-size:12px;color:#b8c3d3;margin-top:3px;line-height:1.45">${onFile.matched} of ${inv.lines.length} line${inv.lines.length!==1?'s':''} match parts already on <b style="color:#fff">${invEsc(vehName(onFile.v))}</b> #${invEsc(onFile.v.stockNumber||'—')}${onFile.nearReceipt?', and that car has a receipt from around the same date':''}. Attaching adds this email receipt to that car as a second attachment and leaves its parts as they are.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn-red" id="fl-attach" ${INV.busy?'disabled':''}>Attach receipt to this car</button><button class="btn-ghost" id="fl-notit">Not it — sort by hand</button><button class="btn-ghost" id="fl-open-car">Open car</button></div></div>`:''}
+    ${(!onFile&&suggested)?`<div class="fl-banner" style="background:#052e1f;border-color:#166534"><div style="font-size:13px;font-weight:700;color:#4ade80">VIN on the email matches ${invEsc(vehName(suggested))} #${invEsc(suggested.stockNumber||'—')}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn-ghost" id="fl-use-sugg">Use for all lines</button></div></div>`:''}
+    <div class="fl-receipt">
+      <div style="width:44px;height:56px;flex-shrink:0;border-radius:4px;background:#131824;border:1px solid #243048;display:flex;align-items:center;justify-content:center;font-size:20px">📧</div>
+      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">Original email${inv.receipt&&inv.receipt.url?'':' (copy not saved)'}</div><div style="font-size:11px;color:#8a9ab0;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${invEsc((inv.email&&inv.email.subject)||'')}</div></div>
+      ${inv.receipt&&inv.receipt.url?`<button class="btn-ghost" onclick="window.open('${invEsc(inv.receipt.url)}','_blank','noopener')">View / print</button>`:''}
+    </div>
+    <div class="fl-head">Line items · ${inv.lines.length}${totals?` <span style="font-weight:400;letter-spacing:0;text-transform:none;color:#8a9ab0;margin-left:8px">${totals}</span>`:''}</div>
+    <div id="fl-lines">${inv.lines.map(line).join('')}</div>
+    ${inv.lines.length>1?`<div style="display:flex;gap:8px;margin:4px 0 14px;flex-wrap:wrap"><button class="btn-ghost" id="fl-all-veh">All lines → one vehicle</button><button class="btn-ghost" id="fl-all-shop">All lines → Shop</button></div>`:''}
+    <div class="fl-footer"><div style="flex:1"><div style="font-size:13px;font-weight:700">${done} of ${inv.lines.length} sorted</div><div style="font-size:11px;color:#8a9ab0">${canFile?'Ready to file':'Sort every line to a car or Shop'}</div></div><button class="btn-red" id="fl-file" ${(!canFile||INV.busy)?'disabled style="opacity:.45;cursor:not-allowed"':''}>File invoice</button></div>
+    ${inv.textPreview?`<details style="margin-top:18px"><summary style="font-size:11px;color:#8a9ab0;cursor:pointer">What the agent read</summary><pre style="white-space:pre-wrap;font-size:11px;color:#8a9ab0;line-height:1.4;margin-top:8px;font-family:'Courier New',monospace">${invEsc(inv.textPreview)}</pre></details>`:''}`;
+  const pickFor=(idxs)=>openVehiclePicker('Assign to vehicle',idxs.length===1?(inv.lines.find(l=>l.idx===idxs[0])||{}).description:`${idxs.length} lines`,vid=>{idxs.forEach(i=>d.assign[i]={kind:'vehicle',vehicleId:vid});render();});
+  c.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{
+    const i=parseInt(b.getAttribute('data-idx'));const act=b.getAttribute('data-act');
+    if(act==='veh') pickFor([i]);
+    else if(act==='shop'){d.assign[i]={kind:'shop'};render();}
+    else if(act==='clear'){delete d.assign[i];render();}
+  });
+  const $=id=>c.querySelector('#'+id);
+  if($('fl-all-veh')) $('fl-all-veh').onclick=()=>pickFor(inv.lines.map(l=>l.idx));
+  if($('fl-all-shop')) $('fl-all-shop').onclick=()=>{inv.lines.forEach(l=>d.assign[l.idx]={kind:'shop'});render();};
+  if($('fl-use-sugg')) $('fl-use-sugg').onclick=()=>{inv.lines.forEach(l=>d.assign[l.idx]={kind:'vehicle',vehicleId:suggested.id});render();};
+  if($('fl-notit')) $('fl-notit').onclick=()=>{d.onFileDismissed=true;render();};
+  if($('fl-open-car')) $('fl-open-car').onclick=()=>{ST.selectedId=onFile.v.id;ST.view='detail';ST.activeTab='repairs';render();};
+  if($('fl-attach')) $('fl-attach').onclick=()=>{if(confirm(`Attach this ${inv.vendorName} receipt to ${vehName(onFile.v)} #${onFile.v.stockNumber||''}? Its parts stay as they are.`)) fileInvoice(inv,{attachTo:onFile.v.id});};
+  if($('fl-file')) $('fl-file').onclick=()=>{if(!canFile) return;const n=new Set(inv.lines.map(l=>d.assign[l.idx]).filter(a=>a.kind==='vehicle').map(a=>a.vehicleId)).size;if(confirm(`File this invoice? Parts will be added to ${n} vehicle${n!==1?'s':''} as received, with the email receipt attached.`)) fileInvoice(inv,'sort');};
+}
+function filingIcon(){return`<path d="M3 2h7l3 3v9H3V2z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M5.5 8h5M5.5 10.5h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>`}
 
 // ═══════════════════════════════════════════════
 // SVG ICONS
