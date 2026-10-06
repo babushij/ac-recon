@@ -7628,7 +7628,7 @@ function renderAnalytics(c){
 }
 
 // ═══════════════════════════════════════
-// NEEDS FILING — vendor invoices imported by the ac-recon-mail Worker (v29)
+// NEEDS FILING — vendor invoices imported by the ac-recon-mail Worker (v30)
 // Reads shops/automotive_connection/invoices (status 'needs_filing'); each line is
 // filed to a vehicle (parts added to its current visit + the emailed receipt copy
 // attached) or to Shop (tools / supplies). Invoices that look like they were already
@@ -7774,7 +7774,7 @@ function renderEmployees(c){
   c.querySelectorAll('[data-settle]').forEach(b=>b.onclick=()=>{const st=b.getAttribute('data-settle');const id=b.getAttribute('data-id');if(st==='open'||confirm(st==='paid'?'Mark this charge as paid back?':'Mark this charge as deducted from paycheck?'))settleCharge(id,st);});
 }
 const invEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const invMoney=n=>'$'+(Math.round((parseFloat(n)||0)*100)/100).toFixed(2);
+const invMoney=n=>{const v=Math.round((parseFloat(n)||0)*100)/100;return (v<0?'-$':'$')+Math.abs(v).toFixed(2);};
 const vehName=v=>`${v.year||''} ${v.make||''} ${v.model||''}`.replace(/\s+/g,' ').trim()||'(no name)';
 const vehLast6=v=>String(v.vin||'').slice(-6).toUpperCase();
 function vehIsActive(v){const cv=currentVisit(v);return !(cv&&(cv.statuses||[]).includes('booked'));}
@@ -7786,8 +7786,10 @@ function getDraft(inv){
 // A line with the user's quantity / each-price corrections applied (edits live in the draft until filed).
 function effLine(inv,l){
   const e=getDraft(inv).edits[l.idx]||{};
-  const quantity=Math.max(1,parseInt(e.quantity!=null?e.quantity:l.quantity)||1);
-  const eachCost=Math.max(0,Math.round((parseFloat(e.eachCost!=null?e.eachCost:l.eachCost)||0)*100)/100);
+  // Returns / credits carry a negative quantity; the editor shows the count, the sign stays with the line.
+  const sign=(l.isReturn||(parseInt(l.quantity)||0)<0)?-1:1;
+  const quantity=sign*Math.max(1,Math.abs(parseInt(e.quantity!=null?e.quantity:l.quantity))||1);
+  const eachCost=Math.max(0,Math.round(Math.abs(parseFloat(e.eachCost!=null?e.eachCost:l.eachCost)||0)*100)/100);
   return {...l,quantity,eachCost,lineTotal:Math.round(eachCost*quantity*100)/100,edited:!!(e.quantity!=null||e.eachCost!=null)};
 }
 function invTotals(inv){
@@ -7868,7 +7870,8 @@ async function fileInvoice(inv,mode){
   try{
     let touched=0,updated=0,added=0;
     const newPartFrom=l=>({
-      name:l.description||'',partNum:l.partNumber||'',cost:parseFloat(l.eachCost)||0,qty:parseInt(l.quantity)||1,
+      // a return goes on the car as a negative-cost part so the vehicle's parts total comes down
+      name:l.description||'',partNum:l.partNumber||'',cost:((parseInt(l.quantity)||1)<0?-1:1)*(parseFloat(l.eachCost)||0),qty:Math.abs(parseInt(l.quantity))||1,
       vendor:vendorId,state:'received',receivedDate:inv.invoiceMs,source:'invoice',invoiceId:inv.id,orderNumber:inv.orderNumber||''
     });
     for(const vid of Object.keys(byVeh)){
@@ -8050,7 +8053,7 @@ function renderFilingDetail(c,inv){
     else state=`<div class="fl-assigned" style="background:#0b1a2e;border-color:#1e3a5f"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v?invEsc(vehName(v)):'(vehicle missing)'}</div><div style="font-size:11px;color:#8a9ab0">${v?`#${invEsc(v.stockNumber||'—')} · VIN …<b style="color:#fff;font-weight:800;font-family:'Courier New',monospace">${invEsc(vehLast6(v))}</b>`:''}</div></div><button class="fl-link" data-act="clear" data-idx="${l.idx}" style="color:#7cb4f5">Change</button></div>`;
     return `<div class="fl-line" style="border-color:${a?'#1a2035':'#2e3d56'}">
       <div style="display:flex;justify-content:space-between;gap:10px"><div style="min-width:0"><div style="font-size:14px;font-weight:600">${invEsc(l.description)}</div><div style="font-size:11px;color:#8a9ab0;margin-top:3px;font-family:'Courier New',monospace">${invEsc(l.partNumber||'—')}${l.isCore?` · <span style="color:${l.isReturn?'#4ade80':'#fbbf24'};font-family:inherit">${l.isReturn?'core credit':'core charge'}</span>`:l.isReturn?' · <span style="color:#4ade80;font-family:inherit">return</span>':''}${l.edited?' · <span style="color:#fbbf24">edited</span>':''}</div></div><div style="font-size:14px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums" data-linetotal="${l.idx}">${invMoney(l.lineTotal)}</div></div>
-      <div class="fl-edit"><label>Qty <input type="number" inputmode="numeric" min="1" step="1" value="${l.quantity}" data-edit="quantity" data-idx="${l.idx}"></label><label>Each $ <input type="number" inputmode="decimal" min="0" step="0.01" value="${l.eachCost.toFixed(2)}" data-edit="eachCost" data-idx="${l.idx}"></label>${l.edited?`<button class="fl-link" data-act="reset" data-idx="${l.idx}" style="color:#8a9ab0">Reset</button>`:''}</div>${state}</div>`;
+      <div class="fl-edit"><label>Qty ${l.quantity<0?'<span style="color:#4ade80">−</span>':''}<input type="number" inputmode="numeric" min="1" step="1" value="${Math.abs(l.quantity)}" data-edit="quantity" data-idx="${l.idx}"></label><label>Each $ <input type="number" inputmode="decimal" min="0" step="0.01" value="${l.eachCost.toFixed(2)}" data-edit="eachCost" data-idx="${l.idx}"></label>${l.edited?`<button class="fl-link" data-act="reset" data-idx="${l.idx}" style="color:#8a9ab0">Reset</button>`:''}</div>${state}</div>`;
   };
   const totals=[['Shipping',inv.shipping],['Tax',inv.tax]].filter(x=>x[1]!=null&&x[1]!==0).map(x=>`<span>${x[0]} ${invMoney(x[1])}</span>`).join(' · ');
   const totalsBox=`<div class="fl-totals ${T.mismatch?'bad':'ok'}" id="fl-totals">
