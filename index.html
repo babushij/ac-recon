@@ -7658,6 +7658,10 @@ function tsMs(t){
   if(typeof t.seconds==='number') return t.seconds*1000;
   const d=new Date(t); return isNaN(d)?null:d.getTime();
 }
+// A small colour-coded badge per vendor (initials on a distinct colour) so the list is easy to scan.
+// These are our own neutral badges, not the vendors' logos.
+const VENDOR_BADGES={advance:['ADV','#0f766e'],worldpac:['WP','#6d28d9'],autozone:['AZ','#b45309'],oreilly:['OR','#15803d'],atd:['ATD','#1d4ed8'],ebay:['eB','#be185d'],rockauto:['RA','#4b5563']};
+function vendorBadge(i){const k=String(i.vendor||'').toLowerCase();const b=VENDOR_BADGES[k];return b?{label:b[0],bg:b[1]}:{label:String(i.vendorName||i.vendor||'?').replace(/[^A-Za-z0-9]/g,'').slice(0,3).toUpperCase()||'?',bg:'#374151'};}
 function normInvoice(id,d){
   const lines=(Array.isArray(d.lines)?d.lines:[]).map((l,i)=>({...l,idx:(typeof l.idx==='number'?l.idx:i)}));
   return {...d,id,lines,invoiceMs:tsMs(d.invoiceDate)||tsMs(d.createdAt)||Date.now()};
@@ -8025,9 +8029,9 @@ function renderFiling(c){
   rest.forEach(i=>{const d=getDraft(i);const m=d.onFileDismissed?null:findOnFile(i);if(m){i._onFile=m;onFile.push(i);}else{i._onFile=null;normal.push(i);}});
   const row=(i,extra,cls)=>{
     const d=getDraft(i);const done=i.lines.filter(l=>d.assign[l.idx]).length;
-    const badgeBg=i.vendor==='ebay'?'#1d4ed8':i.vendor==='rockauto'?'#4b5563':'#b91c1c';
+    const vb=vendorBadge(i);
     return `<button class="fl-row ${cls||''}" onclick="INV.sel='${invEsc(i.id)}';render()">
-      <div class="fl-badge" style="background:${badgeBg}">${invEsc((i.vendor||'inv').slice(0,4).toUpperCase())}</div>
+      <div class="fl-badge" style="background:${vb.bg};font-size:${vb.label.length>2?11:14}px">${invEsc(vb.label)}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:600"><span>${invEsc(i.vendorName||i.vendor)}${i.orderNumber?` <span style="color:#8a9ab0;font-weight:400">#${invEsc(i.orderNumber)}</span>`:''}</span><span style="font-variant-numeric:tabular-nums">${invMoney(i.total)}</span></div>
         <div style="font-size:12px;color:#b8c3d3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${extra}</div>
