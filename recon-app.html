@@ -3733,6 +3733,16 @@ function renderDetail(c,v){
   // ══════════════════════════════════════════════
   // Extract auto parts from a receipt (image OR PDF) via the Worker.
   // Returns: {items: [...], tax: number, documentType: 'image'|'pdf'} or null on error
+  // Tax + shipping on a receipt are part of what the parts cost: spread over the items in proportion to price.
+  function foldReceiptExtras(items, extras){
+    extras = Number(extras)||0;
+    const sub = items.reduce((a,it)=>a + (Number(it.eachCost)||0)*(Number(it.quantity)||1), 0);
+    if(!(extras>0) || !(sub>0)) return items;
+    return items.map(it=>{
+      const qty = Number(it.quantity)||1, each = Number(it.eachCost)||0, line = each*qty;
+      return {...it, eachCost: Math.round((line + extras*line/sub)/qty*100)/100};
+    });
+  }
   async function scanReceiptWithAI(dataUrl){
     const match=dataUrl.match(/^data:([^;]+);base64,(.+)$/);
     if(!match){console.error('Receipt AI: input not a data URL');return null;}
@@ -3760,7 +3770,8 @@ function renderDetail(c,v){
       const items = Array.isArray(arr) ? arr : [];
       const tax = typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0;
       console.log('[Receipt AI] Extracted', items.length, 'items · tax $', tax.toFixed(2));
-      return {items, tax, documentType: data.documentType || 'image'};
+      const shipping = typeof data.shipping === 'number' ? data.shipping : parseFloat(data.shipping) || 0;
+      return {items, tax, shipping, documentType: data.documentType || 'image'};
     }catch(e){console.error('Receipt AI error',e);return null;}
   }
 
@@ -4210,9 +4221,10 @@ function renderDetail(c,v){
 
         st.textContent='Scanning with AI...';
         const result = await scanReceiptWithAI(aiDataUrl);
-        const items = result && result.items ? result.items : null;
+        const extrasTotal = result ? (result.tax||0)+(result.shipping||0) : 0;
+        const items = result && result.items ? foldReceiptExtras(result.items, extrasTotal) : null;
         if(!items||!items.length){st.textContent='Could not read receipt — fill the frame with the receipt.';st.style.color='#f87171';return;}
-        st.textContent=`Found ${items.length} item${items.length!==1?'s':''}. Review and confirm:`;
+        st.textContent=`Found ${items.length} item${items.length!==1?'s':''}${extrasTotal?` · tax/shipping $${extrasTotal.toFixed(2)} added to cost`:''}. Review and confirm:`;
         st.style.color='#34d399';
         let h=`<div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;overflow:hidden;margin-top:6px">`;
         // Bulk-state header
@@ -5074,12 +5086,12 @@ function renderDetail(c,v){
       }
 
       const items = result.items || [];
-      const taxTotal = result.tax || 0;
+      const taxTotal = (result.tax || 0) + (result.shipping || 0); // tax + shipping both go into the parts' cost
 
       if(items.length===0){
         setStatusOk('No parts detected');
       } else {
-        setStatusOk(`Found ${items.length} part${items.length!==1?'s':''}${taxTotal?` · tax $${taxTotal.toFixed(2)}`:''}`);
+        setStatusOk(`Found ${items.length} part${items.length!==1?'s':''}${taxTotal?` · tax${result.shipping?' + shipping':''} $${taxTotal.toFixed(2)} added to cost`:''}`);
       }
 
       // Local working copy; user edits update this before save.

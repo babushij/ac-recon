@@ -1,4 +1,4 @@
-// AC Recon — Receipt AI Worker (v2)
+// AC Recon — Receipt AI Worker (v3 — also returns shipping)
 // ───────────────────────────────────
 // Extracts auto parts from receipt images OR PDFs using Anthropic Claude.
 //
@@ -27,23 +27,24 @@ const SYSTEM_PROMPT = `You are an auto parts receipt/invoice extractor. Your ONL
 
 CRITICAL RULES:
 1. Output ONLY a JSON object with two keys. No prose. No markdown fences. No explanation.
-2. Shape: {"items": [{"description": "string", "eachCost": number, "quantity": number, "partNumber": "string"}], "tax": number}
+2. Shape: {"items": [{"description": "string", "eachCost": number, "quantity": number, "partNumber": "string"}], "tax": number, "shipping": number}
 3. For each line item:
    - eachCost: the PER-UNIT price BEFORE tax (if receipt shows "each" and "qty", use each; if receipt only shows a line total, compute each = line_total / quantity)
    - quantity: the quantity for that line (default 1 if not shown)
    - partNumber: include ONLY if clearly shown on that line, otherwise ""
    - description: exactly as written on the receipt, trimmed of clutter (leading stars, SKU codes in parens, duplicate spaces)
 4. tax: total sales tax amount on the receipt (sum of all tax lines). Use 0 if no tax shown.
+   shipping: total shipping / delivery / freight / handling charged on the receipt (sum of those lines, after any shipping discount). Use 0 if none shown.
 5. EXCLUDE from items[] everything that is NOT a physical part being purchased:
    - Sales tax (capture in the separate tax field instead)
-   - Shipping, delivery, handling, freight fees
+   - Shipping, delivery, handling, freight fees (capture in the separate shipping field instead)
    - Labor charges, shop fees, diagnostic fees, disposal fees, hazmat fees
    - Core deposits, core charges, core refunds (CORE / CORE CHG / CORE DEP / CORE FEE) - these are a deposit on the OLD part, not a new purchase
    - Warranty fees, insurance, extended service plans, protection plans
    - Subtotals, totals, balance due, payments, change, tips
    - Restock fees, enviro fees, shop supplies
    - Customer info, vendor info, addresses, phone numbers, dates
-6. If the document shows no identifiable parts, return {"items": [], "tax": 0}.
+6. If the document shows no identifiable parts, return {"items": [], "tax": 0, "shipping": 0}.
 
 IMPORTANT for PDFs: Process ONLY the first page. Even if multi-page, extract only from page 1.
 
@@ -53,9 +54,9 @@ Example — receipt with 2 parts (qty 1 each), shipping, tax:
   Shipping:            $5.00
   Tax:                 $14.85
 Output:
-{"items":[{"description":"BRAKE PAD SET FRONT","eachCost":89.99,"quantity":1,"partNumber":"D1234"},{"description":"BRAKE ROTOR FRONT","eachCost":64.50,"quantity":2,"partNumber":"BR9012"}],"tax":14.85}
+{"items":[{"description":"BRAKE PAD SET FRONT","eachCost":89.99,"quantity":1,"partNumber":"D1234"},{"description":"BRAKE ROTOR FRONT","eachCost":64.50,"quantity":2,"partNumber":"BR9012"}],"tax":14.85,"shipping":5.00}
 
-Example — non-parts document: {"items": [], "tax": 0}`;
+Example — non-parts document: {"items": [], "tax": 0, "shipping": 0}`;
 
 export default {
   async fetch(request, env, ctx) {
@@ -66,7 +67,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/health' || url.pathname === '/') {
-      return json({ ok: true, model: MODEL, version: 'v2' });
+      return json({ ok: true, model: MODEL, version: 'v3' });
     }
 
     if (url.pathname === '/receipt' && request.method === 'POST') {
@@ -138,8 +139,8 @@ async function handleReceipt(request, env) {
           {
             type: 'text',
             text: isPdf
-              ? 'Extract auto parts from page 1 of this PDF invoice. Return ONLY a JSON object with {"items": [...], "tax": number}.'
-              : 'Extract auto parts from this receipt image. Return ONLY a JSON object with {"items": [...], "tax": number}.'
+              ? 'Extract auto parts from page 1 of this PDF invoice. Return ONLY a JSON object with {"items": [...], "tax": number, "shipping": number}.'
+              : 'Extract auto parts from this receipt image. Return ONLY a JSON object with {"items": [...], "tax": number, "shipping": number}.'
           }
         ]
       }
@@ -190,11 +191,11 @@ async function handleReceipt(request, env) {
     parsed = JSON.parse(cleaned);
   } catch (e) {
     console.error('Claude returned non-JSON:', rawText.slice(0, 500));
-    return json({ items: '[]', tax: 0, documentType: docType, debug_raw: rawText.slice(0, 300) });
+    return json({ items: '[]', tax: 0, shipping: 0, documentType: docType, debug_raw: rawText.slice(0, 300) });
   }
 
   // New shape: {items: [...], tax: N}. Fall back to legacy if Claude returned bare array.
-  let itemsRaw, tax;
+  let itemsRaw, tax, shipping = 0;
   if (Array.isArray(parsed)) {
     // Legacy response — Claude gave a bare array
     itemsRaw = parsed;
@@ -202,8 +203,9 @@ async function handleReceipt(request, env) {
   } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
     itemsRaw = parsed.items;
     tax = typeof parsed.tax === 'number' ? parsed.tax : parseFloat(parsed.tax) || 0;
+    shipping = typeof parsed.shipping === 'number' ? parsed.shipping : parseFloat(parsed.shipping) || 0;
   } else {
-    return json({ items: '[]', tax: 0, documentType: docType, debug_raw: 'Unexpected shape' });
+    return json({ items: '[]', tax: 0, shipping: 0, documentType: docType, debug_raw: 'Unexpected shape' });
   }
 
   const items = itemsRaw
@@ -227,6 +229,7 @@ async function handleReceipt(request, env) {
   return json({
     items: JSON.stringify(items),
     tax: tax || 0,
+    shipping: shipping || 0,
     documentType: docType
   });
 }
