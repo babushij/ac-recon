@@ -594,6 +594,11 @@ body.board-mode .main{margin-left:0!important}
 .fl-row.flagged{background:#180508;border-color:#5c1420}
 .fl-row.onfile{border-color:#1e3a5f}
 .fl-badge{width:40px;height:40px;flex-shrink:0;border-radius:var(--r-lg);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.4px}
+.fl-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
+.fl-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 7px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--text3);cursor:pointer;user-select:none}
+.fl-chip.on{border-color:#3b82f6;background:#0b1a2e;color:#eef0f6}
+.fl-chip input{accent-color:#3b82f6;margin:0}
+.fl-chip-b{min-width:22px;height:18px;padding:0 4px;border-radius:5px;color:#fff;font-size:9px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
 .fl-banner{padding:12px;margin:0 0 14px;border:1px solid;border-radius:var(--r-xl)}
 .fl-receipt{display:flex;align-items:center;gap:12px;padding:12px;margin:0 0 18px;background:var(--surface);border:1px dashed var(--border3);border-radius:var(--r-xl)}
 .fl-line{padding:12px;margin:0 0 10px;background:var(--surface);border:1px solid;border-radius:var(--r-xl)}
@@ -7661,6 +7666,13 @@ function tsMs(t){
 // A small colour-coded badge per vendor (initials on a distinct colour) so the list is easy to scan.
 // These are our own neutral badges, not the vendors' logos.
 const VENDOR_BADGES={advance:['ADV','#0f766e'],worldpac:['WP','#6d28d9'],autozone:['AZ','#b45309'],oreilly:['OR','#15803d'],atd:['ATD','#1d4ed8'],ebay:['eB','#be185d'],rockauto:['RA','#4b5563']};
+function invVendorOff(){
+  if(!INV.vendorOff){INV.vendorOff=new Set();try{INV.vendorOff=new Set(JSON.parse(localStorage.getItem('acInvVendorOff')||'[]'));}catch(e){}}
+  return INV.vendorOff;
+}
+function invSaveVendorOff(){try{localStorage.setItem('acInvVendorOff',JSON.stringify([...INV.vendorOff]));}catch(e){}}
+window.invToggleVendor=k=>{const o=invVendorOff();if(o.has(k))o.delete(k);else o.add(k);invSaveVendorOff();render();};
+window.invVendorAll=on=>{const o=invVendorOff();if(on)o.clear();else INV.list.forEach(i=>o.add(String(i.vendor||'other').toLowerCase()));invSaveVendorOff();render();};
 function vendorBadge(i){const k=String(i.vendor||'').toLowerCase();const b=VENDOR_BADGES[k];return b?{label:b[0],bg:b[1]}:{label:String(i.vendorName||i.vendor||'?').replace(/[^A-Za-z0-9]/g,'').slice(0,3).toUpperCase()||'?',bg:'#374151'};}
 function normInvoice(id,d){
   const lines=(Array.isArray(d.lines)?d.lines:[]).map((l,i)=>({...l,idx:(typeof l.idx==='number'?l.idx:i)}));
@@ -8023,8 +8035,15 @@ function renderFiling(c){
     c.innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">All caught up</div><div class="empty-sub">Every vendor invoice is filed to a vehicle or Shop. New eBay / RockAuto orders show up here within the hour.</div></div>`;
     return;
   }
-  const flagged=INV.list.filter(i=>i.flag);
-  const rest=INV.list.filter(i=>!i.flag);
+  // vendor check-boxes: only the checked vendors are listed (all checked by default)
+  const vkey=i=>String(i.vendor||'other').toLowerCase();
+  const vendorsHere=[];INV.list.forEach(i=>{if(!vendorsHere.some(v=>v.k===vkey(i)))vendorsHere.push({k:vkey(i),name:i.vendorName||i.vendor||'Other',n:0});vendorsHere.find(v=>v.k===vkey(i)).n++;});
+  vendorsHere.sort((a,b)=>a.name.localeCompare(b.name));
+  const off=invVendorOff();
+  const shown=INV.list.filter(i=>!off.has(vkey(i)));
+  const filterBar=vendorsHere.length>1?`<div class="fl-filter">${vendorsHere.map(v=>{const on=!off.has(v.k);const vb=vendorBadge({vendor:v.k,vendorName:v.name});return `<label class="fl-chip ${on?'on':''}"><input type="checkbox" ${on?'checked':''} onchange="invToggleVendor('${invEsc(v.k)}')"><span class="fl-chip-b" style="background:${vb.bg}">${invEsc(vb.label)}</span>${invEsc(v.name)} <b>${v.n}</b></label>`;}).join('')}<button class="fl-link" onclick="invVendorAll(true)" style="font-size:11px;color:#7cb4f5">All</button><button class="fl-link" onclick="invVendorAll(false)" style="font-size:11px;color:#8a9ab0">None</button></div>`:'';
+  const flagged=shown.filter(i=>i.flag);
+  const rest=shown.filter(i=>!i.flag);
   const onFile=[],normal=[];
   rest.forEach(i=>{const d=getDraft(i);const m=d.onFileDismissed?null:findOnFile(i);if(m){i._onFile=m;onFile.push(i);}else{i._onFile=null;normal.push(i);}});
   const row=(i,extra,cls)=>{
@@ -8048,7 +8067,8 @@ function renderFiling(c){
   if(normal.length){
     html+=`<div class="fl-head" style="margin-top:${(flagged.length||onFile.length)?18:0}px">To sort · ${normal.length}</div>`+normal.map(i=>row(i,(i.orderedBy?`<b style="color:#eef0f6">${invEsc(i.orderedBy)}</b>${i.vinHint?' · …'+invEsc(i.vinHint):''} · `:'')+invEsc(i.lines.map(l=>l.description).join(', ')))).join('');
   }
-  c.innerHTML=html;
+  if(!shown.length) html+=`<div class="empty" style="padding:30px 0"><div class="empty-msg">No vendors checked</div><div class="empty-sub">Tick a vendor above to see its invoices (${INV.list.length} waiting in total).</div></div>`;
+  c.innerHTML=filterBar+html;
 }
 
 function renderFilingDetail(c,inv){
