@@ -594,6 +594,11 @@ body.board-mode .main{margin-left:0!important}
 .fl-row.flagged{background:#180508;border-color:#5c1420}
 .fl-row.onfile{border-color:#1e3a5f}
 .fl-badge{width:40px;height:40px;flex-shrink:0;border-radius:var(--r-lg);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.4px}
+.fl-ps{padding:7px 12px;border:none;background:transparent;color:#8a9ab0;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.fl-ps+.fl-ps{border-left:1px solid #1e3a5f}
+.fl-ps.on{background:#1e3a8a;color:#dbeafe}
+.ppl-btn.ppl-install{background:#4c1d9533;border-color:#6d28d988;color:#ddd6fe}
+.ppl-btn.ppl-install:hover{background:#4c1d9566;border-color:#a78bfa;color:#fff}
 .fl-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
 .fl-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 7px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--text3);cursor:pointer;user-select:none}
 .fl-chip.on{border-color:#3b82f6;background:#0b1a2e;color:#eef0f6}
@@ -1663,6 +1668,7 @@ function load(){
     ensurePerVehicleCloud().finally(()=>subscribeToFirestore());
     subscribeToSettings();
     try{subscribeToInvoices();}catch(e){console.warn('invoices subscribe:',e);}
+    try{subscribeToDeliveries();}catch(e){console.warn('deliveries subscribe:',e);}
     try{subscribeToCharges();}catch(e){console.warn('charges subscribe:',e);}
     try{subscribeToCores();}catch(e){console.warn('cores subscribe:',e);}
   }
@@ -3883,8 +3889,8 @@ function renderDetail(c,v){
     // ── PARTS SECTION (pipeline: needed → ordered → received) ──
     const allParts = v.parts || [];
     const partsTotal = allParts.reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
-    const receivedTotal = allParts.filter(p=>partState(p)==='received').reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
-    const pendingTotal = allParts.filter(p=>partState(p)!=='received').reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+    const receivedTotal = allParts.filter(p=>partState(p)==='received'||partState(p)==='installed').reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
+    const pendingTotal = allParts.filter(p=>partState(p)==='needed'||partState(p)==='ordered').reduce((a,p)=>a+((parseFloat(p.cost)||0)*(parseInt(p.qty)||1)),0);
     const partsPanel=document.createElement('div');partsPanel.className='panel';
     const partsVendors=getVendors('parts');
 
@@ -3901,8 +3907,10 @@ function renderDetail(c,v){
         const etaStr = p.eta ? new Date(p.eta).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
         const etaLabel = etaStr ? `ETA ${etaStr}` : 'ETA —';
         badge = `<span style="display:inline-block;background:#1e3a8a;color:#bfdbfe;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase">🚚 Ordered · ${etaLabel}</span>`;
+      } else if(state === 'installed'){
+        badge = `<span style="display:inline-block;background:#4c1d95;color:#ddd6fe;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase">🔧 Installed${p.installedDate?' · '+new Date(p.installedDate).toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}</span>`;
       } else {
-        badge = `<span style="display:inline-block;background:#14532d;color:#bbf7d0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase">✓ Received</span>`;
+        badge = `<span style="display:inline-block;background:#14532d;color:#bbf7d0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase">${p.deliveredVia==='email'?'📦 Delivered':'✓ Received'}${p.deliveredVia==='email'&&p.deliveredDate?' · '+new Date(p.deliveredDate).toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}</span>`;
       }
       // Action buttons by state
       let actionBtns = '';
@@ -3912,6 +3920,10 @@ function renderDetail(c,v){
       } else if(state === 'ordered'){
         actionBtns = `<button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">📦 Mark received</button>
           <button class="ppl-btn ppl-edit-order" data-i="${i}" title="Edit order details">✎ Edit ETA / Tracking</button>`;
+      } else if(state === 'received'){
+        actionBtns = `<button class="ppl-btn ppl-install" data-i="${i}" title="Mark as installed on the car">🔧 Mark installed</button>`;
+      } else if(state === 'installed'){
+        actionBtns = `<button class="ppl-btn ppl-uninstall" data-i="${i}" title="Back to received">↩ Not installed</button>`;
       }
       // Tracking line for ordered
       const trackingLine = (state==='ordered' && p.trackingNum)
@@ -3943,7 +3955,7 @@ function renderDetail(c,v){
     };
 
     // Group rows by state, preserving original index for action handlers
-    const groupedRows = {needed: [], ordered: [], received: []};
+    const groupedRows = {needed: [], ordered: [], received: [], installed: []};
     allParts.forEach((p, i)=>{
       const s = partState(p);
       groupedRows[s] = groupedRows[s] || [];
@@ -3962,6 +3974,10 @@ function renderDetail(c,v){
     if(groupedRows.received.length){
       partsListHtml += `<div style="font-size:10px;color:#bbf7d0;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:8px 0 2px">✓ Received (${groupedRows.received.length})</div>`;
       partsListHtml += groupedRows.received.join('');
+    }
+    if(groupedRows.installed.length){
+      partsListHtml += `<div style="font-size:10px;color:#ddd6fe;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:8px 0 2px">🔧 Installed (${groupedRows.installed.length})</div>`;
+      partsListHtml += groupedRows.installed.join('');
     }
     if(!partsListHtml){
       partsListHtml = '<div style="color:#7a8499;font-size:13px;padding:12px 0;text-align:center">No parts yet — scan a receipt or add below</div>';
@@ -3991,6 +4007,7 @@ function renderDetail(c,v){
             <option value="received" selected>✓ Received (have it now)</option>
             <option value="ordered">🚚 Ordered (on the way)</option>
             <option value="needed">📋 Needed (not yet ordered)</option>
+            <option value="installed">🔧 Installed (already on the car)</option>
           </select>
         </div>
       </div>
@@ -4007,6 +4024,12 @@ function renderDetail(c,v){
       });
       partsPanel.querySelectorAll('.ppl-receive').forEach(btn=>{
         btn.onclick=()=>window.markPartReceived(parseInt(btn.dataset.i));
+      });
+      partsPanel.querySelectorAll('.ppl-install').forEach(btn=>{
+        btn.onclick=()=>window.markPartInstalled(parseInt(btn.dataset.i),true);
+      });
+      partsPanel.querySelectorAll('.ppl-uninstall').forEach(btn=>{
+        btn.onclick=()=>window.markPartInstalled(parseInt(btn.dataset.i),false);
       });
     }, 0);
 
@@ -4088,6 +4111,7 @@ function renderDetail(c,v){
       // Stamp dates by state
       if(state === 'ordered') newPart.orderedDate = Date.now();
       if(state === 'received') newPart.receivedDate = Date.now();
+      if(state === 'installed'){ newPart.receivedDate = Date.now(); newPart.installedDate = Date.now(); }
       v.parts=[...(v.parts||[]),newPart];
       writeToCurrentVisit(v,'parts',v.parts);
       // If this part puts the vehicle into "waiting on parts" or out of it, sync status
@@ -4117,6 +4141,19 @@ function renderDetail(c,v){
       syncPartsStatus(v);
       save();
       toast(`✓ "${p.name}" marked as received`);
+    };
+
+    // Final stage: the part is on the car (or back to received)
+    window.markPartInstalled=function(i,on){
+      const p = (v.parts||[])[i];
+      if(!p) return;
+      const updated = [...v.parts];
+      updated[i] = on ? {...p, state:'installed', installedDate:Date.now()} : {...p, state:'received', installedDate:null};
+      v.parts = updated;
+      writeToCurrentVisit(v,'parts',v.parts);
+      syncPartsStatus(v);
+      save();
+      toast(on ? `🔧 "${p.name}" marked as installed` : `"${p.name}" back to received`);
     };
 
     // Open dialog to edit ETA/tracking/note (used when transitioning needed→ordered, or editing an order)
@@ -5615,7 +5652,7 @@ function renderMechDashboard(c, mechId){
   const highCount = vs.filter(v=>v.priority==='high').length;
   const concernCount = vs.reduce((n,v)=>n+(v.concerns||[]).filter(c=>c.status==='pending').length, 0);
   const partsPendingCount = vs.filter(v=>{
-    return (v.parts||[]).some(p=>(p.state||'received')!=='received');
+    return (v.parts||[]).some(p=>{const st=p.state||'received';return st==='needed'||st==='ordered';});
   }).length;
 
   // Active session info for this mechanic
@@ -7653,7 +7690,8 @@ function renderAnalytics(c){
 // to that car without adding duplicate parts.
 // Nothing here deletes anything; vehicle writes go through writeToCurrentVisit + save().
 // ═══════════════════════════════════════
-let INV={list:[],loaded:false,error:null,unsub:null,sel:null,draft:{},busy:false};
+let INV={list:[],loaded:false,error:null,unsub:null,sel:null,draft:{},busy:false,deliveries:[],delUnsub:null};
+const deliveriesCol=()=>db.collection('shops').doc('automotive_connection').collection('deliveries');
 const invoicesCol=()=>db.collection('shops').doc('automotive_connection').collection('invoices');
 
 function tsMs(t){
@@ -7678,6 +7716,79 @@ function normInvoice(id,d){
   const lines=(Array.isArray(d.lines)?d.lines:[]).map((l,i)=>({...l,idx:(typeof l.idx==='number'?l.idx:i)}));
   return {...d,id,lines,invoiceMs:tsMs(d.invoiceDate)||tsMs(d.createdAt)||Date.now()};
 }
+// ── DELIVERIES — "delivered" emails from eBay / RockAuto (read by the mail Worker) flip matching ORDERED parts to received ──
+function subscribeToDeliveries(){
+  if(!db) return;
+  if(INV.delUnsub){try{INV.delUnsub();}catch(e){}}
+  INV.delUnsub=deliveriesCol().where('matched','==',false).onSnapshot(snap=>{
+    INV.deliveries=snap.docs.map(d=>({id:d.id,...d.data(),deliveredMs:tsMs(d.data().deliveredAt)||tsMs(d.data().createdAt)||Date.now()}));
+    try{applyDeliveries();}catch(e){console.warn('applyDeliveries:',e);}
+    if(ST.view==='filing'&&!INV.sel) render();
+  },err=>console.warn('Deliveries subscription error:',err));
+}
+const _alnum=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const _stop=new Set(['the','and','for','with','new','set','kit','oem','front','rear','left','right','genuine','assembly','assy','part','parts','auto','car','truck']);
+function _titleWords(t){return new Set(String(t||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!_stop.has(w)));}
+// Every ordered part on every vehicle (any visit), with where it lives.
+function orderedPartsAll(){
+  const out=[];
+  (ST.vehicles||[]).forEach(v=>{const visits=(v.visits&&v.visits.length)?v.visits:[v];visits.forEach(vi=>(vi.parts||[]).forEach(p=>{if(partState(p)==='ordered')out.push({v,part:p});}));});
+  return out;
+}
+// Which ordered part does this delivery email belong to? Order number first, then tracking number, then a unique title match.
+function matchDelivery(d){
+  const cands=orderedPartsAll();
+  const onum=_alnum(d.orderNumber), trk=_alnum(d.trackingNum);
+  let hit=onum&&cands.filter(c=>_alnum(c.part.orderNumber)===onum);
+  if(hit&&hit.length) return {parts:hit,by:'order number'};
+  hit=trk&&cands.filter(c=>_alnum(c.part.trackingNum)===trk);
+  if(hit&&hit.length) return {parts:hit,by:'tracking number'};
+  const titles=(Array.isArray(d.itemTitles)?d.itemTitles:[]).map(_titleWords).filter(w=>w.size);
+  if(!titles.length) return null;
+  const vend=_alnum(d.vendorName||d.vendor);
+  const scored=[];
+  cands.forEach(c=>{
+    const vn=_alnum((c.part.vendor&&getVendorById(c.part.vendor)||{}).name);
+    if(vn&&vend&&!(vn.includes(vend)||vend.includes(vn))) return;      // ordered from a different vendor
+    if(c.part.orderNumber&&onum&&_alnum(c.part.orderNumber)!==onum) return; // belongs to a different order
+    const pw=_titleWords(c.part.name); if(pw.size<2) return;
+    titles.forEach(tw=>{const shared=[...pw].filter(w=>tw.has(w)).length;const ratio=shared/Math.min(pw.size,tw.size);if(shared>=2&&ratio>=0.6) scored.push({c,ratio,shared});});
+  });
+  if(!scored.length) return null;
+  scored.sort((a,b)=>b.ratio-a.ratio||b.shared-a.shared);
+  if(scored.length>1&&scored[1].c.part!==scored[0].c.part&&scored[1].ratio>=scored[0].ratio-0.1) return null; // ambiguous → leave for a person
+  return {parts:[scored[0].c],by:'item title'};
+}
+let _applyingDeliveries=false;
+async function applyDeliveries(){
+  if(_applyingDeliveries||ST.role!=='manager'||!db||!(ST.vehicles||[]).length||!INV.deliveries.length) return;
+  _applyingDeliveries=true;
+  try{
+    let flipped=0;const changedV=new Set();const done=[];
+    for(const d of INV.deliveries){
+      const m=matchDelivery(d); if(!m) continue;
+      m.parts.forEach(c=>{
+        c.part.state='received';c.part.receivedDate=d.deliveredMs;c.part.deliveredVia='email';c.part.deliveredDate=d.deliveredMs;
+        changedV.add(c.v.id);flipped++;
+      });
+      done.push({d,m});
+    }
+    if(!flipped) return;
+    changedV.forEach(id=>{const v=getV(id);if(!v)return;const cv=currentVisit(v);writeToCurrentVisit(v,'parts',[...((cv&&cv.parts)||v.parts||[])]);syncPartsStatus(v);});
+    save();
+    for(const {d,m} of done){
+      try{await deliveriesCol().doc(d.id).set({matched:true,matchedAt:firebase.firestore.FieldValue.serverTimestamp(),matchedBy:m.by,vehicleIds:[...new Set(m.parts.map(c=>c.v.id))],partNames:m.parts.map(c=>c.part.name).slice(0,6)},{merge:true});}catch(e){console.warn('delivery mark:',e);}
+    }
+    toast(`📦 ${flipped} part${flipped!==1?'s':''} delivered per email — marked received`);
+    render();
+  }finally{_applyingDeliveries=false;}
+}
+function deliveriesHtml(){
+  const ds=(INV.deliveries||[]);
+  if(!ds.length) return '';
+  return `<div class="fl-head" style="margin-top:22px;color:#7cb4f5">📦 Delivered — no matching order yet · ${ds.length}</div><p style="margin:-4px 0 10px;font-size:11px;color:#8a9ab0">A delivery email came in but no ordered part matches it (yet). File the order as "Ordered" and it will match by itself, or dismiss it.</p>`+ds.map(d=>`<div class="fl-row" style="cursor:default"><div class="fl-badge" style="background:${vendorBadge({vendor:d.vendor,vendorName:d.vendorName}).bg};font-size:11px">${invEsc(vendorBadge({vendor:d.vendor,vendorName:d.vendorName}).label)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">${invEsc(d.vendorName||d.vendor)}${d.orderNumber?` <span style="color:#8a9ab0;font-weight:400">#${invEsc(d.orderNumber)}</span>`:''}</div><div style="font-size:12px;color:#b8c3d3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${invEsc((d.itemTitles||[]).join(', ')||d.subject||'')}</div><div style="font-size:11px;color:#8a9ab0;margin-top:2px">${fmtD(d.deliveredMs)}</div></div><button class="emp-btn" onclick="invDismissDelivery('${invEsc(d.id)}')">Dismiss</button></div>`).join('');
+}
+window.invDismissDelivery=async id=>{try{await deliveriesCol().doc(id).set({matched:true,matchedBy:'dismissed',matchedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});}catch(e){toast('Dismiss failed: '+(e.message||e),'err');}};
 function subscribeToInvoices(){
   if(!db) return;
   if(INV.unsub){try{INV.unsub();}catch(e){}}
@@ -7812,6 +7923,14 @@ function getDraft(inv){
   return INV.draft[inv.id];
 }
 // A line with the user's quantity / each-price corrections applied (edits live in the draft until filed).
+// eBay / RockAuto emails are ORDER confirmations: the parts are normally still on the way. Portal invoices are already in hand.
+function isEmailInvoice(inv){return !/portal$/.test(inv.source||'');}
+function invPartState(inv){
+  const d=getDraft(inv);
+  if(d.partState) return d.partState;
+  if(!isEmailInvoice(inv)) return 'received';
+  return (Date.now()-(inv.invoiceMs||Date.now()))>21*86400000?'received':'ordered';
+}
 function effLine(inv,l){
   const e=getDraft(inv).edits[l.idx]||{};
   // Returns / credits carry a negative quantity; the editor shows the count, the sign stays with the line.
@@ -7894,13 +8013,15 @@ async function fileInvoice(inv,mode){
   const empLines=[];
   lines.forEach(l=>{const a=assignOf[l.idx];if(a.kind==='shop')shopIdx.push(l.idx);else if(a.kind==='employee')empLines.push({l,employeeId:a.employeeId});else(byVeh[a.vehicleId]=byVeh[a.vehicleId]||[]).push(l);});
   const vendorId=ensurePartsVendor(inv.vendorName);
+  const filedState=(mode&&mode.attachTo)?'received':invPartState(inv);
   INV.busy=true;
   try{
     let touched=0,updated=0,added=0;
     const newPartFrom=l=>({
       // a return goes on the car as a negative-cost part so the vehicle's parts total comes down
       name:l.description||'',partNum:l.partNumber||'',cost:((parseInt(l.quantity)||1)<0?-1:1)*(parseFloat(l.eachCost)||0),qty:Math.abs(parseInt(l.quantity))||1,
-      vendor:vendorId,state:'received',receivedDate:inv.invoiceMs,source:'invoice',invoiceId:inv.id,orderNumber:inv.orderNumber||''
+      vendor:vendorId,source:'invoice',invoiceId:inv.id,orderNumber:inv.orderNumber||'',
+      ...(filedState==='ordered'?{state:'ordered',orderedDate:inv.invoiceMs}:{state:'received',receivedDate:inv.invoiceMs})
     });
     for(const vid of Object.keys(byVeh)){
       const v=getV(vid);if(!v) throw new Error('Vehicle not found: '+vid);
@@ -7968,8 +8089,9 @@ async function fileInvoice(inv,mode){
     },{merge:true});
     delete INV.draft[inv.id];
     INV.sel=null;
+    if(filedState==='ordered'){try{setTimeout(applyDeliveries,300);}catch(e){}}
     const n=Object.keys(byVeh).length;
-    toast((mode&&mode.attachTo)?(mode.updateParts?`${vehName(getV(mode.attachTo))}: ${updated} part${updated!==1?'s':''} corrected${added?`, ${added} added`:''} · receipt attached`:'Receipt attached to '+vehName(getV(mode.attachTo))):`Filed · ${n} vehicle${n!==1?'s':''}${shopIdx.length?` · ${shopIdx.length} shop line${shopIdx.length!==1?'s':''}`:''}${empLines.length?` · ${empLines.length} employee charge${empLines.length!==1?'s':''}`:''}`);
+    toast((mode&&mode.attachTo)?(mode.updateParts?`${vehName(getV(mode.attachTo))}: ${updated} part${updated!==1?'s':''} corrected${added?`, ${added} added`:''} · receipt attached`:'Receipt attached to '+vehName(getV(mode.attachTo))):`Filed${filedState==='ordered'?' as ordered':''} · ${n} vehicle${n!==1?'s':''}${shopIdx.length?` · ${shopIdx.length} shop line${shopIdx.length!==1?'s':''}`:''}${empLines.length?` · ${empLines.length} employee charge${empLines.length!==1?'s':''}`:''}`);
   }catch(e){
     console.error('File invoice failed:',e);
     toast('Filing failed: '+(e.message||e),'err');
@@ -8032,7 +8154,7 @@ function renderFiling(c){
   }
   if(!INV.loaded){c.innerHTML='<div class="empty"><div class="empty-msg">Loading invoices…</div></div>';return;}
   if(!INV.list.length){
-    c.innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">All caught up</div><div class="empty-sub">Every vendor invoice is filed to a vehicle or Shop. New eBay / RockAuto orders show up here within the hour.</div></div>`;
+    c.innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-msg">All caught up</div><div class="empty-sub">Every vendor invoice is filed to a vehicle or Shop. New eBay / RockAuto orders show up here within the hour.</div></div>`+deliveriesHtml();
     return;
   }
   // vendor check-boxes: only the checked vendors are listed (all checked by default)
@@ -8068,7 +8190,7 @@ function renderFiling(c){
     html+=`<div class="fl-head" style="margin-top:${(flagged.length||onFile.length)?18:0}px">To sort · ${normal.length}</div>`+normal.map(i=>row(i,(i.orderedBy?`<b style="color:#eef0f6">${invEsc(i.orderedBy)}</b>${i.vinHint?' · …'+invEsc(i.vinHint):''} · `:'')+invEsc(i.lines.map(l=>l.description).join(', ')))).join('');
   }
   if(!shown.length) html+=`<div class="empty" style="padding:30px 0"><div class="empty-msg">No vendors checked</div><div class="empty-sub">Tick a vendor above to see its invoices (${INV.list.length} waiting in total).</div></div>`;
-  c.innerHTML=filterBar+html;
+  c.innerHTML=filterBar+html+deliveriesHtml();
 }
 
 function renderFilingDetail(c,inv){
@@ -8107,6 +8229,7 @@ function renderFilingDetail(c,inv){
     ${inv.po!=null||inv.orderedBy?`<div class="fl-receipt" style="border-style:solid;padding:10px 12px;margin-bottom:12px"><div style="flex:1"><div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:1px;text-transform:uppercase">${inv.vendor==='worldpac'?'Comment / PO on the invoice':'PO on the invoice'}</div><div style="font-size:14px;font-weight:600;margin-top:2px">${inv.po?invEsc(inv.po):'<span style="color:#f87171">blank</span>'}</div><div style="font-size:11px;color:#8a9ab0;margin-top:2px">${inv.orderedBy?'Ordered by <b style="color:#eef0f6">'+invEsc(inv.orderedBy)+'</b>':'No name'}${inv.vinHint?' · VIN …<b style="color:#fff;font-family:\'Courier New\',monospace">'+invEsc(inv.vinHint)+'</b>':' · no last six'}${inv.storeNumber?' · store '+invEsc(inv.storeNumber):''}${inv.vehicleDescription?' · '+(inv.vendor==='worldpac'?'speedDIAL':invEsc(inv.vendorName||'Vendor'))+' vehicle: <b style="color:#eef0f6">'+invEsc(inv.vehicleDescription)+'</b>':''}</div></div></div>`:''}
     ${inv.suggestedShop&&!onFile?`<div class="fl-banner" style="background:#2a1a06;border-color:#6b4410"><div style="font-size:13px;font-weight:700;color:#fbbf24">PO says this is for the shop</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn-ghost" id="fl-use-shop">All lines → Shop</button></div></div>`:''}
     ${(!onFile&&suggested)?`<div class="fl-banner" style="background:#052e1f;border-color:#166534"><div style="font-size:13px;font-weight:700;color:#4ade80">${inv.suggestedBy==='description'?(inv.vendor==='worldpac'?'speedDIAL':invEsc(inv.vendorName||'Vendor'))+' vehicle "'+invEsc(inv.vehicleDescription||'')+'" matches':inv.source&&/portal$/.test(inv.source)?'VIN on the PO matches':'VIN on the email matches'} ${invEsc(vehName(suggested))} #${invEsc(suggested.stockNumber||'—')}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn-ghost" id="fl-use-sugg">Use for all lines</button></div></div>`:''}
+    ${isEmailInvoice(inv)&&!onFile?`<div class="fl-banner" style="background:#0b1a2e;border-color:#1e3a5f"><div style="font-size:12px;font-weight:700;color:#7cb4f5;margin-bottom:6px">These parts are…</div><div style="display:inline-flex;border:1px solid #1e3a5f;border-radius:8px;overflow:hidden"><button class="fl-ps ${invPartState(inv)==='ordered'?'on':''}" data-ps="ordered" type="button">🚚 Ordered — on the way</button><button class="fl-ps ${invPartState(inv)==='received'?'on':''}" data-ps="received" type="button">✓ Already here</button></div><div style="font-size:11px;color:#8a9ab0;margin-top:6px">Ordered parts flip to received on their own when the delivery email arrives.</div></div>`:''}
     <div class="fl-receipt">
       <div style="width:44px;height:56px;flex-shrink:0;border-radius:4px;background:#131824;border:1px solid #243048;display:flex;align-items:center;justify-content:center;font-size:20px">${/portal$/.test(inv.source||'')?'📄':'📧'}</div>
       <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${/portal$/.test(inv.source||'')?'Invoice PDF':'Original email'}${inv.receipt&&inv.receipt.url?'':' (copy not saved)'}</div><div style="font-size:11px;color:#8a9ab0;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${invEsc((inv.email&&inv.email.subject)||'')}</div></div>
@@ -8120,6 +8243,7 @@ function renderFilingDetail(c,inv){
     <div style="margin:12px 0 0;text-align:center"><button class="fl-link" id="fl-skip" style="color:#8a9ab0;font-size:12px" ${INV.busy?'disabled':''}>Not an invoice — skip it</button></div>
     ${inv.textPreview?`<details style="margin-top:18px"><summary style="font-size:11px;color:#8a9ab0;cursor:pointer">What the agent read</summary><pre style="white-space:pre-wrap;font-size:11px;color:#8a9ab0;line-height:1.4;margin-top:8px;font-family:'Courier New',monospace">${invEsc(inv.textPreview)}</pre></details>`:''}`;
   const pickFor=(idxs)=>openVehiclePicker('Assign to vehicle',idxs.length===1?(inv.lines.find(l=>l.idx===idxs[0])||{}).description:`${idxs.length} lines`,vid=>{idxs.forEach(i=>d.assign[i]={kind:'vehicle',vehicleId:vid});render();});
+  c.querySelectorAll('[data-ps]').forEach(b=>b.onclick=()=>{d.partState=b.getAttribute('data-ps');render();});
   c.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{
     const i=parseInt(b.getAttribute('data-idx'));const act=b.getAttribute('data-act');
     if(act==='veh') pickFor([i]);
