@@ -7628,7 +7628,7 @@ function renderAnalytics(c){
 }
 
 // ═══════════════════════════════════════
-// NEEDS FILING — vendor invoices imported by the ac-recon-mail Worker (v30)
+// NEEDS FILING — vendor invoices imported by the ac-recon-mail Worker (v31)
 // Reads shops/automotive_connection/invoices (status 'needs_filing'); each line is
 // filed to a vehicle (parts added to its current visit + the emailed receipt copy
 // attached) or to Shop (tools / supplies). Invoices that look like they were already
@@ -8081,6 +8081,7 @@ function renderFilingDetail(c,inv){
     ${totalsBox}
     ${inv.lines.length>1?`<div style="display:flex;gap:8px;margin:4px 0 14px;flex-wrap:wrap"><button class="btn-ghost" id="fl-all-veh">All lines → one vehicle</button><button class="btn-ghost" id="fl-all-shop">All lines → Shop</button><button class="btn-ghost" id="fl-all-emp">All lines → Employee</button></div>`:''}
     <div class="fl-footer"><div style="flex:1"><div style="font-size:13px;font-weight:700">${done} of ${inv.lines.length} sorted</div><div style="font-size:11px;color:#8a9ab0">${canFile?'Ready to file':'Sort every line to a car, Shop, or an employee'}</div></div><button class="btn-red" id="fl-file" ${(!canFile||INV.busy)?'disabled style="opacity:.45;cursor:not-allowed"':''}>File invoice</button></div>
+    <div style="margin:12px 0 0;text-align:center"><button class="fl-link" id="fl-skip" style="color:#8a9ab0;font-size:12px" ${INV.busy?'disabled':''}>Not an invoice — skip it</button></div>
     ${inv.textPreview?`<details style="margin-top:18px"><summary style="font-size:11px;color:#8a9ab0;cursor:pointer">What the agent read</summary><pre style="white-space:pre-wrap;font-size:11px;color:#8a9ab0;line-height:1.4;margin-top:8px;font-family:'Courier New',monospace">${invEsc(inv.textPreview)}</pre></details>`:''}`;
   const pickFor=(idxs)=>openVehiclePicker('Assign to vehicle',idxs.length===1?(inv.lines.find(l=>l.idx===idxs[0])||{}).description:`${idxs.length} lines`,vid=>{idxs.forEach(i=>d.assign[i]={kind:'vehicle',vehicleId:vid});render();});
   c.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{
@@ -8106,6 +8107,7 @@ function renderFilingDetail(c,inv){
   if($('fl-notit')) $('fl-notit').onclick=()=>{d.onFileDismissed=true;render();};
   if($('fl-open-car')) $('fl-open-car').onclick=()=>{ST.selectedId=onFile.v.id;ST.view='detail';ST.activeTab='repairs';render();};
   if($('fl-attach')) $('fl-attach').onclick=()=>{if(confirm(`Attach this ${inv.vendorName} receipt to ${vehName(onFile.v)} #${onFile.v.stockNumber||''}? Its parts stay as they are.`)) fileInvoice(inv,{attachTo:onFile.v.id});};
+  if($('fl-skip')) $('fl-skip').onclick=async()=>{if(!confirm('Skip this? It leaves Needs filing and nothing is added to any vehicle (use for account payments, statements, duplicates). The import will not bring it back.')) return;try{await invoicesCol().doc(inv.id).set({status:'skipped',skipReason:'marked not an invoice',skippedAt:firebase.firestore.FieldValue.serverTimestamp(),skippedBy:ST.role||'manager'},{merge:true});INV.sel=null;toast('Skipped');}catch(e){toast('Skip failed: '+(e.message||e),'err');}render();};
   if($('fl-file')) $('fl-file').onclick=()=>{if(!canFile) return;const n=new Set(inv.lines.map(l=>d.assign[l.idx]).filter(a=>a.kind==='vehicle').map(a=>a.vehicleId)).size;if(confirm(`File this invoice? Parts will be added to ${n} vehicle${n!==1?'s':''} as received, with the email receipt attached.`)) fileInvoice(inv,'sort');};
 }
 // ── CORES — core charges opened by vendor invoices, closed automatically when the credit comes through ──
