@@ -24,18 +24,18 @@
   /* Red */
   --red:#C8102E;--red-dim:#180508;--red-border:#3d0d16;
   /* Backgrounds — deep layering */
-  --bg:#080a0e;
-  --surface:#0e1117;
-  --surface2:#131824;
-  --surface3:#1a2035;
+  --bg:#14213d;
+  --surface:#0f1a31;
+  --surface2:#1c2b4d;
+  --surface3:#233559;
   /* Borders */
-  --border:#1a2035;--border2:#243048;--border3:#2e3d56;
+  --border:#2b3d68;--border2:#364b7d;--border3:#445a91;
   /* Text */
-  --text:#eef0f6;--text2:#b8c3d3;--text3:#8a9ab0;--text4:#64758d;
+  --text:#f1f5ff;--text2:#c3cfe8;--text3:#9fb0d6;--text4:#7f91bb;
   /* Sidebar */
   --sidebar-w:230px;--topbar-h:56px;--bottom-nav-h:60px;
   /* Radius — sharp industrial */
-  --r:3px;--r-md:4px;--r-lg:6px;--r-xl:8px;
+  --r:6px;--r-md:8px;--r-lg:12px;--r-xl:16px;
   /* Font — geometric system stack */
   --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI','Helvetica Neue',Arial,sans-serif;
   --font-mono:'SF Mono','Fira Code','Cascadia Code','Courier New',monospace;
@@ -267,7 +267,7 @@ a{text-decoration:none;color:inherit}
 /* ═══ PARTS PIPELINE BUTTONS ═══ */
 .ppl-btn{
   font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;
-  border:1px solid #2a2f3f;background:#1e2230;color:#cdd3de;
+  border:1px solid #364b7d;background:#2b3d68;color:#cdd3de;
   cursor:pointer;transition:all .1s;font-family:inherit
 }
 .ppl-btn:hover{border-color:#374151;color:#fff}
@@ -285,20 +285,20 @@ a{text-decoration:none;color:inherit}
 /* ═══ FILE THUMBNAIL (receipts + OBDII previews) ═══ */
 .file-thumb{
   width:56px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;
-  background:#0a0c10;border:1px solid #1e2230;cursor:pointer;
+  background:#0a0c10;border:1px solid #2b3d68;cursor:pointer;
   display:flex;align-items:center;justify-content:center;position:relative;
   transition:border-color .12s, transform .12s;
 }
 .file-thumb:hover{border-color:#374151;transform:scale(1.04)}
 .file-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .file-thumb.pdf{
-  background:linear-gradient(135deg,#1a1d27 0%,#0d0f14 100%);
+  background:linear-gradient(135deg,#233559 0%,#16233f 100%);
 }
 .file-thumb.pdf::before{
   content:'';position:absolute;top:0;right:0;width:14px;height:14px;
-  background:#0d0f14;
+  background:#16233f;
   clip-path:polygon(100% 0, 0 0, 100% 100%);
-  border-left:1px solid #2a2f3f;border-bottom:1px solid #2a2f3f;
+  border-left:1px solid #364b7d;border-bottom:1px solid #364b7d;
 }
 .file-thumb-pdf-label{
   font-size:10px;font-weight:800;color:#C8102E;letter-spacing:1px;
@@ -394,7 +394,7 @@ pre.export-pre{background:var(--surface2);border:1px solid var(--border);border-
 .search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:16px;line-height:1;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
 
 /* ═══ STATS PANEL ═══ */
-.stats-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:14px;overflow:hidden;border-top:2px solid var(--red)}
+.stats-panel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:14px;overflow:hidden;border-top:2px solid var(--red)}
 .stats-period-bar{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .stats-period-bar::-webkit-scrollbar{display:none}
 .stats-period-btn{flex:1;min-width:52px;padding:8px 4px;font-size:10px;font-weight:700;color:var(--text4);border:none;background:none;cursor:pointer;letter-spacing:.8px;white-space:nowrap;border-bottom:2px solid transparent;transition:all .12s;text-transform:uppercase}
@@ -626,6 +626,28 @@ body.board-mode .main{margin-left:0!important}
 .emp-btn:hover{background:var(--surface3)}
 
 
+
+/* command-center palette for inline-styled cards */
+[style*="background:#111318"],[style*="background: #111318"]{background:#1c2b4d!important}
+[style*="background:#0c0e13"],[style*="background:#0d0f14"]{background:#16233f!important}
+[style*="background:#161921"],[style*="background:#1a1d27"]{background:#233559!important}
+[style*="#1e2230"]{border-color:#2b3d68!important}
+[style*="#2a2f3f"]{border-color:#364b7d!important}
+/* dashboard tiles */
+.dash-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.dash-tile{border:0;border-radius:14px;padding:14px 16px;color:#fff;text-align:left;cursor:pointer;font-family:inherit;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.dash-tile small{display:block;font-size:11px;font-weight:600;opacity:.9}
+.dash-tile .n{font-size:28px;font-weight:800;margin-top:4px;line-height:1}
+.dash-sec{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin:6px 2px 8px}
+.dash-vendors{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.dash-vendor{background:var(--surface2);border:1px solid var(--border2);border-radius:14px;padding:11px 8px;text-align:center;cursor:pointer;color:var(--text);font-family:inherit}
+.dash-vendor .vb{width:36px;height:36px;border-radius:10px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff}
+.dash-vendor .vn{font-size:12px;font-weight:600}.dash-vendor .vc{font-size:10px;color:var(--text3);margin-top:2px}
+.stats-step{display:flex;align-items:center;justify-content:center;gap:14px;padding:8px;border-bottom:1px solid var(--border);background:var(--surface3)}
+.stats-step button{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;width:34px;height:30px;font-size:16px;font-weight:700}
+.stats-step button[disabled]{opacity:.3;cursor:default}
+.stats-step span{font-size:14px;font-weight:700;min-width:130px;text-align:center}
+.stats-step a{font-size:11px;color:var(--text3);text-decoration:underline;cursor:pointer}
 </style>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -2071,21 +2093,39 @@ function renderContent(){
 // DASHBOARD
 // ═══════════════════════════════════════════════
 // Start timestamp of a dashboard period ('today'|'week'|'month'|'year'|'all'), shared by the dashboard tiles and the acquired drill-down.
-function periodStartTs(period){
-  const sod=new Date();sod.setHours(0,0,0,0);
-  const todayStart=sod.getTime();
-  if(period==='today') return todayStart;
-  if(period==='week')  return todayStart-((new Date().getDay())*86400000);
-  if(period==='month') return new Date(new Date().getFullYear(),new Date().getMonth(),1).getTime();
-  if(period==='year')  return new Date(new Date().getFullYear(),0,1).getTime();
-  return 0;
+function periodRangeTs(period){
+  const now=new Date();const sod=new Date();sod.setHours(0,0,0,0);const t=sod.getTime();
+  if(period==='today') return [t,Infinity];
+  if(period==='week')  return [t-(now.getDay()*86400000),Infinity];
+  if(period==='month'){const o=ST.dashMonthOff||0;return [new Date(now.getFullYear(),now.getMonth()-o,1).getTime(),o?new Date(now.getFullYear(),now.getMonth()-o+1,1).getTime():Infinity];}
+  if(period==='year'){const o=ST.dashYearOff||0;return [new Date(now.getFullYear()-o,0,1).getTime(),o?new Date(now.getFullYear()-o+1,0,1).getTime():Infinity];}
+  return [0,Infinity];
 }
+// Start timestamp of a dashboard period, shared by the dashboard tiles and the acquired drill-down.
+function periodStartTs(period){return periodRangeTs(period)[0];}
 const PERIOD_LABELS={today:'Today',week:'This week',month:'This month',year:'Year to date',all:'All time'};
+function periodLabel(period){
+  const now=new Date();
+  if(period==='month'&&(ST.dashMonthOff||0)>0) return new Date(now.getFullYear(),now.getMonth()-ST.dashMonthOff,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  if(period==='year'&&(ST.dashYearOff||0)>0) return String(now.getFullYear()-ST.dashYearOff);
+  return PERIOD_LABELS[period]||period;
+}
+window.dashStep=function(p,d){
+  const k=p==='month'?'dashMonthOff':'dashYearOff';
+  ST[k]=Math.max(0,(ST[k]||0)+d);
+  render();
+};
+window.dashStepReset=function(p){ST[p==='month'?'dashMonthOff':'dashYearOff']=0;render();};
 function acquiredInPeriod(period){
-  const start=periodStartTs(period);
-  return ST.vehicles.filter(v=>(v.createdAt||0)>=start);
+  const [a,b]=periodRangeTs(period);
+  return ST.vehicles.filter(v=>(v.createdAt||0)>=a&&(v.createdAt||0)<b);
 }
 
+window.dashVendor=function(k){
+  const o=invVendorOff();o.clear();
+  INV.list.forEach(i=>{const x=String(i.vendor||'other').toLowerCase();if(x!==k)o.add(x);});
+  invSaveVendorOff();ST.view='filing';render();
+};
 function renderDashboard(c){
   setTopbar('Dashboard',`<button class="btn-red" onclick="ST.view='add';render()">+ Add vehicle</button>`);
   const vs=ST.vehicles;
@@ -2120,8 +2160,8 @@ function renderDashboard(c){
   }
 
   function filterByPeriod(vArr,period){
-    const start=periodStartTs(period);
-    return vArr.filter(v=>(v.createdAt||0)>=start);
+    const [a,b]=periodRangeTs(period);
+    return vArr.filter(v=>(v.createdAt||0)>=a&&(v.createdAt||0)<b);
   }
 
   // Store active period in ST
@@ -2158,6 +2198,27 @@ function renderDashboard(c){
   ];
 
   let html='';
+
+  // ══════════════════════════════════════════
+  // COMMAND-CENTER TILES — what needs attention, one tap away
+  // ══════════════════════════════════════════
+  {
+    const stuckN=vs.filter(v=>stuckInfo(v).stuck).length;
+    const coreN=(typeof overdueCoreCount==='function'&&overdueCoreCount())||(typeof openCoreCount==='function'?openCoreCount():0);
+    const T=[
+      ['Needs filing',typeof filingCount==='function'?filingCount():0,'#2563eb',"ST.view='filing'"],
+      ['Parts to install',getAllToInstall().length,'#7c3aed',"ST.view='toinstall'"],
+      ['Parts on order',getAllPendingParts().length,'#0891b2',"ST.view='partspipeline'"],
+      ['Cores open',coreN,'#d97706',"ST.view='cores'"],
+      ['Concerns to approve',pendingCount,'#dc2626',"ST.view='approvals'"],
+      ['Stuck vehicles',stuckN,'#be123c',"ST._stuckOpen=true;ST.view='dashboard'"],
+    ];
+    html+=`<div class="dash-tiles">${T.map(t=>`<button class="dash-tile" style="background:${t[2]}" onclick="${t[3]};render()"><small>${t[0]}</small><div class="n">${t[1]}</div></button>`).join('')}</div>`;
+    if(typeof INV!=='undefined'&&INV.list&&INV.list.length){
+      const by={};INV.list.forEach(i=>{const k=String(i.vendor||'other').toLowerCase();(by[k]=by[k]||{k,i,n:0}).n++;});
+      html+=`<div class="dash-sec">Vendor invoices waiting</div><div class="dash-vendors">${Object.values(by).sort((a,b)=>b.n-a.n).map(g=>{const b=vendorBadge(g.i);return `<button class="dash-vendor" onclick="dashVendor('${g.k}')"><div class="vb" style="background:${b.bg}">${b.label}</div><div class="vn">${(g.i.vendorName||g.i.vendor||'Other')}</div><div class="vc">${g.n} to file</div></button>`;}).join('')}</div>`;
+    }
+  }
 
   // ══════════════════════════════════════════
   // 0. STUCK VEHICLES — workflow bottleneck alert
@@ -2210,6 +2271,7 @@ function renderDashboard(c){
       ${STAT_PERIODS.map(p=>`<button class="stats-period-btn${ST.dashPeriod===p.id?' active':''}"
         onclick="ST.dashPeriod='${p.id}';renderDashboard(document.getElementById('content'))">${p.label}</button>`).join('')}
     </div>
+    ${(ST.dashPeriod==='month'||ST.dashPeriod==='year')?(()=>{const p=ST.dashPeriod,off=p==='month'?(ST.dashMonthOff||0):(ST.dashYearOff||0);return `<div class="stats-step"><button onclick="dashStep('${p}',1)" title="Previous ${p}">‹</button><span>${periodLabel(p)}${off===0?(p==='year'?'':''):''}</span><button onclick="dashStep('${p}',-1)" ${off===0?'disabled':''} title="Next ${p}">›</button>${off>0?`<a onclick="dashStepReset('${p}')">back to current</a>`:''}</div>`;})():''}
     <div style="padding:12px 14px">
       <div style="display:flex;gap:0;margin-bottom:10px">
         <div style="flex:1;padding-right:14px;border-right:1px solid var(--border)">
@@ -2383,7 +2445,7 @@ function renderAcquired(c){
   const period=ST.acqPeriod||ST.dashPeriod||'today';
   renderVehicles(c,{
     period,
-    title:'Acquired · '+(PERIOD_LABELS[period]||period),
+    title:'Acquired · '+periodLabel(period),
     vehicles:acquiredInPeriod(period),
     back:()=>{ST.view='dashboard';render();},
     // the drill-down keeps its own filter state so All Vehicles is unaffected
@@ -2425,7 +2487,7 @@ function renderVehicles(c,scope){
   if(scope){
     const periods=[['today','Today'],['week','Week'],['month','Month'],['year','YTD'],['all','All time']];
     html+=`<div class="acq-bar">${periods.map(([id,l])=>`<button class="stats-period-btn${scope.period===id?' active':''}" data-period="${id}">${l}</button>`).join('')}</div>
-    <div class="acq-note">${scope.vehicles.length} vehicle${scope.vehicles.length!==1?'s':''} acquired ${(PERIOD_LABELS[scope.period]||'').toLowerCase()} · filters below apply within this group</div>`;
+    <div class="acq-note">${scope.vehicles.length} vehicle${scope.vehicles.length!==1?'s':''} acquired ${periodLabel(scope.period).toLowerCase()} · filters below apply within this group</div>`;
   }
   html+=`
   <div class="search-wrap">
