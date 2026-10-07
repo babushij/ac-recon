@@ -910,6 +910,43 @@ function writeToCurrentVisit(v, field, value){
   v.updatedAt = Date.now();
 }
 
+
+// ═══════════════════════════════════════════════
+// EDIT VEHICLE BASICS — stock #, mileage, color (e.g. after a repo / BHPH change)
+// ═══════════════════════════════════════════════
+window.editVehicleBasics=function(id){
+  const v=_vById(id); if(!v) return;
+  const old=document.getElementById('veh-edit-modal'); if(old) old.remove();
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const m=document.createElement('div');
+  m.id='veh-edit-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;font-family:inherit';
+  m.innerHTML=`<div style="background:#0e1117;border:1px solid #1e2230;border-radius:14px;max-width:380px;width:100%;padding:22px">
+    <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px">Edit vehicle</div>
+    <div style="font-size:12px;color:#9aa3b8;margin-bottom:14px">${esc(v.year)} ${esc(v.make)} ${esc(v.model)} · VIN ...${esc(String(v.vin||'').slice(-6))}</div>
+    <div class="field"><label>Stock #</label><input id="ve-stock" value="${esc(v.stockNumber)}" autocapitalize="characters"></div>
+    <div class="field"><label>Mileage</label><input id="ve-miles" inputmode="numeric" value="${esc(v.mileage)}"></div>
+    <div class="field"><label>Color</label><input id="ve-color" value="${esc(v.color)}"></div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="btn-ghost" style="flex:1" id="ve-cancel">Cancel</button>
+      <button class="btn-red" style="flex:1" id="ve-save">Save</button>
+    </div></div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove();
+  m.addEventListener('click',e=>{if(e.target===m)close();});
+  document.getElementById('ve-cancel').onclick=close;
+  document.getElementById('ve-save').onclick=function(){
+    const stock=document.getElementById('ve-stock').value.trim();
+    const miles=document.getElementById('ve-miles').value.replace(/[^0-9]/g,'');
+    const color=document.getElementById('ve-color').value.trim();
+    writeToCurrentVisit(v,'stockNumber',stock);
+    v.mileage=miles; v.color=color; v.updatedAt=Date.now();
+    save(); close();
+    toast('Vehicle updated');
+    if(typeof render==='function') render();
+  };
+};
+
 function startNewVisit(v, overrides={}){
   const visit = {
     id: v.id + '-v' + ((v.visits||[]).length + 1),
@@ -4860,6 +4897,7 @@ function renderDetail(c,v){
         <span>Stock: <strong style="color:#cdd3de">${v.stockNumber||'—'}</strong></span>
         <span>VIN: <strong style="color:#cdd3de;font-family:'Courier New',Courier,monospace">${vinHtml(v.vin)}</strong></span>
         <span>${v.color||''} · ${Number(v.mileage||0).toLocaleString()} mi</span>
+        ${ST.role==='manager'||ST.role==='sales'?`<button class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="editVehicleBasics('${v.id}')">✎ Edit stock / miles / color</button>`:''}
         ${mech?`<span style="color:${mech.color}">${mech.icon} ${mech.name}</span>`:''}
         ${pri?`<span style="color:${pri.color}">${pri.icon} ${pri.label} priority</span>`:''}
       </div>
