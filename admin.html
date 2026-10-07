@@ -1096,6 +1096,64 @@ function getAllPendingParts(){
   return out;
 }
 
+// ═══════════════════════════════════════════════
+// NEEDS INSTALLING — received parts waiting to go on a car, + loose inventory
+// ═══════════════════════════════════════════════
+function getAllToInstall(){
+  const out=[];
+  (ST.vehicles||[]).forEach(v=>{
+    const cur=currentVisit(v);
+    if(!cur||!Array.isArray(cur.parts)) return;
+    cur.parts.forEach((p,idx)=>{ if(partState(p)==='received') out.push({vehicle:v,part:p,partIdx:idx}); });
+  });
+  return out;
+}
+function getLooseParts(){
+  const out=[];
+  (ST.vehicles||[]).forEach(v=>{ (v.looseParts||[]).forEach((p,idx)=>out.push({vehicle:v,part:p,idx})); });
+  return out;
+}
+function _vById(id){ return (ST.vehicles||[]).find(x=>x.id===id); }
+function installPartById(vid,idx,on){
+  const v=_vById(vid); if(!v||!Array.isArray(v.parts)||!v.parts[idx]) return;
+  const p=v.parts[idx];
+  const upd=[...v.parts];
+  upd[idx]=on?{...p,state:'installed',installedDate:Date.now()}:{...p,state:'received',installedDate:null};
+  writeToCurrentVisit(v,'parts',upd);
+  syncPartsStatus(v); save();
+}
+function installAllReceived(vid){
+  let n=0;
+  (ST.vehicles||[]).forEach(v=>{
+    if(vid&&v.id!==vid) return;
+    const cur=currentVisit(v); if(!cur||!Array.isArray(cur.parts)) return;
+    let changed=false;
+    const upd=cur.parts.map(p=>{ if(partState(p)==='received'){changed=true;n++;return {...p,state:'installed',installedDate:Date.now()};} return p; });
+    if(changed){ writeToCurrentVisit(v,'parts',upd); syncPartsStatus(v); }
+  });
+  if(n) save();
+  return n;
+}
+// Part does not go on this car: take it off the vehicle (cost leaves the car) and keep it as loose inventory
+function partToStock(vid,idx){
+  const v=_vById(vid); if(!v||!Array.isArray(v.parts)||!v.parts[idx]) return;
+  const p=v.parts[idx];
+  const upd=v.parts.filter((_,i)=>i!==idx);
+  v.looseParts=[...(v.looseParts||[]),{...p,state:'stock',fromStock:v.stockNumber||'',stockedDate:Date.now()}];
+  writeToCurrentVisit(v,'parts',upd);
+  syncPartsStatus(v); save();
+}
+function stockToCar(fromVid,idx,toVid){
+  const from=_vById(fromVid), to=_vById(toVid);
+  if(!from||!to||!(from.looseParts||[])[idx]) return;
+  const p=from.looseParts[idx];
+  from.looseParts=from.looseParts.filter((_,i)=>i!==idx);
+  from.updatedAt=Date.now();
+  const {fromStock,stockedDate,...rest}=p;
+  writeToCurrentVisit(to,'parts',[...(to.parts||[]),{...rest,state:'received'}]);
+  syncPartsStatus(to); save();
+}
+
 // Finalize add-parts-from-receipt. picked = [{description, partNumber, eachCost, quantity, ...}]
 // matches = array of {receiptIdx (into picked), orderedIdx (into freshV.parts)} — closes those orders out
 function finalizeReceiptParts(freshV, picked, matches){
@@ -1866,6 +1924,7 @@ function buildSidebar(){
     {id:'salespipeline',label:'Sale pending / Sold',icon:saleIcon()},
     {section:'WORKFLOW'},
     {id:'partspipeline',label:'Parts pipeline',icon:partsIcon(),badge:getAllPendingParts().length},
+    {id:'toinstall',label:'Needs installing',icon:wrenchIcon(),badge:getAllToInstall().length},
     {id:'filing',label:'Needs filing',icon:filingIcon(),badge:filingCount()},
     {id:'cores',label:'Cores',icon:coreIcon(),badge:overdueCoreCount()||openCoreCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
@@ -1896,6 +1955,7 @@ function buildSidebar(){
     {section:'MY WORK'},
     mech?{id:'mypipeline',label:mech.name+' pipeline',icon:wrenchIcon()}:{id:'mypipeline',label:'My pipeline',icon:wrenchIcon()},
     {id:'partspipeline',label:'Parts pipeline',icon:partsIcon(),badge:getAllPendingParts().length},
+    {id:'toinstall',label:'Needs installing',icon:wrenchIcon(),badge:getAllToInstall().length},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
     {section:'BROWSE'},
     {id:'vehicles',label:'All vehicles',icon:carIcon()},
@@ -1997,6 +2057,7 @@ function renderContent(){
     case 'vendors':      renderVendors(c);break;
     case 'analytics':    renderAnalytics(c);break;
     case 'partspipeline':renderPartsPipeline(c);break;
+    case 'toinstall':    renderToInstall(c);break;
     case 'filing':       renderFiling(c);break;
     case 'employees':    renderEmployees(c);break;
     case 'cores':        renderCores(c);break;
@@ -3921,7 +3982,8 @@ function renderDetail(c,v){
         actionBtns = `<button class="ppl-btn ppl-receive" data-i="${i}" title="Mark as received">📦 Mark received</button>
           <button class="ppl-btn ppl-edit-order" data-i="${i}" title="Edit order details">✎ Edit ETA / Tracking</button>`;
       } else if(state === 'received'){
-        actionBtns = `<button class="ppl-btn ppl-install" data-i="${i}" title="Mark as installed on the car">🔧 Mark installed</button>`;
+        actionBtns = `<button class="ppl-btn ppl-install" data-i="${i}" title="Mark as installed on the car">🔧 Mark installed</button>
+          <button class="ppl-btn ppl-stock" data-i="${i}" title="Not going on this car — keep as inventory">📦 Not for this car</button>`;
       } else if(state === 'installed'){
         actionBtns = `<button class="ppl-btn ppl-uninstall" data-i="${i}" title="Back to received">↩ Not installed</button>`;
       }
@@ -3992,9 +4054,13 @@ function renderDetail(c,v){
       ? `<div style="background:#1e3a8a33;border:1px solid #1e3a8a;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#bfdbfe;display:flex;align-items:center;gap:8px"><span style="font-size:16px">⏳</span><span><strong>${groupedRows.needed.length+groupedRows.ordered.length} part${(groupedRows.needed.length+groupedRows.ordered.length)!==1?'s':''} pending</strong> · ${fmt$(pendingTotal)} not yet received</span></div>`
       : '';
 
+    const toInstallBanner = groupedRows.received.length
+      ? `<div id="to-install-banner" style="background:#4c1d9533;border:1px solid #4c1d95;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#ddd6fe;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:16px">🔧</span><span style="flex:1"><strong>${groupedRows.received.length} part${groupedRows.received.length!==1?'s':''} to install</strong> · tap Mark installed when it is on the car</span><button class="ppl-btn" id="inst-all-veh">Mark all installed</button></div>`
+      : '';
     partsPanel.innerHTML=`
       <div class="panel-title">Parts & Materials <span style="float:right;color:#C8102E">${fmt$(partsTotal)}</span></div>
       ${pendingBanner}
+      ${toInstallBanner}
       <div id="parts-list">${partsListHtml}</div>
       <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="field" style="grid-column:1/-1"><label>Part name *</label><input id="p-name" placeholder="e.g. Front brake pads"></div>
@@ -4028,6 +4094,11 @@ function renderDetail(c,v){
       partsPanel.querySelectorAll('.ppl-install').forEach(btn=>{
         btn.onclick=()=>window.markPartInstalled(parseInt(btn.dataset.i),true);
       });
+      partsPanel.querySelectorAll('.ppl-stock').forEach(btn=>{
+        btn.onclick=()=>{ partToStock(v.id,parseInt(btn.dataset.i)); toast('Moved to loose inventory'); render(); };
+      });
+      const _ia=partsPanel.querySelector('#inst-all-veh');
+      if(_ia) _ia.onclick=()=>{ const n=installAllReceived(v.id); toast(n+' parts marked installed'); render(); };
       partsPanel.querySelectorAll('.ppl-uninstall').forEach(btn=>{
         btn.onclick=()=>window.markPartInstalled(parseInt(btn.dataset.i),false);
       });
@@ -7048,6 +7119,62 @@ let _vendorTab = 'parts'; // module-scope to persist tab choice across re-render
 // ═══════════════════════════════════════════════
 // PARTS PIPELINE — full-page view of pending parts shop-wide
 // ═══════════════════════════════════════════════
+function renderToInstall(c){
+  setTopbar('Needs installing','');
+  const items=getAllToInstall();
+  const loose=getLooseParts();
+  const byV={};
+  items.forEach(it=>{(byV[it.vehicle.id]=byV[it.vehicle.id]||{vehicle:it.vehicle,items:[]}).items.push(it);});
+  const total=items.reduce((a,it)=>a+((parseFloat(it.part.cost)||0)*(parseInt(it.part.qty)||1)),0);
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  const btn='font-size:11px;font-weight:600;padding:6px 11px;border-radius:7px;border:1px solid #2a2f3f;background:#1a1d27;color:#cdd3de;cursor:pointer;font-family:inherit';
+  let h=`<div style="font-size:13px;color:#cdd3de;margin-bottom:10px">Parts that are in hand but not yet on the car. Tap <b>Mark installed</b> once the mechanic has put it on.</div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+     <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:12px 16px"><div style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">TO INSTALL</div><div id="ti-count" style="font-size:22px;font-weight:700;color:#ddd6fe">${items.length}</div></div>
+     <div style="background:#111318;border:1px solid #2a2f3f;border-radius:10px;padding:12px 16px"><div style="font-size:10px;color:#9aa3b8;letter-spacing:.5px">VALUE</div><div style="font-size:22px;font-weight:700;color:#C8102E">${fmt$(total)}</div></div>
+     ${items.length&&ST.role==='manager'?`<button id="ti-all" style="${btn};align-self:center;border-color:#4c1d95;color:#ddd6fe">🔧 Mark all ${items.length} as installed…</button>`:''}
+   </div>`;
+  if(!items.length){
+    h+=`<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:34px 20px;text-align:center;color:#9aa3b8"><div style="font-size:32px;opacity:.4">✅</div><div style="font-size:13px;color:#cdd3de;margin-top:6px">Nothing waiting to be installed</div></div>`;
+  }
+  Object.values(byV).forEach(g=>{
+    const v=g.vehicle;
+    h+=`<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;overflow:hidden;margin-bottom:10px">
+      <div class="ti-go" data-vid="${v.id}" style="padding:11px 14px;border-bottom:1px solid #1e2230;background:#0c0e13;cursor:pointer">
+        <div style="font-size:13px;font-weight:600;color:#fff">🚗 ${esc(`${v.year||''} ${v.make||''} ${v.model||''}`.trim())}</div>
+        <div style="font-size:11px;color:#9aa3b8">${v.stockNumber?'#'+esc(v.stockNumber):'—'} · ${g.items.length} part${g.items.length!==1?'s':''} to install</div>
+      </div>`;
+    g.items.forEach(it=>{
+      const p=it.part;
+      h+=`<div style="padding:10px 14px;border-bottom:1px solid #1e2230;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px"><div style="font-size:13px;color:#e2e4ea">${esc(p.name)}</div><div style="font-size:10px;color:#9aa3b8">${p.partNum?'#'+esc(p.partNum)+' · ':''}${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}</div></div>
+        <button class="ppl-btn ti-inst" data-vid="${v.id}" data-i="${it.partIdx}">🔧 Mark installed</button>
+        <button style="${btn}" class="ti-stock" data-vid="${v.id}" data-i="${it.partIdx}" title="This part is not going on this car — keep it as inventory">📦 Not for this car</button>
+      </div>`;
+    });
+    h+='</div>';
+  });
+  if(loose.length){
+    const cars=(ST.vehicles||[]).filter(v=>!(currentVisit(v)?.statuses||[]).includes('sold')).slice(0,400);
+    const opts=cars.map(v=>`<option value="${v.id}">${esc(`${v.stockNumber||''} ${v.year||''} ${v.make||''} ${v.model||''}`.trim())}</option>`).join('');
+    h+=`<div style="font-size:11px;font-weight:700;letter-spacing:.6px;color:#bfdbfe;margin:18px 0 8px">📦 LOOSE INVENTORY (${loose.length}) — not on any car</div>`;
+    loose.forEach(it=>{
+      const p=it.part;
+      h+=`<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px"><div style="font-size:13px;color:#e2e4ea">${esc(p.name)}</div><div style="font-size:10px;color:#9aa3b8">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}${p.fromStock?' · was on #'+esc(p.fromStock):''}</div></div>
+        <select class="ti-car" data-vid="${it.vehicle.id}" data-i="${it.idx}" style="background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:7px;border-radius:7px;font-size:12px;max-width:220px"><option value="">Put on a car…</option>${opts}</select>
+      </div>`;
+    });
+  }
+  c.innerHTML=h;
+  c.querySelectorAll('.ti-go').forEach(el=>el.onclick=()=>{ST.selectedId=el.dataset.vid;ST.view='detail';ST.activeTab='repairs';render();});
+  c.querySelectorAll('.ti-inst').forEach(b=>b.onclick=()=>{installPartById(b.dataset.vid,parseInt(b.dataset.i),true);toast('Marked installed');render();});
+  c.querySelectorAll('.ti-stock').forEach(b=>b.onclick=()=>{partToStock(b.dataset.vid,parseInt(b.dataset.i));toast('Moved to loose inventory');render();});
+  c.querySelectorAll('.ti-car').forEach(s=>s.onchange=()=>{if(!s.value)return;stockToCar(s.dataset.vid,parseInt(s.dataset.i),s.value);toast('Put on car');render();});
+  const all=c.querySelector('#ti-all');
+  if(all) all.onclick=()=>{ if(confirm(`Mark all ${items.length} received parts on ${Object.keys(byV).length} vehicle(s) as installed?\n\nUse this once to clear the backlog of parts that are already on the cars.`)){const n=installAllReceived();toast(`${n} parts marked installed`);render();} };
+}
+
 let _ppFilter = 'all'; // 'all' | 'ordered' | 'needed' | 'late'
 
 function renderPartsPipeline(c){
