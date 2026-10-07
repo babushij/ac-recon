@@ -1961,6 +1961,7 @@ function buildSidebar(){
     {id:'partspipeline',label:'Parts pipeline',icon:partsIcon(),badge:getAllPendingParts().length},
     {id:'toinstall',label:'Needs installing',icon:wrenchIcon(),badge:getAllToInstall().length},
     {id:'filing',label:'Needs filing',icon:filingIcon(),badge:filingCount()},
+    {id:'frazer',label:'Send to Frazer',icon:filingIcon(),badge:(FRZ.loaded&&FRZ.rows.length)||0},
     {id:'cores',label:'Cores',icon:coreIcon(),badge:overdueCoreCount()||openCoreCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
     {id:'board',label:'Shop board (TV)',icon:tvIcon()},
@@ -2093,6 +2094,7 @@ function renderContent(){
     case 'analytics':    renderAnalytics(c);break;
     case 'partspipeline':renderPartsPipeline(c);break;
     case 'toinstall':    renderToInstall(c);break;
+    case 'frazer':       renderFrazer(c);break;
     case 'filing':       renderFiling(c);break;
     case 'employees':    renderEmployees(c);break;
     case 'cores':        renderCores(c);break;
@@ -7194,6 +7196,137 @@ let _vendorTab = 'parts'; // module-scope to persist tab choice across re-render
 // ═══════════════════════════════════════════════
 // PARTS PIPELINE — full-page view of pending parts shop-wide
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// SEND TO FRAZER — costs filed to a car in AC Recon, queued for the Frazer desktop script (frazer-entry.ahk).
+// Flow: this page builds frazer_queue.tsv → the AutoHotkey script on the Frazer PC enters one Added Cost per line item
+// → it writes frazer_results.tsv → load that file here and the lines are marked sent. Nothing is ever sent twice.
+// Only invoices filed AFTER the start date are queued (older history is not re-sent). Vehicles/parts are never touched.
+// ═══════════════════════════════════════
+let FRZ={loaded:false,busy:false,rows:[],cfg:null,msg:'',results:{}};
+const frazerCfgRef=()=>db.collection('shops').doc('automotive_connection').collection('config').doc('frazer');
+async function frazerLoadCfg(){
+  try{const d=await frazerCfgRef().get();if(d.exists)return d.data();}catch(e){}
+  try{return JSON.parse(localStorage.getItem('frazerCfg')||'null');}catch(e){}
+  return null;
+}
+async function frazerSaveCfg(cfg){
+  FRZ.cfg=cfg;
+  try{localStorage.setItem('frazerCfg',JSON.stringify(cfg));}catch(e){}
+  try{await frazerCfgRef().set(cfg);}catch(e){console.warn('frazer cfg (saved on this device only):',e);}
+}
+const frazerVendorName=n=>{const m=(FRZ.cfg&&FRZ.cfg.vendorMap)||{};const k=String(n||'').trim().toLowerCase();return(m[k]!==undefined&&m[k]!=='')?m[k]:String(n||'').trim();};
+const frazerClean=s=>String(s==null?'':s).replace(/[\t\r\n]+/g,' ').trim();
+function frazerDate(ms){const d=new Date(ms);const p=n=>String(n).padStart(2,'0');return p(d.getMonth()+1)+'/'+p(d.getDate())+'/'+String(d.getFullYear()).slice(2);}
+async function frazerLoad(){
+  if(FRZ.busy)return;FRZ.busy=true;
+  try{
+    FRZ.cfg=await frazerLoadCfg();
+    if(!FRZ.cfg||!FRZ.cfg.startMs){FRZ.loaded=true;FRZ.rows=[];return;}
+    const snap=await invoicesCol().where('filedAt','>=',new Date(FRZ.cfg.startMs)).get();
+    const rows=[];
+    snap.docs.forEach(d=>{
+      const inv=normInvoice(d.id,d.data());
+      if(inv.status!=='filed'||inv.filedMode!=='parts_added')return;
+      const sent=inv.frazerSent||{};
+      inv.lines.forEach(l=>{
+        const a=l.assign;if(!a||a.kind!=='vehicle')return;
+        if(sent[l.idx])return;
+        const v=getV(a.vehicleId);
+        const amt=(typeof l.lineTotal==='number'?l.lineTotal:(parseFloat(l.eachCost)||0)*(parseInt(l.quantity)||1));
+        rows.push({key:inv.id+'|'+l.idx,invId:inv.id,idx:l.idx,vid:a.vehicleId,vehicle:v?vehName(v):'(vehicle removed)',stock:v?(v.stockNumber||''):'',vin:v?String(v.vin||''):'',
+          dateMs:inv.invoiceMs,vendorName:inv.vendorName||inv.vendor||'',desc:l.description||'',pn:l.partNumber||'',qty:parseInt(l.quantity)||1,amount:Math.round(amt*100)/100,order:inv.orderNumber||''});
+      });
+    });
+    rows.sort((a,b)=>String(a.stock).localeCompare(String(b.stock))||a.dateMs-b.dateMs);
+    FRZ.rows=rows;FRZ.loaded=true;
+  }catch(e){console.error('frazerLoad',e);FRZ.msg='Could not load: '+(e.message||e);FRZ.loaded=true;}
+  finally{FRZ.busy=false;if(ST.view==='frazer')render();}
+}
+function frazerProblem(r){
+  if(!r.stock&&r.vin.length<6)return'No stock # or VIN on the car';
+  if(!r.vendorName)return'No vendor';
+  if(!r.amount)return'Zero amount';
+  return'';
+}
+function frazerQueueTsv(){
+  const head=['key','stock','last6','date','vendor','description','amount'].join('\t');
+  const lines=FRZ.rows.filter(r=>!frazerProblem(r)).map(r=>[r.key,frazerClean(r.stock),r.vin.slice(-6).toUpperCase(),frazerDate(r.dateMs),frazerClean(frazerVendorName(r.vendorName)),frazerClean(r.desc).slice(0,60),r.amount.toFixed(2)].join('\t'));
+  return head+'\n'+lines.join('\n')+'\n';
+}
+window.frazerDownload=()=>{
+  const blob=new Blob([frazerQueueTsv()],{type:'text/tab-separated-values'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='frazer_queue.tsv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+  toast('frazer_queue.tsv downloaded — put it in the Frazer script folder');
+};
+async function frazerMarkSent(keys,note){
+  const byInv={};keys.forEach(k=>{const[i,x]=k.split('|');(byInv[i]=byInv[i]||{})[x]={ms:Date.now(),note:note||''};});
+  const batch=db.batch();
+  Object.keys(byInv).forEach(i=>batch.set(invoicesCol().doc(i),{frazerSent:byInv[i]},{merge:true}));
+  await batch.commit();
+}
+window.frazerSkip=async key=>{
+  if(!confirm('Mark this line as already in Frazer? It will not be queued again.'))return;
+  try{await frazerMarkSent([key],'manual');FRZ.rows=FRZ.rows.filter(r=>r.key!==key);toast('Marked as in Frazer');render();}catch(e){toast('Failed: '+(e.message||e),'err');}
+};
+window.frazerLoadResults=async input=>{
+  const f=input.files&&input.files[0];if(!f)return;
+  try{
+    const txt=await f.text();const res={};const done=[];
+    txt.split(/\r?\n/).slice(1).forEach(ln=>{
+      const c=ln.split('\t');if(c.length<2||!c[0])return;
+      res[c[0]]={status:c[1],note:c[2]||''};
+      if(c[1]==='ADDED'||c[1]==='DUPLICATE')done.push(c[0]);
+    });
+    if(done.length)await frazerMarkSent(done,'script');
+    FRZ.results=Object.assign({},FRZ.results,res);
+    FRZ.rows=FRZ.rows.filter(r=>!done.includes(r.key));
+    const flagged=Object.keys(res).filter(k=>!done.includes(k)).length;
+    toast(`${done.length} marked sent${flagged?` · ${flagged} need attention`:''}`);
+  }catch(e){toast('Could not read results: '+(e.message||e),'err');}
+  input.value='';render();
+};
+window.frazerSetStart=async mode=>{
+  const cur=FRZ.cfg||{};
+  const ms=mode==='now'?Date.now():new Date(prompt('Send costs filed on or after (YYYY-MM-DD):',new Date().toISOString().slice(0,10))+'T00:00:00').getTime();
+  if(!ms||isNaN(ms))return;
+  await frazerSaveCfg(Object.assign({},cur,{startMs:ms,vendorMap:cur.vendorMap||{}}));
+  FRZ.loaded=false;render();
+};
+window.frazerVendor=async(k,val)=>{const cur=FRZ.cfg||{};const m=Object.assign({},cur.vendorMap||{});if(val.trim())m[k]=val.trim();else delete m[k];await frazerSaveCfg(Object.assign({},cur,{vendorMap:m}));render();};
+function renderFrazer(c){
+  setTopbar('Send to Frazer','');
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  const money=n=>(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const btn='font-size:12px;font-weight:600;padding:9px 14px;border-radius:8px;border:1px solid #364b7d;background:#1c2b4d;color:#e6ebf7;cursor:pointer;font-family:inherit';
+  if(!FRZ.loaded&&!FRZ.busy)frazerLoad();
+  if(!FRZ.loaded){c.innerHTML='<div style="color:#9aa3b8;padding:20px">Loading…</div>';return;}
+  if(!FRZ.cfg||!FRZ.cfg.startMs){
+    c.innerHTML=`<div style="max-width:560px;font-size:13px;color:#cdd3de;line-height:1.5"><b style="font-size:15px">Send costs to Frazer</b><p>Every part or line you file to a car in <b>Needs filing</b> can be entered into that car's <b>Added Costs</b> in Frazer — one Frazer line per item — by the script on the Frazer PC.</p><p>Pick where to start. Invoices filed <b>before</b> this moment are treated as already handled and are never sent.</p><button style="${btn}" onclick="frazerSetStart('now')">Start from now</button> <button style="${btn}" onclick="frazerSetStart('date')">Start from a date…</button></div>`;
+    return;
+  }
+  const rows=FRZ.rows;const bad=rows.filter(frazerProblem),ok=rows.filter(r=>!frazerProblem(r));
+  const vendors=[...new Set(rows.map(r=>r.vendorName).filter(Boolean))];
+  const vm=(FRZ.cfg.vendorMap)||{};
+  const byCar={};ok.forEach(r=>{(byCar[r.vid]=byCar[r.vid]||{name:r.vehicle,stock:r.stock,rows:[]}).rows.push(r);});
+  const resBad=Object.entries(FRZ.results).filter(([k,v])=>v.status!=='ADDED'&&v.status!=='DUPLICATE');
+  const total=ok.reduce((a,r)=>a+r.amount,0);
+  let h=`<div style="font-size:13px;color:#cdd3de;margin-bottom:12px">Costs you filed to cars since <b>${new Date(FRZ.cfg.startMs).toLocaleDateString()}</b> that are not in Frazer yet. Download the file, run the Frazer script on the Frazer PC, then load the results file it creates.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <button style="${btn};${ok.length?'background:#c0392b;border-color:#c0392b;color:#fff':'opacity:.5'}" ${ok.length?'':'disabled'} onclick="frazerDownload()">1 · Download frazer_queue.tsv (${ok.length} lines · ${money(total)})</button>
+    <label style="${btn}">2 · Load frazer_results.tsv<input type="file" accept=".tsv,.txt" style="display:none" onchange="frazerLoadResults(this)"></label>
+    <button style="${btn}" onclick="FRZ.loaded=false;render()">Refresh</button></div>`;
+  if(FRZ.msg)h+=`<div style="color:#f87171;font-size:12px;margin-bottom:10px">${esc(FRZ.msg)}</div>`;
+  if(resBad.length)h+=`<div style="background:#2a1216;border:1px solid #5c1420;border-radius:10px;padding:12px;margin-bottom:14px"><div style="font-weight:700;color:#f87171;margin-bottom:6px">Needs your attention (${resBad.length})</div>${resBad.map(([k,v])=>{const r=rows.find(x=>x.key===k);return`<div style="font-size:12px;color:#e6ebf7;margin:4px 0"><b>${esc(v.status)}</b> · ${r?esc(r.vehicle)+' #'+esc(r.stock)+' · '+esc(r.desc)+' '+money(r.amount):esc(k)}<div style="color:#9aa3b8">${esc(v.note)}</div></div>`;}).join('')}</div>`;
+  if(vendors.length)h+=`<details style="margin-bottom:14px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#9aa3b8;letter-spacing:.5px">VENDOR NAMES IN FRAZER (${vendors.length})</summary><div style="font-size:12px;color:#9aa3b8;margin:8px 0">The script types this name into Frazer's vendor search and picks the exact match. It must match the Frazer vendor list.</div>${vendors.map(v=>{const k=v.trim().toLowerCase();return`<div style="display:flex;gap:8px;align-items:center;margin:6px 0"><span style="width:200px;font-size:12px;color:#cdd3de">${esc(v)}</span>→<input value="${esc(vm[k]||'')}" placeholder="${esc(v)}" onchange="frazerVendor('${esc(k).replace(/'/g,"\\'")}',this.value)" style="flex:1;max-width:260px;padding:7px 9px;border-radius:7px;border:1px solid #364b7d;background:#0f1a31;color:#e6ebf7;font-family:inherit"></div>`;}).join('')}</details>`;
+  if(bad.length)h+=`<div style="background:#2a2412;border:1px solid #5c4a14;border-radius:10px;padding:12px;margin-bottom:14px"><div style="font-weight:700;color:#fbbf24;margin-bottom:6px">Not queued (${bad.length}) — fix these first</div>${bad.map(r=>`<div style="font-size:12px;color:#e6ebf7;margin:4px 0">${esc(r.vehicle)} · ${esc(r.desc)} ${money(r.amount)} — <span style="color:#fbbf24">${frazerProblem(r)}</span></div>`).join('')}</div>`;
+  if(!ok.length&&!bad.length)h+=`<div style="padding:30px;text-align:center;color:#9aa3b8;border:1px dashed #364b7d;border-radius:12px">Nothing waiting for Frazer.</div>`;
+  Object.values(byCar).forEach(g=>{
+    h+=`<div style="background:#1c2b4d;border:1px solid #2b3d68;border-radius:12px;padding:12px 14px;margin-bottom:10px"><div style="font-weight:700;margin-bottom:6px">${esc(g.name)} <span style="color:#9aa3b8;font-weight:500">#${esc(g.stock)}</span><span style="float:right;color:#9aa3b8;font-weight:500">${money(g.rows.reduce((a,r)=>a+r.amount,0))}</span></div>`+
+      g.rows.map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-top:1px solid #2b3d68;font-size:12px"><span style="color:#9aa3b8;width:62px">${frazerDate(r.dateMs)}</span><span style="width:140px;color:#818cf8">${esc(frazerVendorName(r.vendorName))}</span><span style="flex:1">${esc(r.desc)}${r.qty>1?' ×'+r.qty:''}</span><b>${money(r.amount)}</b><button style="${btn};padding:4px 8px;font-size:11px" onclick="frazerSkip('${esc(r.key)}')" title="Already entered in Frazer by hand">In Frazer</button></div>`).join('')+`</div>`;
+  });
+  c.innerHTML=h;
+}
+
 function renderToInstall(c){
   setTopbar('Needs installing','');
   const mechSel=ST.tiMech===undefined?(ST.role!=='manager'?ST.role:''):ST.tiMech;
