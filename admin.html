@@ -4170,7 +4170,7 @@ function renderDetail(c,v){
         btn.onclick=()=>window.markPartInstalled(parseInt(btn.dataset.i),true);
       });
       partsPanel.querySelectorAll('.ppl-stock').forEach(btn=>{
-        btn.onclick=()=>{ partToStock(v.id,parseInt(btn.dataset.i)); toast('Moved to loose inventory'); render(); };
+        btn.onclick=()=>{ if(!confirm('Take this part off this car and keep it as loose inventory?\n\n(You can put it back from Needs installing → Loose inventory.)')) return; partToStock(v.id,parseInt(btn.dataset.i)); toast('Moved to loose inventory'); render(); };
       });
       const _ia=partsPanel.querySelector('#inst-all-veh');
       if(_ia) _ia.onclick=()=>{ const n=installAllReceived(v.id); toast(n+' parts marked installed'); render(); };
@@ -7245,6 +7245,7 @@ function renderToInstall(c){
       const p=it.part;
       h+=`<div style="background:#111318;border:1px solid #1e2230;border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <div style="flex:1;min-width:160px"><div style="font-size:13px;color:#e2e4ea">${esc(p.name)}</div><div style="font-size:10px;color:#9aa3b8">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}${p.fromStock?' · was on #'+esc(p.fromStock):''}</div></div>
+        <button class="ppl-btn ti-back" data-vid="${it.vehicle.id}" data-i="${it.idx}" style="min-height:42px">↩ Put back on ${it.vehicle.stockNumber?'#'+esc(it.vehicle.stockNumber):'its car'}</button>
         <select class="ti-car" data-vid="${it.vehicle.id}" data-i="${it.idx}" style="background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:7px;border-radius:7px;font-size:12px;max-width:220px"><option value="">Put on a car…</option>${opts}</select>
       </div>`;
     });
@@ -7253,7 +7254,8 @@ function renderToInstall(c){
   c.querySelectorAll('.ti-chip').forEach(b=>b.onclick=()=>{ST.tiMech=b.dataset.m;render();});
   c.querySelectorAll('.ti-go').forEach(el=>el.onclick=()=>{ST.selectedId=el.dataset.vid;ST.view='detail';ST.activeTab='repairs';render();});
   c.querySelectorAll('.ti-inst').forEach(b=>b.onclick=()=>{installPartById(b.dataset.vid,parseInt(b.dataset.i),true);toast('Marked installed');render();});
-  c.querySelectorAll('.ti-stock').forEach(b=>b.onclick=()=>{partToStock(b.dataset.vid,parseInt(b.dataset.i));toast('Moved to loose inventory');render();});
+  c.querySelectorAll('.ti-stock').forEach(b=>b.onclick=()=>{if(!confirm('Take this part off the car and keep it as loose inventory?\n\n(You can put it back from the Loose inventory list.)'))return;partToStock(b.dataset.vid,parseInt(b.dataset.i));toast('Moved to loose inventory');render();});
+  c.querySelectorAll('.ti-back').forEach(b=>b.onclick=()=>{stockToCar(b.dataset.vid,parseInt(b.dataset.i),b.dataset.vid);toast('Put back on the car');render();});
   c.querySelectorAll('.ti-car').forEach(s=>s.onchange=()=>{if(!s.value)return;stockToCar(s.dataset.vid,parseInt(s.dataset.i),s.value);toast('Put on car');render();});
   const all=c.querySelector('#ti-all');
   if(all) all.onclick=()=>{ if(confirm(`Mark all ${allItems.length} received parts on ${new Set(allItems.map(x=>x.vehicle.id)).size} vehicle(s) as installed?\n\nUse this once to clear the backlog of parts that are already on the cars.`)){const n=installAllReceived();toast(`${n} parts marked installed`);render();} };
