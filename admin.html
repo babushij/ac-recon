@@ -2563,6 +2563,12 @@ function renderVehicles(c,scope){
       <option value="__none__">— Not assigned</option>
       ${mechOptions}
     </select>
+    <select id="vf-sort" style="flex:1;background:#111318;border:1px solid #2a2f3f;border-radius:8px;padding:8px 10px;color:${(ST.vfSort&&ST.vfSort!=='updated')?'#fff':'#555d73'};font-size:12px;font-weight:600">
+      <option value="updated">Sort: recently updated</option>
+      <option value="stock">Sort: stock # (A→Z, 1→9)</option>
+      <option value="stockdesc">Sort: stock # (newest first)</option>
+      <option value="nostock">Sort: no stock # first</option>
+    </select>
   </div>`;
 
   // ── Apply filters ──
@@ -2585,7 +2591,14 @@ function renderVehicles(c,scope){
   if(ST[F.mech]==='__none__') filtered=filtered.filter(v=>!v.assignedTo);
   else if(ST[F.mech]) filtered=filtered.filter(v=>v.assignedTo===ST[F.mech]||v.assignedTo2===ST[F.mech]);
 
-  const sorted=[...filtered].sort((a,b)=>b.updatedAt-a.updatedAt);
+  const _stk=v=>String(v.stockNumber||'').trim();
+  const _cmp=(a,b)=>_stk(a).localeCompare(_stk(b),undefined,{numeric:true,sensitivity:'base'});
+  const _mode=ST.vfSort||'updated';
+  const sorted=[...filtered].sort(
+    _mode==='stock'?(a,b)=>(_stk(a)?0:1)-(_stk(b)?0:1)||_cmp(a,b):
+    _mode==='stockdesc'?(a,b)=>(_stk(a)?0:1)-(_stk(b)?0:1)||_cmp(b,a):
+    _mode==='nostock'?(a,b)=>(_stk(a)?1:0)-(_stk(b)?1:0)||_cmp(a,b):
+    (a,b)=>b.updatedAt-a.updatedAt);
 
   // Active filter summary
   const inclLabels=ST[F.include].map(sid=>SMAP[sid]).filter(Boolean).map(s=>`${s.icon} ${s.label}`);
@@ -2630,6 +2643,9 @@ function renderVehicles(c,scope){
       rerender();
     });
   });
+
+  const sSel=c.querySelector('#vf-sort');
+  if(sSel){ sSel.value=ST.vfSort||'updated'; sSel.onchange=()=>{ST.vfSort=sSel.value;rerender();}; }
 
   const mSel=c.querySelector('#vf-mech');
   if(mSel){ mSel.value=ST[F.mech]||''; mSel.onchange=()=>{ST[F.mech]=mSel.value;rerender();}; }
@@ -4105,6 +4121,16 @@ function renderDetail(c,v){
       const trackingLine = (state==='ordered' && p.trackingNum)
         ? `<div style="font-size:10px;color:#cdd3de;margin-top:2px"><span style="color:#9aa3b8">Tracking:</span> <a href="#" onclick="window.openTrackingSearch('${(p.trackingNum||'').replace(/'/g,'')}');return false;" style="color:#60a5fa;text-decoration:none">${p.trackingNum}</a></div>`
         : '';
+      // link to the receipt this part was filed from (invoice receipt copy on the car)
+      let rcpt = null;
+      if(p.invoiceId){
+        const _all = [].concat(v.receipts||[], ...(v.visits||[]).map(vi=>vi.receipts||[]));
+        rcpt = _all.find(r=>r && r.invoiceId===p.invoiceId && r.url);
+      }
+      const rcptUrl = (rcpt && rcpt.url) || p.receiptUrl || '';
+      const receiptLine = rcptUrl
+        ? `<div style="font-size:10px;margin-top:2px"><a href="${rcptUrl}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:none">🧾 Receipt${p.orderNumber?' #'+p.orderNumber:''}</a></div>`
+        : '';
       const noteLine = p.note
         ? `<div style="font-size:10px;color:#fbbf24;margin-top:2px;font-style:italic">📝 ${p.note}</div>`
         : '';
@@ -4118,6 +4144,7 @@ function renderDetail(c,v){
             <div style="font-size:13px;color:#e2e4ea">${p.name}</div>
             <div style="font-size:10px;color:#9aa3b8">${p.partNum?`#${p.partNum}`:''}${p.partNum&&vName?' · ':''}${vName?`<span style="color:#818cf8">${vendorIconImg(vName,14)}${vName}</span>`:''}</div>
             ${trackingLine}
+            ${receiptLine}
             ${noteLine}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
