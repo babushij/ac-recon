@@ -8332,7 +8332,7 @@ const vehName=v=>`${v.year||''} ${v.make||''} ${v.model||''}`.replace(/\s+/g,' '
 const vehLast6=v=>String(v.vin||'').slice(-6).toUpperCase();
 function vehIsActive(v){const cv=currentVisit(v);return !(cv&&(cv.statuses||[]).includes('booked'));}
 function getDraft(inv){
-  if(!INV.draft[inv.id]) INV.draft[inv.id]={assign:{},edits:{},onFileDismissed:false};
+  if(!INV.draft[inv.id]) INV.draft[inv.id]={assign:{},edits:{},onFileDismissed:false,discount:null};
   if(!INV.draft[inv.id].edits) INV.draft[inv.id].edits={};
   return INV.draft[inv.id];
 }
@@ -8353,10 +8353,12 @@ function effLine(inv,l){
   const eachCost=Math.max(0,Math.round(Math.abs(parseFloat(e.eachCost!=null?e.eachCost:l.eachCost)||0)*100)/100);
   return {...l,quantity,eachCost,lineTotal:Math.round(eachCost*quantity*100)/100,edited:!!(e.quantity!=null||e.eachCost!=null)};
 }
+// Vendor discount (RockAuto 5% etc.): the draft value wins over what the email reader found. Positive number.
+function invDiscount(inv){const d=INV.draft[inv.id];const v=(d&&d.discount!=null&&d.discount!=='')?parseFloat(d.discount):parseFloat(inv.discount);return Math.max(0,Math.round((v||0)*100)/100);}
 function invTotals(inv){
   const lines=inv.lines.map(l=>effLine(inv,l));
   const linesSum=Math.round(lines.reduce((a,l)=>a+l.lineTotal,0)*100)/100;
-  const extras=(parseFloat(inv.shipping)||0)+(parseFloat(inv.tax)||0);
+  const extras=Math.round(((parseFloat(inv.shipping)||0)+(parseFloat(inv.tax)||0)-invDiscount(inv))*100)/100;
   const computed=Math.round((linesSum+extras)*100)/100;
   const stated=inv.total!=null?Math.round((parseFloat(inv.total)||0)*100)/100:null;
   const diff=stated!=null?Math.round((computed-stated)*100)/100:0;
@@ -8410,6 +8412,24 @@ function ensurePartsVendor(name){
 }
 
 // ── Filing: write parts + receipt copy to vehicles, mark invoice filed ──
+// Mutates lines (already effLine'd): final = parts - discount + tax + shipping, shared by each line's weight (discount %, tax, shipping pro rata).
+// Core charges, returns and zero lines are left alone. Returns the net amount spread (0 = nothing changed).
+function allocateExtras(inv,lines){
+  const ex=Math.round(((parseFloat(inv.shipping)||0)+(parseFloat(inv.tax)||0)-invDiscount(inv))*100)/100;
+  const tgt=lines.filter(l=>l.lineTotal>0&&!l.isCore&&!l.isReturn);
+  const base=Math.round(tgt.reduce((a,l)=>a+l.lineTotal,0)*100)/100;
+  if(ex===0||base<=0) return 0;
+  const final=Math.max(0,Math.round((base+ex)*100)/100);
+  let left=final;
+  tgt.forEach((l,i)=>{
+    const nt=i===tgt.length-1?left:Math.round(final*l.lineTotal/base*100)/100;
+    left=Math.round((left-nt)*100)/100;
+    l.baseTotal=l.lineTotal;l.extraShare=Math.round((nt-l.lineTotal)*100)/100;
+    l.lineTotal=nt;
+    l.eachCost=Math.round(nt/Math.abs(l.quantity)*10000)/10000;
+  });
+  return ex;
+}
 async function fileInvoice(inv,mode){
   // mode: 'sort' (lines assigned in draft)
   //     | {attachTo: vehicleId}                  already on file: attach the email receipt only, parts untouched
@@ -8420,22 +8440,7 @@ async function fileInvoice(inv,mode){
   // Shipping + tax are real cost of the parts: spread them across the positive, non-core lines in proportion to line total
   // so they land on the car / shop / employee charge / Frazer entry. Skipped when only attaching a receipt to parts already on file.
   let extrasShared=0;
-  if(!(mode&&mode.attachTo)){
-    const ex=Math.round(((parseFloat(inv.shipping)||0)+(parseFloat(inv.tax)||0))*100)/100;
-    const tgt=lines.filter(l=>l.lineTotal>0&&!l.isCore&&!l.isReturn);
-    const base=tgt.reduce((a,l)=>a+l.lineTotal,0);
-    if(ex>0&&base>0){
-      let left=ex;
-      tgt.forEach((l,i)=>{
-        const share=i===tgt.length-1?left:Math.round(ex*l.lineTotal/base*100)/100;
-        left=Math.round((left-share)*100)/100;
-        l.baseTotal=l.lineTotal;l.extraShare=share;
-        l.lineTotal=Math.round((l.lineTotal+share)*100)/100;
-        l.eachCost=Math.round(l.lineTotal/Math.abs(l.quantity)*10000)/10000;
-      });
-      extrasShared=ex;
-    }
-  }
+  if(!(mode&&mode.attachTo)) extrasShared=allocateExtras(inv,lines);
   const byVeh={};const shopIdx=[];
   const assignOf={};
   if(mode&&mode.attachTo){
@@ -8518,7 +8523,7 @@ async function fileInvoice(inv,mode){
     await invoicesCol().doc(inv.id).set({
       status:'filed',filedAt:firebase.firestore.FieldValue.serverTimestamp(),filedBy:ST.role||'manager',
       filedMode:(mode&&mode.attachTo)?(mode.updateParts?'parts_updated':'attach_existing'):'parts_added',
-      lines:outLines,linesSum:extrasShared?Math.round(lines.reduce((x,l)=>x+l.lineTotal,0)*100)/100:t.linesSum,extrasAllocated:extrasShared||0,vehicleIds:Object.keys(byVeh),shopLineCount:shopIdx.length,employeeLineCount:empLines.length,employeeIds:[...new Set(empLines.map(x=>x.employeeId))]
+      lines:outLines,linesSum:extrasShared?Math.round(lines.reduce((x,l)=>x+l.lineTotal,0)*100)/100:t.linesSum,extrasAllocated:extrasShared||0,discountApplied:invDiscount(inv),vehicleIds:Object.keys(byVeh),shopLineCount:shopIdx.length,employeeLineCount:empLines.length,employeeIds:[...new Set(empLines.map(x=>x.employeeId))]
     },{merge:true});
     delete INV.draft[inv.id];
     INV.sel=null;
@@ -8634,6 +8639,7 @@ function renderFilingDetail(c,inv){
   const done=inv.lines.filter(l=>d.assign[l.idx]).length;
   const canFile=done===inv.lines.length&&inv.lines.length>0;
   const T=invTotals(inv);
+  const PV={};{const pl=inv.lines.map(l=>effLine(inv,l));allocateExtras(inv,pl);pl.forEach(l=>{PV[l.idx]=l;});}
   const line=l0=>{
     const l=effLine(inv,l0);
     const a=d.assign[l.idx];const v=a&&a.kind==='vehicle'?getV(a.vehicleId):null;
@@ -8643,12 +8649,13 @@ function renderFilingDetail(c,inv){
     else if(a.kind==='shop') state=`<div class="fl-assigned" style="background:#2a1a06;border-color:#6b4410"><div style="flex:1"><div style="font-size:13px;font-weight:600">Shop — tools &amp; supplies</div><div style="font-size:11px;color:#d6b98a">Not tied to a vehicle</div></div><button class="fl-link" data-act="clear" data-idx="${l.idx}" style="color:#fbbf24">Change</button></div>`;
     else state=`<div class="fl-assigned" style="background:#0b1a2e;border-color:#1e3a5f"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v?invEsc(vehName(v)):'(vehicle missing)'}</div><div style="font-size:11px;color:#8a9ab0">${v?`#${invEsc(v.stockNumber||'—')} · VIN …<b style="color:#fff;font-weight:800;font-family:'Courier New',monospace">${invEsc(vehLast6(v))}</b>`:''}</div></div><button class="fl-link" data-act="clear" data-idx="${l.idx}" style="color:#7cb4f5">Change</button></div>`;
     return `<div class="fl-line" style="border-color:${a?'#1a2035':'#2e3d56'}">
-      <div style="display:flex;justify-content:space-between;gap:10px"><div style="min-width:0"><div style="font-size:14px;font-weight:600">${invEsc(l.description)}</div><div style="font-size:11px;color:#8a9ab0;margin-top:3px;font-family:'Courier New',monospace">${invEsc(l.partNumber||'—')}${l.isCore?` · <span style="color:${l.isReturn?'#4ade80':'#fbbf24'};font-family:inherit">${l.isReturn?'core credit':'core charge'}</span>`:l.isReturn?' · <span style="color:#4ade80;font-family:inherit">return</span>':''}${l.edited?' · <span style="color:#fbbf24">edited</span>':''}</div></div><div style="font-size:14px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums" data-linetotal="${l.idx}">${invMoney(l.lineTotal)}</div></div>
+      <div style="display:flex;justify-content:space-between;gap:10px"><div style="min-width:0"><div style="font-size:14px;font-weight:600">${invEsc(l.description)}</div><div style="font-size:11px;color:#8a9ab0;margin-top:3px;font-family:'Courier New',monospace">${invEsc(l.partNumber||'—')}${l.isCore?` · <span style="color:${l.isReturn?'#4ade80':'#fbbf24'};font-family:inherit">${l.isReturn?'core credit':'core charge'}</span>`:l.isReturn?' · <span style="color:#4ade80;font-family:inherit">return</span>':''}${l.edited?' · <span style="color:#fbbf24">edited</span>':''}</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums" data-linetotal="${l.idx}">${invMoney(l.lineTotal)}</div>${PV[l.idx]&&PV[l.idx].extraShare?`<div style="font-size:11px;font-weight:700;color:#4ade80">cost on car ${invMoney(PV[l.idx].lineTotal)}</div><div style="font-size:10px;font-weight:500;color:#8a9ab0">${PV[l.idx].extraShare>0?"+":"−"}${invMoney(Math.abs(PV[l.idx].extraShare))} disc/tax/ship</div>`:""}</div></div>
       <div class="fl-edit"><label>Qty ${l.quantity<0?'<span style="color:#4ade80">−</span>':''}<input type="number" inputmode="numeric" min="1" step="1" value="${Math.abs(l.quantity)}" data-edit="quantity" data-idx="${l.idx}"></label><label>Each $ <input type="number" inputmode="decimal" min="0" step="0.01" value="${l.eachCost.toFixed(2)}" data-edit="eachCost" data-idx="${l.idx}"></label>${l.edited?`<button class="fl-link" data-act="reset" data-idx="${l.idx}" style="color:#8a9ab0">Reset</button>`:''}</div>${state}</div>`;
   };
   const totals=[['Shipping',inv.shipping],['Tax',inv.tax]].filter(x=>x[1]!=null&&x[1]!==0).map(x=>`<span>${x[0]} ${invMoney(x[1])}</span>`).join(' · ');
   const totalsBox=`<div class="fl-totals ${T.mismatch?'bad':'ok'}" id="fl-totals">
       <div style="flex:1"><div style="font-size:12px;font-weight:700">Lines ${invMoney(T.linesSum)}${T.extras?` + shipping/tax ${invMoney(T.extras)} (spread into part costs)`:''} = <span style="font-variant-numeric:tabular-nums">${invMoney(T.computed)}</span></div>
+      <div style="font-size:11px;margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">Discount $ <input type="number" inputmode="decimal" min="0" step="0.01" id="fl-disc" value="${invDiscount(inv)?invDiscount(inv).toFixed(2):''}" placeholder="0.00" style="width:80px"><button class="fl-link" id="fl-disc5" type="button">5% off</button></div>
       <div style="font-size:11px;margin-top:2px">${T.stated==null?'Invoice total not read from the email':T.mismatch?`Invoice total is ${invMoney(T.stated)} — off by ${invMoney(Math.abs(T.diff))}. Check a quantity or price above.`:`Matches the invoice total of ${invMoney(T.stated)}`}</div></div>
       <span style="font-size:18px">${T.stated==null?'·':T.mismatch?'⚠':'✓'}</span></div>
     ${Array.isArray(inv.mathCorrections)&&inv.mathCorrections.length?`<div style="font-size:11px;color:#8a9ab0;margin:-8px 0 14px 2px">Agent corrected while reading: ${invEsc(inv.mathCorrections.join('; '))}</div>`:''}`;
@@ -8692,6 +8699,8 @@ function renderFilingDetail(c,inv){
   });
   c.querySelectorAll('[data-act="reset"]').forEach(b=>b.onclick=()=>{delete d.edits[parseInt(b.getAttribute('data-idx'))];render();});
   const $=id=>c.querySelector('#'+id);
+  if($('fl-disc')) $('fl-disc').onchange=e=>{d.discount=e.target.value;render();};
+  if($('fl-disc5')) $('fl-disc5').onclick=()=>{d.discount=(Math.round(T.linesSum*0.05*100)/100).toFixed(2);render();};
   if($('fl-update')) $('fl-update').onclick=()=>{if(confirm(`Update the parts on ${vehName(onFile.v)} #${onFile.v.stockNumber||''} to match this invoice (quantities and prices as shown), and attach the email receipt? The existing photo receipt stays.`)) fileInvoice(inv,{attachTo:onFile.v.id,updateParts:true});};
   if($('fl-all-veh')) $('fl-all-veh').onclick=()=>pickFor(inv.lines.map(l=>l.idx));
   if($('fl-all-shop')) $('fl-all-shop').onclick=()=>{inv.lines.forEach(l=>d.assign[l.idx]={kind:'shop'});render();};
