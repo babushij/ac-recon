@@ -8417,6 +8417,25 @@ async function fileInvoice(inv,mode){
   if(INV.busy) return;
   const draft=getDraft(inv);
   const lines=inv.lines.map(l=>effLine(inv,l));
+  // Shipping + tax are real cost of the parts: spread them across the positive, non-core lines in proportion to line total
+  // so they land on the car / shop / employee charge / Frazer entry. Skipped when only attaching a receipt to parts already on file.
+  let extrasShared=0;
+  if(!(mode&&mode.attachTo)){
+    const ex=Math.round(((parseFloat(inv.shipping)||0)+(parseFloat(inv.tax)||0))*100)/100;
+    const tgt=lines.filter(l=>l.lineTotal>0&&!l.isCore&&!l.isReturn);
+    const base=tgt.reduce((a,l)=>a+l.lineTotal,0);
+    if(ex>0&&base>0){
+      let left=ex;
+      tgt.forEach((l,i)=>{
+        const share=i===tgt.length-1?left:Math.round(ex*l.lineTotal/base*100)/100;
+        left=Math.round((left-share)*100)/100;
+        l.baseTotal=l.lineTotal;l.extraShare=share;
+        l.lineTotal=Math.round((l.lineTotal+share)*100)/100;
+        l.eachCost=Math.round(l.lineTotal/Math.abs(l.quantity)*10000)/10000;
+      });
+      extrasShared=ex;
+    }
+  }
   const byVeh={};const shopIdx=[];
   const assignOf={};
   if(mode&&mode.attachTo){
@@ -8499,7 +8518,7 @@ async function fileInvoice(inv,mode){
     await invoicesCol().doc(inv.id).set({
       status:'filed',filedAt:firebase.firestore.FieldValue.serverTimestamp(),filedBy:ST.role||'manager',
       filedMode:(mode&&mode.attachTo)?(mode.updateParts?'parts_updated':'attach_existing'):'parts_added',
-      lines:outLines,linesSum:t.linesSum,vehicleIds:Object.keys(byVeh),shopLineCount:shopIdx.length,employeeLineCount:empLines.length,employeeIds:[...new Set(empLines.map(x=>x.employeeId))]
+      lines:outLines,linesSum:extrasShared?Math.round(lines.reduce((x,l)=>x+l.lineTotal,0)*100)/100:t.linesSum,extrasAllocated:extrasShared||0,vehicleIds:Object.keys(byVeh),shopLineCount:shopIdx.length,employeeLineCount:empLines.length,employeeIds:[...new Set(empLines.map(x=>x.employeeId))]
     },{merge:true});
     delete INV.draft[inv.id];
     INV.sel=null;
@@ -8629,7 +8648,7 @@ function renderFilingDetail(c,inv){
   };
   const totals=[['Shipping',inv.shipping],['Tax',inv.tax]].filter(x=>x[1]!=null&&x[1]!==0).map(x=>`<span>${x[0]} ${invMoney(x[1])}</span>`).join(' · ');
   const totalsBox=`<div class="fl-totals ${T.mismatch?'bad':'ok'}" id="fl-totals">
-      <div style="flex:1"><div style="font-size:12px;font-weight:700">Lines ${invMoney(T.linesSum)}${T.extras?` + shipping/tax ${invMoney(T.extras)}`:''} = <span style="font-variant-numeric:tabular-nums">${invMoney(T.computed)}</span></div>
+      <div style="flex:1"><div style="font-size:12px;font-weight:700">Lines ${invMoney(T.linesSum)}${T.extras?` + shipping/tax ${invMoney(T.extras)} (spread into part costs)`:''} = <span style="font-variant-numeric:tabular-nums">${invMoney(T.computed)}</span></div>
       <div style="font-size:11px;margin-top:2px">${T.stated==null?'Invoice total not read from the email':T.mismatch?`Invoice total is ${invMoney(T.stated)} — off by ${invMoney(Math.abs(T.diff))}. Check a quantity or price above.`:`Matches the invoice total of ${invMoney(T.stated)}`}</div></div>
       <span style="font-size:18px">${T.stated==null?'·':T.mismatch?'⚠':'✓'}</span></div>
     ${Array.isArray(inv.mathCorrections)&&inv.mathCorrections.length?`<div style="font-size:11px;color:#8a9ab0;margin:-8px 0 14px 2px">Agent corrected while reading: ${invEsc(inv.mathCorrections.join('; '))}</div>`:''}`;
