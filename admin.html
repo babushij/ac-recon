@@ -7271,7 +7271,7 @@ async function frazerLoad(){
         if(sent[l.idx])return;
         const v=getV(a.vehicleId);
         const amt=(typeof l.lineTotal==='number'?l.lineTotal:(parseFloat(l.eachCost)||0)*(parseInt(l.quantity)||1));
-        rows.push({key:inv.id+'|'+l.idx,invId:inv.id,idx:l.idx,vid:a.vehicleId,vehicle:v?vehName(v):'(vehicle removed)',stock:v?(v.stockNumber||''):'',vin:v?String(v.vin||''):'',
+        rows.push({key:inv.id+'|'+l.idx,invId:inv.id,idx:l.idx,vid:a.vehicleId,vehicle:v?vehName(v):'(vehicle removed)',stock:v?(v.stockNumber||''):'',vin:v?String(v.vin||''):'',veh:v?[v.year,v.make,v.model].map(x=>String(x||'').replace(/[|\t\r\n]/g,' ').trim()).join('|'):'',
           dateMs:inv.invoiceMs,vendorName:inv.vendorName||inv.vendor||'',desc:l.description||'',pn:l.partNumber||'',qty:parseInt(l.quantity)||1,amount:Math.round(amt*100)/100,order:inv.orderNumber||''});
       });
     });
@@ -7287,8 +7287,8 @@ function frazerProblem(r){
   return'';
 }
 function frazerQueueTsv(){
-  const head=['key','stock','last6','date','vendor','description','amount'].join('\t');
-  const lines=FRZ.rows.filter(r=>!frazerProblem(r)).map(r=>[r.key,frazerClean(r.stock),r.vin.slice(-6).toUpperCase(),frazerDate(r.dateMs),frazerClean(frazerVendorName(r.vendorName)),frazerClean(r.desc).slice(0,60),r.amount.toFixed(2)].join('\t'));
+  const head=['key','stock','last6','date','vendor','description','amount','vehicle'].join('\t');
+  const lines=FRZ.rows.filter(r=>!frazerProblem(r)).map(r=>[r.key,frazerClean(r.stock),r.vin.slice(-6).toUpperCase(),frazerDate(r.dateMs),frazerClean(frazerVendorName(r.vendorName)),frazerClean(r.desc).slice(0,60),r.amount.toFixed(2),r.veh||''].join('\t'));
   return head+'\n'+lines.join('\n')+'\n';
 }
 window.frazerDownload=()=>{
