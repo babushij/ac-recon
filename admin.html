@@ -8355,7 +8355,21 @@ function effLine(inv,l){
   return {...l,quantity,eachCost,lineTotal:Math.round(eachCost*quantity*100)/100,edited:!!(e.quantity!=null||e.eachCost!=null)};
 }
 // Vendor discount (RockAuto 5% etc.): the draft value wins over what the email reader found. Positive number.
-function invDiscount(inv){const d=INV.draft[inv.id];const v=(d&&d.discount!=null&&d.discount!=='')?parseFloat(d.discount):parseFloat(inv.discount);return Math.max(0,Math.round((v||0)*100)/100);}
+function invDiscountApplies(inv){return inv.vendor==='rockauto'||(parseFloat(inv.discount)||0)>0;}
+function invDiscount(inv){
+  if(!invDiscountApplies(inv)) return 0;
+  const d=INV.draft[inv.id];
+  if(d&&d.discount!=null&&d.discount!=='') return Math.max(0,Math.round((parseFloat(d.discount)||0)*100)/100);
+  if(parseFloat(inv.discount)>0) return Math.round(parseFloat(inv.discount)*100)/100;
+  // RockAuto order read before the discount line was captured: if the stated total only adds up with their usual 5% off, apply it
+  if(inv.total!=null){
+    const base=inv.lines.reduce((x,l)=>{const e=effLine(inv,l);return x+(e.isCore||e.isReturn?0:e.lineTotal);},0);
+    const core=inv.lines.reduce((x,l)=>{const e=effLine(inv,l);return x+(e.isCore||e.isReturn?e.lineTotal:0);},0);
+    const ex=(parseFloat(inv.shipping)||0)+(parseFloat(inv.tax)||0),five=Math.round(base*0.05*100)/100;
+    if(Math.abs(base+core+ex-five-parseFloat(inv.total))<=0.05&&Math.abs(base+core+ex-parseFloat(inv.total))>0.05) return five;
+  }
+  return 0;
+}
 function invTotals(inv){
   const lines=inv.lines.map(l=>effLine(inv,l));
   const linesSum=Math.round(lines.reduce((a,l)=>a+l.lineTotal,0)*100)/100;
@@ -8656,7 +8670,7 @@ function renderFilingDetail(c,inv){
   const totals=[['Shipping',inv.shipping],['Tax',inv.tax]].filter(x=>x[1]!=null&&x[1]!==0).map(x=>`<span>${x[0]} ${invMoney(x[1])}</span>`).join(' · ');
   const totalsBox=`<div class="fl-totals ${T.mismatch?'bad':'ok'}" id="fl-totals">
       <div style="flex:1"><div style="font-size:12px;font-weight:700">Lines ${invMoney(T.linesSum)}${T.extras?` + shipping/tax ${invMoney(T.extras)} (spread into part costs)`:''} = <span style="font-variant-numeric:tabular-nums">${invMoney(T.computed)}</span></div>
-      <div style="font-size:11px;margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">Discount $ <input type="number" inputmode="decimal" min="0" step="0.01" id="fl-disc" value="${invDiscount(inv)?invDiscount(inv).toFixed(2):''}" placeholder="0.00" style="width:80px"><button class="fl-link" id="fl-disc5" type="button">5% off</button></div>
+      ${invDiscountApplies(inv)?`<div style="font-size:11px;margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">Discount $ <input type="number" inputmode="decimal" min="0" step="0.01" id="fl-disc" value="${invDiscount(inv)?invDiscount(inv).toFixed(2):''}" placeholder="0.00" style="width:80px"><button class="fl-link" id="fl-disc5" type="button">5% off</button></div>`:''}
       <div style="font-size:11px;margin-top:2px">${T.stated==null?'Invoice total not read from the email':T.mismatch?`Invoice total is ${invMoney(T.stated)} — off by ${invMoney(Math.abs(T.diff))}. Check a quantity or price above.`:`Matches the invoice total of ${invMoney(T.stated)}`}</div></div>
       <span style="font-size:18px">${T.stated==null?'·':T.mismatch?'⚠':'✓'}</span></div>
     ${Array.isArray(inv.mathCorrections)&&inv.mathCorrections.length?`<div style="font-size:11px;color:#8a9ab0;margin:-8px 0 14px 2px">Agent corrected while reading: ${invEsc(inv.mathCorrections.join('; '))}</div>`:''}`;
