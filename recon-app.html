@@ -5010,6 +5010,7 @@ function renderDetail(c,v){
       <textarea id="ov-notes" style="background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 13px;color:#e2e4ea;width:100%;resize:vertical;min-height:80px;font-family:inherit;font-size:14px"
         onblur="save({notes:this.value})" placeholder="Vehicle notes...">${v.notes||''}</textarea>
     </div>`;
+    mdPartsSection(el,v);
     buildComments(el);
     // Wire selects with addEventListener so they save reliably on mobile
     const mechSel=el.querySelector('#ov-mech');
@@ -8940,8 +8941,23 @@ window.mdCopyVin=btn=>{
   const ok=()=>{btn.textContent='Copied';setTimeout(()=>btn.textContent='Copy VIN',1500);};
   try{navigator.clipboard.writeText(v.vin||'').then(ok,()=>toast('Copy failed','err'));}catch(e){toast('Copy failed','err');}
 };
+
+// Parts search block for the vehicle record (Overview tab)
+window.mdPartsSection=function(el,v){
+  MD.car=v.id;
+  const box=document.createElement('div');
+  box.innerHTML=`<div style="font-size:11px;font-weight:600;color:#9aa3b8;letter-spacing:1px;margin:18px 0 10px;text-transform:uppercase;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>Parts search</span><span style="font-size:10px;letter-spacing:.8px;color:${mdExtOn()?'#4ade80':'var(--text4)'}">${mdExtOn()?'Parts extension connected':'Parts extension not found'}</span></div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--text2);word-break:break-all;flex:1 1 180px">VIN ${vinHtml(v.vin)}</span><button class="btn-ghost" type="button" onclick="mdCopyVin(this)">Copy VIN</button></div>
+  <form style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" onsubmit="mdOpenAll(event)">
+    <input id="md-pn" value="${mdEsc(MD.pn)}" placeholder="Part number (optional)" aria-label="Part number" style="flex:1 1 200px;min-width:0;font-family:var(--font-mono)" oninput="MD.pn=this.value;mdUpdateLinks()">
+    <button class="btn-red" type="submit">Open all vendors</button>
+  </form>
+  <div class="dash-vendors" id="md-vendors">${mdVendorTiles()}</div>`;
+  el.appendChild(box);
+  box.querySelectorAll('#md-vendors a').forEach(a=>a.onclick=e=>{if(mdHandoff([a.dataset.v]))e.preventDefault();});
+};
 // extension announces itself after the page loads
-try{new MutationObserver(()=>{if(ST.view==='mechdash'&&MD.car)render();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-ac-parts']});}catch(e){}
+try{new MutationObserver(()=>{if((ST.view==='mechdash'&&MD.car)||ST.view==='detail')render();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-ac-parts']});}catch(e){}
 
 // SVG ICONS
 // ═══════════════════════════════════════════════
