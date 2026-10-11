@@ -8832,7 +8832,10 @@ function mdViews(){try{return JSON.parse(localStorage.getItem(MD_LS)||'{}');}cat
 function mdView(){const all=mdViews();const k=ST.role||'manager';return Object.assign({size:'std',hidden:[]},all[k]||{});}
 function mdSaveView(v){try{const all=mdViews();all[ST.role||'manager']=v;localStorage.setItem(MD_LS,JSON.stringify(all));}catch(e){}}
 // Live vehicles only: not booked / not already sold-and-gone
-function mdActive(){return (ST.vehicles||[]).filter(v=>!(v.statuses||[]).includes('booked'));}
+function mdActive(){
+  const mine=getMMAP()[ST.role]?ST.role:null; // mechanics see only cars assigned to them; managers see all
+  return (ST.vehicles||[]).filter(v=>!(v.statuses||[]).includes('booked')&&(!mine||v.assignedTo===mine||v.assignedTo2===mine));
+}
 function mdCars(tile){
   const vs=mdActive();const has=(v,s)=>(v.statuses||[]).includes(s);
   switch(tile){
