@@ -1801,6 +1801,7 @@ function load(){
     try{subscribeToDeliveries();}catch(e){console.warn('deliveries subscribe:',e);}
     try{subscribeToCharges();}catch(e){console.warn('charges subscribe:',e);}
     try{subscribeToCores();}catch(e){console.warn('cores subscribe:',e);}
+    try{gasSubscribe();}catch(e){console.warn('gas subscribe:',e);}
   }
 }
 
@@ -1998,6 +1999,7 @@ function buildSidebar(){
     {id:'partspipeline',label:'Parts pipeline',icon:partsIcon(),badge:getAllPendingParts().length},
     {id:'toinstall',label:'Needs installing',icon:wrenchIcon(),badge:getAllToInstall().length},
     {id:'filing',label:'Needs filing',icon:filingIcon(),badge:filingCount()},
+    {id:'gasreceipts',label:'Gas receipts',icon:filingIcon(),badge:(GAS.charges&&GAS.charges.length)||0},
     {id:'frazer',label:'Send to Frazer',icon:filingIcon(),badge:(FRZ.loaded&&FRZ.rows.length)||0},
     {id:'cores',label:'Cores',icon:coreIcon(),badge:overdueCoreCount()||openCoreCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
@@ -2136,6 +2138,7 @@ function renderContent(){
     case 'toinstall':    renderToInstall(c);break;
     case 'frazer':       renderFrazer(c);break;
     case 'filing':       renderFiling(c);break;
+    case 'gasreceipts':  renderGasReceipts(c);break;
     case 'mechdash':     renderMechDash(c);break;
     case 'employees':    renderEmployees(c);break;
     case 'cores':        renderCores(c);break;
@@ -8953,6 +8956,109 @@ window.mdPartsSection=function(el,v){
 };
 // extension announces itself after the page loads
 try{new MutationObserver(()=>{if((ST.view==='mechdash'&&MD.car)||ST.view==='detail')render();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-ac-parts']});}catch(e){}
+
+// ═══════════════════════════════════════════════
+// GAS RECEIPTS — tag each Citi fuel charge to a car, with the receipt photo, checked against the card alert
+// ═══════════════════════════════════════════════
+const GAS={charges:[],sel:null,who:'',stock:'',vin:'',useVin:false,photo:null,photoUrl:'',total:'',date:'',reading:false,readMsg:'',busy:false,loaded:false,unsub:null,editNames:false,tab:'hist',dima:[],dimaUnsub:null,showPaid:false,confirmAll:false,hist:[],histUnsub:null,hp:'month',hOff:0,hSort:'date'};
+const gasCol=()=>db.collection('shops').doc('automotive_connection').collection('gas_charges');
+const gasEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function gasSubscribe(){
+  if(!db||GAS.unsub)return;
+  try{
+    GAS.unsub=gasCol().where('status','==','needs_receipt').onSnapshot(snap=>{
+      GAS.charges=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||'')));
+      GAS.loaded=true;
+      if(ST.view==='gasreceipts')render();
+    },err=>{console.warn('gas charges:',err);GAS.loaded=true;});
+  }catch(e){console.warn('gasSubscribe',e);}
+}
+function gasSubscribeHist(){
+  if(!db||GAS.histUnsub)return;
+  try{
+    GAS.histUnsub=gasCol().where('status','in',['tagged','flagged']).onSnapshot(snap=>{
+      GAS.hist=snap.docs.map(d=>({id:d.id,...d.data()}));
+      if(ST.view==='gasreceipts'&&!GAS.busy)render();
+    },err=>console.warn('gas history:',err));
+  }catch(e){console.warn('gasSubscribeHist',e);}
+}
+// Date range [from,to) as YYYY-MM-DD strings for the History filter; hOff steps back by week / month / year.
+function gasHistRange(){
+  const p=GAS.hp,o=GAS.hOff,n=new Date(),iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  if(p==='week'){const a=new Date(n.getFullYear(),n.getMonth(),n.getDate()-n.getDay()-7*o),b=new Date(a.getFullYear(),a.getMonth(),a.getDate()+7);return[iso(a),iso(b),o?a.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+new Date(b.getTime()-864e5).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'This week'];}
+  if(p==='month'){const a=new Date(n.getFullYear(),n.getMonth()-o,1),b=new Date(n.getFullYear(),n.getMonth()-o+1,1);return[iso(a),iso(b),o?a.toLocaleDateString('en-US',{month:'long',year:'numeric'}):'This month'];}
+  if(p==='year'){const y=n.getFullYear()-o;return[y+'-01-01',(y+1)+'-01-01',o?String(y):'Year to date'];}
+  return['0000','9999','All time'];
+}
+const gasIsDima=()=>!GAS.useVin&&/^d/i.test(GAS.stock.trim());
+function gasSubscribeDima(){
+  if(!db||GAS.dimaUnsub)return;
+  try{
+    GAS.dimaUnsub=gasCol().where('dima','==',true).onSnapshot(snap=>{
+      GAS.dima=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||'')));
+      if(ST.view==='gasreceipts'&&!GAS.busy)render();
+    },err=>console.warn('dima charges:',err));
+  }catch(e){console.warn('gasSubscribeDima',e);}
+}
+window.gasMarkPaid=async id=>{try{await gasCol().doc(id).set({dimaPaid:true,dimaPaidAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});toast('Marked paid');}catch(e){toast('Could not save: '+(e.message||e),'err');}};
+window.gasMarkAllPaid=async()=>{
+  const open=GAS.dima.filter(x=>!x.dimaPaid);
+  try{const b=db.batch();open.forEach(x=>b.set(gasCol().doc(x.id),{dimaPaid:true,dimaPaidAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}));await b.commit();GAS.confirmAll=false;toast(`${open.length} charges marked paid`);}
+  catch(e){toast('Could not save: '+(e.message||e),'err');}
+};
+function renderGasReceipts(c){
+  gasSubscribe();gasSubscribeDima();gasSubscribeHist();
+  setTopbar('Gas receipts','');
+  const box='background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px';
+  const dOpen=GAS.dima.filter(x=>!x.dimaPaid),dPaid=GAS.dima.filter(x=>x.dimaPaid);
+  const dTot=a=>a.reduce((n,x)=>n+(Number(x.amount)||0),0);
+  const tabBtn=(id,label)=>`<button type="button" data-gtab="${id}" style="flex:1;padding:10px;border-radius:8px;border:1px solid ${GAS.tab===id?'var(--red)':'var(--border)'};background:${GAS.tab===id?'var(--red)':'var(--surface)'};color:${GAS.tab===id?'#fff':'inherit'};font:inherit;font-weight:600;cursor:pointer">${label}</button>`;
+  let h=`<div style="max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px"><div style="display:flex;gap:8px">${tabBtn('hist','My receipts')}${tabBtn('dima','Dima · $'+dTot(dOpen).toFixed(2))}</div>`;
+  if(GAS.tab!=='dima'){
+    const [from,to,lbl]=gasHistRange();
+    const carOf=x=>x.dima?null:(ST.vehicles||[]).find(v=>v.id===x.vehicleId);
+    const carName=x=>x.dima?'Dima':(carOf(x)?vehName(carOf(x)):'—');
+    const rows=GAS.hist.filter(x=>!x.dima&&(x.date||'')>=from&&(x.date||'')<to);
+    const keyOf={date:null,car:carName,stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[GAS.hSort];
+    const cmp=(a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||''));
+    rows.sort(keyOf?(a,b)=>String(keyOf(a)).localeCompare(String(keyOf(b)),undefined,{numeric:true})||cmp(a,b):cmp);
+    const sum=a=>a.reduce((n,x)=>n+(Number(x.amount)||0),0);
+    const row=x=>`<div style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2)"><span style="font-weight:600;min-width:0">${gasEsc(x.merchant)}</span><span style="font-family:var(--font-mono);font-weight:600">$${Number(x.amount).toFixed(2)}</span><span style="font-size:12px;color:var(--text3)">${gasEsc(x.date||'')} · stock ${gasEsc(x.stock||'—')} · ${gasEsc(carName(x))} · ${gasEsc(x.pumpedBy||'')}${x.check==='mismatch'?' · <span style="color:#ff7a7a">flagged</span>':''}</span><span style="text-align:right;font-size:12px">${x.receiptUrl?`<a href="${gasEsc(x.receiptUrl)}" target="_blank" rel="noopener" style="color:var(--text2)">Receipt</a>`:''}</span></div>`;
+    let body='';
+    if(!rows.length)body='<div class="empty"><div class="empty-msg">No gas receipts in this period</div></div>';
+    else if(!keyOf)body=rows.map(row).join('');
+    else{const g=[];rows.forEach(x=>{const k=String(keyOf(x));let e=g.find(q=>q.k===k);if(!e)g.push(e={k,r:[]});e.r.push(x);});
+      body=g.map(e=>`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><div class="dash-sec" style="margin:0">${gasEsc(e.k)} · ${e.r.length}</div><div style="font-family:var(--font-mono);font-weight:700">$${sum(e.r).toFixed(2)}</div></div>`+e.r.map(row).join('')).join('');}
+    const chip=(a,id,l)=>`<button type="button" data-${a}="${id}" style="padding:6px 12px;border-radius:999px;border:1px solid ${(a==='hsort'?GAS.hSort:GAS.hp)===id?'var(--red)':'var(--border)'};background:${(a==='hsort'?GAS.hSort:GAS.hp)===id?'var(--red)':'var(--surface)'};color:${(a==='hsort'?GAS.hSort:GAS.hp)===id?'#fff':'inherit'};font:inherit;font-size:12px;font-weight:600;cursor:pointer">${l}</button>`;
+    h+=`${GAS.charges.length?`<div style="padding:10px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-size:13px;color:var(--text2)">${GAS.charges.length} fuel charge${GAS.charges.length===1?'':'s'} still waiting for a receipt. Tag them on the Gas Receipts page.</div>`:''}<div style="${box};display:flex;flex-direction:column;gap:10px">
+      <div class="stats-period-bar">${[['week','Week'],['month','Month'],['year','Year'],['all','All']].map(([id,l])=>`<button type="button" class="stats-period-btn${GAS.hp===id?' active':''}" data-hp="${id}">${l}</button>`).join('')}</div>
+      ${GAS.hp!=='all'?`<div class="stats-step" style="border-radius:8px"><button type="button" data-hstep="1" title="Previous">‹</button><span>${gasEsc(lbl)}</span><button type="button" data-hstep="-1" ${GAS.hOff===0?'disabled':''} title="Next">›</button>${GAS.hOff>0?'<a data-hstep="reset">back to current</a>':''}</div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><div class="dash-sec" style="margin:0">${rows.length} receipt${rows.length===1?'':'s'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700">$${sum(rows).toFixed(2)}</div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text3)">Sort</span>${[['date','Date'],['car','Car'],['stock','Stock #'],['station','Gas station']].map(([id,l])=>chip('hsort',id,l)).join('')}</div>
+      ${body}</div></div>`;
+    c.innerHTML=h;
+    c.querySelectorAll('[data-gtab]').forEach(b=>b.onclick=()=>{GAS.tab=b.dataset.gtab;render();});
+    c.querySelectorAll('[data-hp]').forEach(b=>b.onclick=()=>{GAS.hp=b.dataset.hp;GAS.hOff=0;render();});
+    c.querySelectorAll('[data-hsort]').forEach(b=>b.onclick=()=>{GAS.hSort=b.dataset.hsort;render();});
+    c.querySelectorAll('[data-hstep]').forEach(b=>b.onclick=()=>{const d=b.dataset.hstep;GAS.hOff=d==='reset'?0:Math.max(0,GAS.hOff+Number(d));render();});
+    return;
+  }
+  if(GAS.tab==='dima'){
+    const row=x=>`<div style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2)"><span style="font-weight:600;min-width:0">${gasEsc(x.merchant)}</span><span style="font-family:var(--font-mono);font-weight:600">$${Number(x.amount).toFixed(2)}</span><span style="font-size:12px;color:var(--text3)">${gasEsc(x.date||'')} · ${gasEsc(x.stock||'')} · ${gasEsc(x.pumpedBy||'')}${x.check==='mismatch'?' · <span style="color:#ff7a7a">flagged</span>':''}</span><span style="text-align:right;font-size:12px;display:flex;gap:10px;justify-content:flex-end">${x.receiptUrl?`<a href="${gasEsc(x.receiptUrl)}" target="_blank" rel="noopener" style="color:var(--text2)">Receipt</a>`:''}${x.dimaPaid?'<span style="color:#4ade80">Paid</span>':`<button type="button" data-gpaid="${x.id}" class="btn-ghost" style="font-size:11px;padding:3px 9px">Mark paid</button>`}</span></div>`;
+    h+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><div class="dash-sec" style="margin:0">Dima owes · ${dOpen.length} charge${dOpen.length===1?'':'s'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700">$${dTot(dOpen).toFixed(2)}</div></div>
+      ${dOpen.length?dOpen.map(row).join(''):'<div class="empty"><div class="empty-msg">Nothing owed</div></div>'}
+      ${dOpen.length>1?(GAS.confirmAll?`<button class="btn-red" id="gas-allpaid" type="button">Confirm: mark all ${dOpen.length} paid ($${dTot(dOpen).toFixed(2)})</button>`:`<button class="btn-ghost" id="gas-allpaid-ask" type="button">Mark all paid</button>`):''}
+    </div>
+    ${dPaid.length?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px"><button type="button" id="gas-showpaid" class="btn-ghost" style="align-self:flex-start;font-size:12px">${GAS.showPaid?'Hide':'Show'} paid · ${dPaid.length} · $${dTot(dPaid).toFixed(2)}</button>${GAS.showPaid?dPaid.map(row).join(''):''}</div>`:''}</div>`;
+    c.innerHTML=h;
+    c.querySelectorAll('[data-gtab]').forEach(b=>b.onclick=()=>{GAS.tab=b.dataset.gtab;render();});
+    c.querySelectorAll('[data-gpaid]').forEach(b=>b.onclick=()=>gasMarkPaid(b.dataset.gpaid));
+    const o=(id,fn)=>{const e=c.querySelector('#'+id);if(e)e.onclick=fn;};
+    o('gas-allpaid-ask',()=>{GAS.confirmAll=true;render();});o('gas-allpaid',gasMarkAllPaid);o('gas-showpaid',()=>{GAS.showPaid=!GAS.showPaid;render();});
+    return;
+  }
+}
 
 // SVG ICONS
 // ═══════════════════════════════════════════════

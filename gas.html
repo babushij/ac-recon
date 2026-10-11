@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>AC Gas Receipts</title>
+<link rel="manifest" href="gas-manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#C8102E">
+<style>
+:root{--bg:#f3f4f7;--surface:#fff;--surface2:#f0f1f5;--border:#d9dce4;--text:#12151c;--text2:#475066;--text3:#7a8399;--red:#C8102E;--ok:#16a34a;--bad:#dc2626;--okbg:rgba(22,163,74,.12);--badbg:rgba(220,38,38,.1)}
+:root[data-theme=dark]{--bg:#0d0f14;--surface:#161a22;--surface2:#1d222c;--border:#2b3140;--text:#eef0f5;--text2:#aab2c5;--text3:#7d869b;--ok:#4ade80;--bad:#ff7a7a;--okbg:rgba(34,197,94,.14);--badbg:rgba(239,68,68,.14)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--red);color:#fff}
+header b{font-size:17px}
+header button{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer}
+main{max-width:520px;margin:0 auto;padding:14px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.sec{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)}
+.tabs{display:flex;gap:8px}
+.tabs button{flex:1;padding:10px 4px;white-space:nowrap;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:600;font-size:13px;cursor:pointer}
+.tabs button.on{background:var(--red);border-color:var(--red);color:#fff}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);text-align:left;color:inherit;font:inherit;width:100%}
+button.row{cursor:pointer}.row.sel{border-color:var(--red)}
+.row .m{font-weight:600;min-width:0}.row .a{font-family:ui-monospace,Menlo,monospace;font-weight:600}.row .s{font-size:12px;color:var(--text3);grid-column:1}.row .r{font-size:12px;text-align:right;display:flex;gap:10px;justify-content:flex-end;align-items:center}
+.row a{color:var(--text2)}
+label.f{display:flex;flex-direction:column;gap:5px;font-weight:600;font-size:14px}
+label.f small{color:var(--red);font-weight:600}
+input,select{font:inherit;padding:11px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%}
+.btn{font:inherit;font-weight:700;padding:13px;border-radius:10px;border:0;background:var(--red);color:#fff;cursor:pointer;width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+.ghost{font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;align-self:flex-start}
+.empty{padding:28px 10px;text-align:center;color:var(--text3)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.note{padding:10px 12px;border-radius:8px;font-size:13px}
+.note.ok{background:var(--okbg);color:var(--ok)}.note.bad{background:var(--badbg);color:var(--bad)}.note span{color:var(--text2);font-size:12px}
+.photo{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--border);border-radius:10px;padding:12px;background:var(--surface2);cursor:pointer;min-height:84px;font-weight:600}
+.photo img,.photo i{width:58px;height:72px;border-radius:4px;flex:none;object-fit:cover}
+.photo i{border:1px solid var(--border);display:grid;place-items:center;font-size:10px;color:var(--text3);font-style:normal;font-weight:400}
+.pill{padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.pill.on{background:var(--red);border-color:var(--red);color:#fff}
+.per{display:flex;border-bottom:1px solid var(--border)}
+.per button{flex:1;padding:9px 4px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);background:none;border:0;border-bottom:2px solid transparent;cursor:pointer}
+.per button.on{color:var(--red);border-bottom-color:var(--red)}
+.step{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px;border-radius:8px;background:var(--surface2)}
+.step button{width:34px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;font-weight:700;cursor:pointer}
+.step button:disabled{opacity:.35}.step a{font-size:12px;color:var(--red);cursor:pointer}
+.big{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:700}
+.flex{display:flex;justify-content:space-between;align-items:baseline}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;display:none;max-width:90%;z-index:9}
+#pin{max-width:320px;margin:70px auto;text-align:center}
+#pin input{text-align:center;font-size:26px;letter-spacing:.4em}
+</style></head>
+<body>
+<header><b>⛽ AC Gas Receipts</b><button id="theme" type="button">Dark</button></header>
+<main id="app"></main><div id="toast"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<script>
+const firebaseConfig={apiKey:"AIzaSyCaDPMylVE1tmNbCd-vRHRR7dh0gWFvw9Y",authDomain:"ac-recon.firebaseapp.com",projectId:"ac-recon",storageBucket:"ac-recon.firebasestorage.app",messagingSenderId:"462482737107",appId:"1:462482737107:web:03a2f9621396256c4a5126"};
+let db=null,storage=null;
+try{firebase.initializeApp(firebaseConfig);db=firebase.firestore();storage=firebase.storage();}catch(e){console.warn('firebase',e);}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}},lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
+function toast(m,t){const e=$('toast');e.textContent=m;e.style.background=t==='err'?'#b91c1c':'#222';e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3200);}
+function applyTheme(t){document.documentElement.dataset.theme=t;$('theme').textContent=t==='dark'?'Light':'Dark';}
+applyTheme(lsGet('gas_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+$('theme').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';lsSet('gas_theme',t);applyTheme(t);};
+const SHOP=()=>db.collection('shops').doc('automotive_connection');
+const gasCol=()=>SHOP().collection('gas_charges');
+const PUMPERS_DEFAULT=['Alina','Christian','Diego','Thomas','Steve','AJ','Isaiah','Dino','Jose'];
+const G={authed:false,tab:'tag',charges:[],hist:[],vehicles:[],loaded:false,sel:null,who:'',stock:'',vin:'',useVin:false,photo:null,photoUrl:'',busy:false,note:null,pumpers:null,editNames:false,hp:'month',hOff:0,hSort:'date'};
+const pumpers=()=>G.pumpers&&G.pumpers.length?G.pumpers:PUMPERS_DEFAULT;
+const sortNew=(a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||''));
+const money=n=>'$'+Number(n||0).toFixed(2);
+const vehName=v=>[v.year,v.make,v.model].filter(Boolean).join(' ')||v.stockNumber||'Car';
+function subscribe(){
+  const snap=(q,fn)=>q.onSnapshot(s=>{fn(s.docs.map(d=>({id:d.id,...d.data()})));if(!G.busy)render();},e=>console.warn('gas sub',e));
+  snap(gasCol().where('status','==','needs_receipt'),a=>{G.charges=a.sort(sortNew);G.loaded=true;if(!G.charges.some(c=>c.id===G.sel)){G.sel=G.charges[0]?G.charges[0].id:null;reset();}prefill();});
+  snap(gasCol().where('status','in',['tagged','flagged']),a=>G.hist=a);
+  // vehicles are read-only here: only to find the car by stock number or VIN
+  SHOP().collection('vehicles').onSnapshot(s=>{G.vehicles=s.docs.map(d=>{try{return JSON.parse(d.data().json);}catch(e){return null;}}).filter(v=>v&&v.id);render();},e=>console.warn('vehicles',e));
+  SHOP().collection('agent_state').doc('gas_pumpers').onSnapshot(d=>{if(d.exists&&Array.isArray(d.data().names)){G.pumpers=d.data().names;render();}},()=>{});
+}
+function reset(){G.who='';G.stock='';G.vin='';G.useVin=false;G.photo=null;if(G.photoUrl){try{URL.revokeObjectURL(G.photoUrl);}catch(e){}}G.photoUrl='';G.note=null;}
+function prefill(){const c=G.charges.find(x=>x.id===G.sel);if(!c)return;if(!G.who&&c.pumpedBy)G.who=c.pumpedBy;if(!G.stock&&!G.vin){if(c.stockEntered)G.stock=c.stockEntered;else if(c.vin6Entered){G.vin=c.vin6Entered;G.useVin=true;}}}
+const charge=()=>G.charges.find(c=>c.id===G.sel)||null;
+const isDima=()=>!G.useVin&&/^d/i.test(G.stock.trim());
+function findCar(){
+  if(G.useVin){const l=G.vin.trim().toLowerCase();return l.length===6?G.vehicles.find(v=>String(v.vin||'').toLowerCase().slice(-6)===l)||null:null;}
+  const s=G.stock.trim().toLowerCase();return s?G.vehicles.find(v=>String(v.stockNumber||'').trim().toLowerCase()===s)||null:null;
+}
+const anyInput=()=>!!(G.who||G.stock.trim()||G.vin.trim()||G.photo);
+function missingList(ch){const m=[];if(!G.who)m.push('who pumped it');if(!(G.useVin?G.vin.trim().length===6:G.stock.trim()))m.push('stock number or VIN');if(!G.photo&&!(ch&&ch.receiptUrl))m.push('receipt photo');return m;}
+function compress(file,maxW,q){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const k=Math.min(1,maxW/img.width),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error('compress')),'image/jpeg',q);};img.onerror=()=>rej(new Error('image'));const r=new FileReader();r.onload=()=>img.src=r.result;r.onerror=()=>rej(new Error('read'));r.readAsDataURL(file);});}
+function pickPhoto(file){if(!file)return;G.photo=file;G.photoUrl=URL.createObjectURL(file);G.note=null;render();}
+async function upload(blob,path){const ref=storage.ref(path);const s=await ref.put(blob);return{url:await s.ref.getDownloadURL(),path,uploadedAt:Date.now()};}
+// Save whatever is entered. It files only once who + stock/VIN + receipt photo are all there.
+async function tag(){
+  const ch=charge();if(!ch||!anyInput()||G.busy)return;
+  G.busy=true;G.note=null;render();
+  try{
+    const ts=firebase.firestore.FieldValue.serverTimestamp(),upd={};
+    if(G.who)upd.pumpedBy=G.who;
+    if(G.useVin?G.vin.trim():G.stock.trim()){if(G.useVin){upd.vin6Entered=G.vin.trim().toUpperCase();upd.stockEntered='';}else{upd.stockEntered=G.stock.trim().toUpperCase();upd.vin6Entered='';}}
+    if(G.photo){const up=await upload(await compress(G.photo,1600,.85),`gas-receipts/${ch.id}.jpg`);upd.receiptUrl=up.url;upd.receiptPath=up.path;}
+    const m={...ch,...upd},stock=m.stockEntered||'',vin6=m.vin6Entered||'',dima=/^d/i.test(stock);
+    let car=null;
+    if(!dima&&(stock||vin6))car=G.vehicles.find(v=>stock?String(v.stockNumber||'').trim().toUpperCase()===stock:(vin6.length===6&&String(v.vin||'').toUpperCase().slice(-6)===vin6))||null;
+    const miss=[];
+    if(!m.pumpedBy)miss.push('who pumped it');
+    if(!stock&&!vin6)miss.push('stock number or VIN');else if(!dima&&!car)miss.push(stock?'no car with that stock number':'no car with those VIN digits');
+    if(!m.receiptUrl)miss.push('receipt photo');
+    if(miss.length){
+      if(Object.keys(upd).length)await gasCol().doc(ch.id).set(upd,{merge:true});
+      G.note={k:'warn',t:'Saved. Still needed to file it: '+miss.join(', ')+'.'};G.photo=null;G.photoUrl='';
+    }else if(dima){
+      await gasCol().doc(ch.id).set({...upd,status:'tagged',dima:true,dimaPaid:false,stock,taggedAt:ts,taggedBy:'gas-page'},{merge:true});
+      toast('Filed to Dima');G.sel=(G.charges.find(c=>c.id!==ch.id)||{}).id||null;reset();
+    }else{
+      const ms=ch.date?new Date(ch.date+'T'+(ch.time||'12:00')+':00').getTime():Date.now(),cost=Math.round(ch.amount*100)/100;
+      await SHOP().collection('invoices').doc('gas_'+ch.id).set({
+        status:'filed',filedMode:'parts_added',filedAt:ts,filedBy:'gas-page',vendor:'',vendorName:'Fuel',orderNumber:ch.id,source:'gas',
+        invoiceDate:new Date(ms),total:cost,linesSum:cost,gasChargeId:ch.id,vehicleIds:[car.id],
+        receipt:{url:m.receiptUrl,path:m.receiptPath,uploadedAt:Date.now(),name:'Gas receipt'},
+        lines:[{idx:0,description:'Fuel — '+(ch.merchant||'gas'),quantity:1,eachCost:cost,lineTotal:cost,assign:{kind:'vehicle',vehicleId:car.id}}]
+      },{merge:true});
+      await gasCol().doc(ch.id).set({...upd,status:'tagged',vehicleId:car.id,stock:car.stockNumber||stock,taggedAt:ts,taggedBy:'gas-page'},{merge:true});
+      toast(`Filed to ${vehName(car)}`);G.sel=(G.charges.find(c=>c.id!==ch.id)||{}).id||null;reset();
+    }
+  }catch(e){console.error(e);toast('Could not save: '+(e.message||e),'err');}
+  finally{G.busy=false;render();}
+}
+// ── history range ──
+function histRange(){
+  const p=G.hp,o=G.hOff,n=new Date(),iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const sd=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  if(p==='week'){const a=new Date(n.getFullYear(),n.getMonth(),n.getDate()-n.getDay()-7*o),b=new Date(a.getFullYear(),a.getMonth(),a.getDate()+7);return[iso(a),iso(b),o?sd(a)+' – '+sd(new Date(b.getTime()-864e5)):'This week'];}
+  if(p==='month'){const a=new Date(n.getFullYear(),n.getMonth()-o,1),b=new Date(n.getFullYear(),n.getMonth()-o+1,1);return[iso(a),iso(b),o?a.toLocaleDateString('en-US',{month:'long',year:'numeric'}):'This month'];}
+  if(p==='year'){const y=n.getFullYear()-o;return[y+'-01-01',(y+1)+'-01-01',o?String(y):'Year to date'];}
+  return['0000','9999','All time'];
+}
+// ── render ──
+const sum=a=>a.reduce((n,x)=>n+(Number(x.amount)||0),0);
+function render(){
+  const app=$('app');
+  if(!G.authed){return;}
+    const tb=(id,l)=>`<button type="button" data-tab="${id}" class="${G.tab===id?'on':''}">${l}</button>`;
+  let h=`<div class="tabs">${tb('tag','Needs receipt · '+G.charges.length)}${tb('hist','History')}</div>`;
+  if(G.tab==='hist')h+=histView();else h+=tagView();
+  app.innerHTML=h;wire(app);
+}
+function tagView(){
+  const ch=charge();
+  if(!G.loaded)return'<div class="empty">Loading charges…</div>';
+  if(!G.charges.length||!ch)return'<div class="empty">No fuel charges need a receipt</div>';
+  const car=findCar(),miss=missingList(ch),hasPhoto=!!(G.photo||ch.receiptUrl);
+  const carLine=isDima()?"Dima's charge · goes on his list, no car":(G.useVin?G.vin.trim().length===6:G.stock.trim())?(car?esc(vehName(car))+' · stock '+esc(car.stockNumber||'—'):'No matching car yet'):'';
+  return`<div class="box"><div class="sec">Needs a receipt · ${G.charges.length}</div>${G.charges.map(x=>`<button type="button" data-ch="${x.id}" class="row${x.id===G.sel?' sel':''}"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} ${esc(x.time||'')}${x.pumpedBy?' · '+esc(x.pumpedBy):''}</span></button>`).join('')}</div>
+  <div class="box" style="gap:14px">
+    <label class="f"><span>Who pumped the gas <small>${G.who?'✓':'required'}</small></span><select id="who"><option value="">Choose employee</option>${pumpers().map(n=>`<option ${G.who===n?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+    <button type="button" class="ghost" id="names" style="margin-top:-8px">Edit names</button>
+    ${G.editNames?`<input id="names-in" value="${esc(pumpers().join(', '))}"><div style="font-size:11px;color:var(--text3);margin-top:-8px">Separate names with commas, then tap outside the box.</div>`:''}
+    ${G.useVin
+      ?`<label class="f"><span>Last 6 of the VIN</span><input id="vin" maxlength="6" value="${esc(G.vin)}" style="font-family:ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase" autocomplete="off"></label><button type="button" class="ghost" id="tostock" style="margin-top:-8px">Use the stock number instead</button>`
+      :`<label class="f"><span>Stock number</span><input id="stock" value="${esc(G.stock)}" autocomplete="off" autocapitalize="characters"></label><button type="button" class="ghost" id="tovin" style="margin-top:-8px">No stock number? Use the last 6 of the VIN</button>`}
+    <div id="carline" style="font-size:13px;color:${car||isDima()?'var(--text2)':'var(--text3)'};margin-top:-6px">${carLine}</div>
+    <div class="f" style="display:flex;flex-direction:column;gap:5px"><span style="font-weight:600;font-size:14px">Receipt photo <small style="color:var(--red)">${hasPhoto?'✓':'required'}</small></span>
+      <label class="photo"><input id="photo" type="file" accept="image/*" capture="environment" style="display:none">${G.photoUrl?`<img src="${G.photoUrl}" alt="Receipt">`:`<i>${ch.receiptUrl?'saved ✓':'no photo'}</i>`}<span>${G.photo?'Tap to retake':(ch.receiptUrl?'Photo saved · tap to replace':'Take a photo of the receipt')}</span></label></div>
+    ${G.note?`<div class="note ${G.note.k==='warn'?'bad':'ok'}">${esc(G.note.t)}</div>`:''}
+    <button class="btn" id="go" type="button" ${anyInput()&&!G.busy?'':'disabled'}>${G.busy?'Saving…':(miss.length?'Save for now':'Save and file to car')}</button>
+    ${miss.length?`<div style="font-size:12px;color:var(--text3);margin-top:-6px">Still needed to file it: ${esc(miss.join(', '))}. You can save what you have now.</div>`:''}
+  </div>`;
+}
+function carName(x){if(x.dima)return'Dima';const v=G.vehicles.find(v=>v.id===x.vehicleId);return v?vehName(v):'—';}
+function histView(){
+  const [from,to,lbl]=histRange();
+  const rows=G.hist.filter(x=>(x.date||'')>=from&&(x.date||'')<to);
+  const keyOf={date:null,car:carName,stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[G.hSort];
+  rows.sort(keyOf?(a,b)=>String(keyOf(a)).localeCompare(String(keyOf(b)),undefined,{numeric:true})||sortNew(a,b):sortNew);
+  const row=x=>`<div class="row"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} · stock ${esc(x.stock||'—')} · ${esc(carName(x))} · ${esc(x.pumpedBy||'')}${x.check==='mismatch'?' · <span style="color:var(--bad)">flagged</span>':''}</span><span class="r">${x.receiptUrl?`<a href="${esc(x.receiptUrl)}" target="_blank" rel="noopener">Receipt</a>`:''}</span></div>`;
+  let body;
+  if(!rows.length)body='<div class="empty">No gas receipts in this period</div>';
+  else if(!keyOf)body=rows.map(row).join('');
+  else{const g=[];rows.forEach(x=>{const k=String(keyOf(x));let e=g.find(q=>q.k===k);if(!e)g.push(e={k,r:[]});e.r.push(x);});
+    body=g.map(e=>`<div class="flex" style="margin-top:6px"><div class="sec">${esc(e.k)} · ${e.r.length}</div><div class="big" style="font-size:16px">${money(sum(e.r))}</div></div>`+e.r.map(row).join('')).join('');}
+  return`<div class="box">
+    <div class="per">${[['week','Week'],['month','Month'],['year','Year'],['all','All']].map(([id,l])=>`<button type="button" data-hp="${id}" class="${G.hp===id?'on':''}">${l}</button>`).join('')}</div>
+    ${G.hp!=='all'?`<div class="step"><button type="button" data-hstep="1">‹</button><span>${esc(lbl)}</span><button type="button" data-hstep="-1" ${G.hOff===0?'disabled':''}>›</button>${G.hOff>0?'<a data-hstep="reset">back to current</a>':''}</div>`:''}
+    <div class="flex"><div class="sec">${rows.length} receipt${rows.length===1?'':'s'}</div><div class="big">${money(sum(rows))}</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text3)">Sort</span>${[['date','Date'],['car','Car'],['stock','Stock #'],['station','Gas station']].map(([id,l])=>`<button type="button" data-hsort="${id}" class="pill${G.hSort===id?' on':''}">${l}</button>`).join('')}</div>
+    ${body}</div>`;
+}
+function wire(app){
+  const on=(id,ev,fn)=>{const e=$(id);if(e)e.addEventListener(ev,fn);};
+  app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{G.tab=b.dataset.tab;render();});
+  app.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{if(G.sel!==b.dataset.ch){G.sel=b.dataset.ch;reset();prefill();render();}});
+  app.querySelectorAll('[data-hp]').forEach(b=>b.onclick=()=>{G.hp=b.dataset.hp;G.hOff=0;render();});
+  app.querySelectorAll('[data-hsort]').forEach(b=>b.onclick=()=>{G.hSort=b.dataset.hsort;render();});
+  app.querySelectorAll('[data-hstep]').forEach(b=>b.onclick=()=>{const d=b.dataset.hstep;G.hOff=d==='reset'?0:Math.max(0,G.hOff+Number(d));render();});
+  const refresh=()=>{const ch=charge(),b=$('go');if(b){b.disabled=!anyInput()||G.busy;b.textContent=missingList(ch).length?'Save for now':'Save and file to car';}const c=$('carline');if(c){const k=findCar();c.textContent=isDima()?"Dima's charge · goes on his list, no car":(G.useVin?G.vin.trim().length===6:G.stock.trim())?(k?vehName(k)+' · stock '+(k.stockNumber||'—'):'No matching car yet'):'';}};
+  on('who','change',e=>{G.who=e.target.value;render();});
+  on('stock','input',e=>{G.stock=e.target.value;refresh();});on('vin','input',e=>{G.vin=e.target.value;refresh();});
+  on('tovin','click',()=>{G.useVin=true;render();});on('tostock','click',()=>{G.useVin=false;render();});
+  on('photo','change',e=>pickPhoto(e.target.files&&e.target.files[0]));
+  on('go','click',tag);
+  on('names','click',()=>{G.editNames=!G.editNames;render();});
+  on('names-in','change',async e=>{const n=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);if(n.length){G.pumpers=n;try{await SHOP().collection('agent_state').doc('gas_pumpers').set({names:n});}catch(err){toast('Names saved on this phone only','err');}}render();});
+}
+// ── PIN gate (manager PIN from AC Recon settings; remembered on this phone) ──
+let pinHash=null;
+async function loadPins(){try{const d=await db.collection('shops').doc('ac_settings').get();const s=JSON.parse((d.data()||{}).settings||'{}');return[(s.pins&&s.pins.manager)||'1234',(s.pins&&s.pins.master)||'7918'];}catch(e){return null;}}
+function start(){G.authed=true;subscribe();render();}
+function pinScreen(msg){
+  $('app').innerHTML=`<div id="pin" class="box"><div style="font-weight:700;font-size:17px">Enter your PIN</div><input id="pin-in" type="password" inputmode="numeric" maxlength="4" autocomplete="off"><div style="color:var(--bad);font-size:13px;min-height:18px">${esc(msg||'')}</div></div>`;
+  const i=$('pin-in');i.focus();
+  i.oninput=async()=>{if(i.value.length<4)return;const pins=await loadPins();if(!pins){pinScreen('Could not check the PIN. Check your connection.');return;}if(pins.includes(i.value)){lsSet('gas_ok','1');start();}else pinScreen('Wrong PIN');};
+}
+if(!db)$('app').innerHTML='<div class="empty">Could not connect. Check your internet and reload.</div>';
+else if(lsGet('gas_ok')==='1')start();else pinScreen('');
+</script></body></html>
