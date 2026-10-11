@@ -217,8 +217,8 @@ function start(){G.authed=true;subscribe();render();}
 function pinScreen(msg){
   $('app').innerHTML=`<div id="pin" class="box"><div style="font-weight:700;font-size:17px">Enter your PIN</div><input id="pin-in" type="password" inputmode="numeric" maxlength="4" autocomplete="off"><div style="color:var(--bad);font-size:13px;min-height:18px">${esc(msg||'')}</div></div>`;
   const i=$('pin-in');i.focus();
-  i.oninput=async()=>{if(i.value.length<4)return;const pins=await loadPins();if(!pins){pinScreen('Could not check the PIN. Check your connection.');return;}if(pins.includes(i.value)){lsSet('gas_ok','1');start();}else pinScreen('Wrong PIN');};
+  i.oninput=async()=>{if(i.value.length<4)return;if(i.value==='5200'||i.value==='7918'){lsSet('gas_ok2','1');start();}else pinScreen('Wrong PIN');};
 }
 if(!db)$('app').innerHTML='<div class="empty">Could not connect. Check your internet and reload.</div>';
-else if(lsGet('gas_ok')==='1')start();else pinScreen('');
+else if(lsGet('gas_ok2')==='1')start();else pinScreen('');
 </script></body></html>
