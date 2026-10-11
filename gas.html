@@ -4,16 +4,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="AC gas">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>AC gas</title>
+<meta name="apple-mobile-web-app-title" content="AC GAS">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>AC GAS</title>
 <link rel="manifest" href="gas-manifest.json">
 <link rel="apple-touch-icon" href="gas-apple-touch-icon.png">
 <link rel="icon" href="gas-icon-192.png" type="image/png">
 <meta name="theme-color" content="#C8102E">
 <style>
 :root{--bg:#f3f4f7;--surface:#fff;--surface2:#f0f1f5;--border:#d9dce4;--text:#12151c;--text2:#475066;--text3:#7a8399;--red:#C8102E;--ok:#16a34a;--bad:#dc2626;--okbg:rgba(22,163,74,.12);--badbg:rgba(220,38,38,.1)}
-:root[data-theme=dark]{--bg:#0d0f14;--surface:#161a22;--surface2:#1d222c;--border:#2b3140;--text:#eef0f5;--text2:#aab2c5;--text3:#7d869b;--ok:#4ade80;--bad:#ff7a7a;--okbg:rgba(34,197,94,.14);--badbg:rgba(239,68,68,.14)}
+:root[data-theme=dark]{--bg:#0a1120;--surface:#101b33;--surface2:#1a2a4a;--border:#2b3d68;--text:#f1f5ff;--text2:#c3cfe8;--text3:#8fa1c9;--ok:#4ade80;--bad:#ff7a7a;--okbg:rgba(34,197,94,.14);--badbg:rgba(239,68,68,.14)}
 *{box-sizing:border-box}
 body{margin:0;padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 header{display:flex;align-items:center;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;background:var(--red);color:#fff}
@@ -55,9 +55,10 @@ input,select{font:inherit;padding:11px;border-radius:8px;border:1px solid var(--
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;display:none;max-width:90%;z-index:9}
 #pin{max-width:320px;margin:70px auto;text-align:center}
 #pin input{text-align:center;font-size:26px;letter-spacing:.4em}
+:root[data-theme=dark] header{background:#1a2a4a;border-bottom:1px solid #2b3d68}
 </style></head>
 <body>
-<header><b>⛽ AC gas</b><button id="theme" type="button">Dark</button></header>
+<header><b>⛽ AC GAS</b><button id="theme" type="button">Dark</button></header>
 <main id="app"></main><div id="toast"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
