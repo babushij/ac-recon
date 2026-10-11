@@ -8907,11 +8907,11 @@ function renderMechDash(c){
   c.querySelectorAll('[data-md-tile]').forEach(b=>b.onclick=()=>{MD.sel=b.dataset.mdTile;render();});
   c.querySelectorAll('.v-row[data-vid]').forEach(row=>{
     row.onclick=()=>{ST.selectedId=row.dataset.vid;ST.view='detail';ST.activeTab='overview';render();};
-    row.style.position='relative';
+    const bar=document.createElement('div');bar.style.cssText='text-align:right;margin:4px 2px 12px';
     const pb=document.createElement('button');pb.className='btn-ghost';pb.textContent='Parts search';
-    pb.style.cssText='position:absolute;right:10px;bottom:8px;font-size:11px;padding:4px 9px';
+    pb.style.cssText='font-size:11px;padding:4px 11px';
     pb.onclick=e=>{e.stopPropagation();MD.car=row.dataset.vid;render();};
-    row.appendChild(pb);
+    bar.appendChild(pb);row.after(bar);
   });
   if(car) c.querySelectorAll('#md-vendors a').forEach(a=>a.onclick=e=>{if(mdHandoff([a.dataset.v]))e.preventDefault();});
 }
