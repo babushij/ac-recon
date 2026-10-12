@@ -970,7 +970,7 @@ window.editVehicleBasics=function(id){
 
 function startNewVisit(v, overrides={}){
   const visit = {
-    id: v.id + '-v' + ((v.visits||[]).length + 1),
+    id: v.id + '-v' + (Math.max(0,...(v.visits||[]).map(x=>+String(x.id||'').split('-v').pop()||0)) + 1),
     dateIn: Date.now(),
     dateOut: null,
     stockNumber: overrides.stockNumber || v.stockNumber || ((v.visits||[]).slice().reverse().find(x=>x.stockNumber)||{}).stockNumber || '',
@@ -10251,19 +10251,48 @@ function subscribeToFirestore() {
 // All old code reads v.stockNumber, v.statuses, etc.
 // Shim reads from current visit and writes to current visit
 // ═══════════════════════════════════════════════
+const SHELL_FROM = new Date(2026,9,12).getTime();
+function repairShellVisits(v){
+  const SHELL_ST=['received','sale_pending','sold','customer_appt'];
+  const isShell=o=>(o.dateIn||0)>=SHELL_FROM && !o.dateOut && (o.statuses||[]).every(x=>SHELL_ST.includes(x)) && !o.assignedTo && !o.assignedTo2 &&
+    !['parts','laborLines','repairs','receipts','photos','timeSessions','obdScans'].some(k=>(o[k]||[]).length) && !(o.notes||'').trim();
+  const shells=v.visits.filter(isShell);
+  if(!shells.length) return;
+  const keep=shells[shells.length-1];
+  const since=Math.min(...shells.map(o=>o.dateIn||0));
+  let changed=false;
+  const have=new Set((keep.concerns||[]).map(c=>c.id));
+  keep.concerns=keep.concerns||[];
+  // concerns from other shells, and concerns misfiled on older visits since the first shell began
+  v.visits.forEach(o=>{
+    if(o===keep) return;
+    const shell=shells.includes(o);
+    const mv=(o.concerns||[]).filter(c=>shell||(c.createdAt||0)>=since);
+    if(!mv.length) return;
+    o.concerns=o.concerns.filter(c=>!mv.includes(c));
+    mv.forEach(c=>{if(!have.has(c.id)){have.add(c.id);keep.concerns.push(c);}});
+    changed=true;
+  });
+  // keep the Sale pending / Sold tag the salesperson chose
+  const sale=shells.some(o=>(o.statuses||[]).includes('sold'))?'sold':shells.some(o=>(o.statuses||[]).includes('sale_pending'))?'sale_pending':'';
+  keep.statuses=keep.statuses||[];
+  if(sale && !keep.statuses.includes('sold') && !keep.statuses.includes('sale_pending')){keep.statuses.push(sale);changed=true;}
+  if(sale) keep.priority='high';
+  if(!keep.stockNumber){const sn=shells.map(o=>o.stockNumber).filter(Boolean).pop()||v.visits.map(o=>o.stockNumber).filter(Boolean).pop();if(sn){keep.stockNumber=sn;changed=true;}}
+  const drop=shells.filter(o=>o!==keep);
+  if(drop.length){v.visits=v.visits.filter(o=>!drop.includes(o));changed=true;}
+  if(changed) v.updatedAt=Date.now();
+}
 function applyVisitShim(v){
   if(!v || !Array.isArray(v.visits) || !v.visits.length) return v;
   const cur = currentVisit(v);
   if(!cur) return v;
-  // Repair: before this fix, a new check-in's concerns were filed on the OLDEST open visit.
-  // Move any concern created after the current visit began back onto it.
-  if(v.visits.length>1){
-    v.visits.forEach(o=>{
-      if(o===cur||!Array.isArray(o.concerns)||!o.concerns.length) return;
-      const mv=o.concerns.filter(c=>(c.createdAt||0)>=(cur.dateIn||0)&&(cur.dateIn||0)>(o.dateIn||0));
-      if(mv.length){ o.concerns=o.concerns.filter(c=>!mv.includes(c)); cur.concerns=[...(cur.concerns||[]),...mv]; v.updatedAt=Date.now(); }
-    });
-  }
+  // Repair (check-in bug, Oct 12 2026): repeated sales check-ins stacked empty "shell" visits and
+  // filed their concerns on an older visit. Collapse today's empty shells into the newest one and
+  // move the misfiled concerns across. Only touches visits created on/after SHELL_FROM.
+  if(v.visits.length>1) repairShellVisits(v);
+  const cur2 = currentVisit(v);
+  if(cur2 && cur2!==cur) return applyVisitShim(v);
   // Copy visit fields onto top-level of v so existing reads work
   const SHIM_FIELDS = ['stockNumber','statuses','assignedTo','assignedTo2','priority',
     'apptDate','parts','laborLines','repairs','receipts','photos','notes',
