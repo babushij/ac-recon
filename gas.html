@@ -50,6 +50,7 @@ input,select{font:inherit;padding:11px;border-radius:8px;border:1px solid var(--
 .step{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px;border-radius:8px;background:var(--surface2)}
 .step button{width:34px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;font-weight:700;cursor:pointer}
 .step button:disabled{opacity:.35}.step a{font-size:12px;color:var(--red);cursor:pointer}
+.sortrow .pill{flex:1 1 auto;padding:6px 6px;font-size:11px;white-space:nowrap;text-align:center}
 .big{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:700}
 .flex{display:flex;justify-content:space-between;align-items:baseline}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;display:none;max-width:90%;z-index:9}
@@ -187,7 +188,7 @@ function carName(x){if(x.dima)return'Dima';if(x.category==='misc')return'Misc';c
 function histView(){
   const [from,to,lbl]=histRange();
   const rows=G.hist.filter(x=>(x.date||'')>=from&&(x.date||'')<to);
-  const keyOf={date:null,car:carName,stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[G.hSort];
+  const keyOf={date:null,who:x=>x.pumpedBy||'—',stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[G.hSort];
   rows.sort(keyOf?(a,b)=>String(keyOf(a)).localeCompare(String(keyOf(b)),undefined,{numeric:true})||sortNew(a,b):sortNew);
   const row=x=>`<div class="row"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} · stock ${esc(x.stock||'—')} · ${esc(carName(x))} · ${esc(x.pumpedBy||'')}${x.check==='mismatch'?' · <span style="color:var(--bad)">flagged</span>':''}</span><span class="r">${x.receiptUrl?`<a href="${esc(x.receiptUrl)}" target="_blank" rel="noopener">Receipt</a>`:''}</span></div>`;
   let body;
@@ -199,7 +200,7 @@ function histView(){
     <div class="per">${[['week','Week'],['month','Month'],['year','Year'],['all','All']].map(([id,l])=>`<button type="button" data-hp="${id}" class="${G.hp===id?'on':''}">${l}</button>`).join('')}</div>
     ${G.hp!=='all'?`<div class="step"><button type="button" data-hstep="1">‹</button><span>${esc(lbl)}</span><button type="button" data-hstep="-1" ${G.hOff===0?'disabled':''}>›</button>${G.hOff>0?'<a data-hstep="reset">back to current</a>':''}</div>`:''}
     <div class="flex"><div class="sec">${rows.length} receipt${rows.length===1?'':'s'}</div><div class="big">${money(sum(rows))}</div></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text3)">Sort</span>${[['date','Date'],['car','Car'],['stock','Stock #'],['station','Gas station']].map(([id,l])=>`<button type="button" data-hsort="${id}" class="pill${G.hSort===id?' on':''}">${l}</button>`).join('')}</div>
+    <div class="sortrow" style="display:flex;gap:5px;flex-wrap:nowrap;align-items:center">${[['date','Date'],['who','Salesperson'],['stock','Stock #'],['station','Gas station']].map(([id,l])=>`<button type="button" data-hsort="${id}" class="pill${G.hSort===id?' on':''}">${l}</button>`).join('')}</div>
     ${body}</div>`;
 }
 function wire(app){

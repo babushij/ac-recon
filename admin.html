@@ -9099,7 +9099,7 @@ function renderGasReceipts(c){
     const carOf=x=>x.dima?null:(ST.vehicles||[]).find(v=>v.id===x.vehicleId);
     const carName=x=>x.dima?'Dima':x.category==='misc'?'Misc':(carOf(x)?vehName(carOf(x)):'—');
     const rows=GAS.hist.filter(x=>!x.dima&&(x.date||'')>=from&&(x.date||'')<to);
-    const keyOf={date:null,car:carName,stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[GAS.hSort];
+    const keyOf={date:null,who:x=>x.pumpedBy||'—',stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[GAS.hSort];
     const cmp=(a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||''));
     rows.sort(keyOf?(a,b)=>String(keyOf(a)).localeCompare(String(keyOf(b)),undefined,{numeric:true})||cmp(a,b):cmp);
     const sum=a=>a.reduce((n,x)=>n+(Number(x.amount)||0),0);
@@ -9109,12 +9109,12 @@ function renderGasReceipts(c){
     else if(!keyOf)body=rows.map(row).join('');
     else{const g=[];rows.forEach(x=>{const k=String(keyOf(x));let e=g.find(q=>q.k===k);if(!e)g.push(e={k,r:[]});e.r.push(x);});
       body=g.map(e=>`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><div class="dash-sec" style="margin:0">${gasEsc(e.k)} · ${e.r.length}</div><div style="font-family:var(--font-mono);font-weight:700">$${sum(e.r).toFixed(2)}</div></div>`+e.r.map(row).join('')).join('');}
-    const chip=(a,id,l)=>`<button type="button" data-${a}="${id}" style="padding:6px 12px;border-radius:999px;border:1px solid ${(a==='hsort'?GAS.hSort:GAS.hp)===id?'var(--red)':'var(--border)'};background:${(a==='hsort'?GAS.hSort:GAS.hp)===id?'var(--red)':'var(--surface)'};color:${(a==='hsort'?GAS.hSort:GAS.hp)===id?'#fff':'inherit'};font:inherit;font-size:12px;font-weight:600;cursor:pointer">${l}</button>`;
+    const chip=(a,id,l)=>`<button type="button" data-${a}="${id}" style="padding:6px 6px;flex:1 1 auto;white-space:nowrap;border-radius:999px;border:1px solid ${(a==='hsort'?GAS.hSort:GAS.hp)===id?'var(--red)':'var(--border)'};background:${(a==='hsort'?GAS.hSort:GAS.hp)===id?'var(--red)':'var(--surface)'};color:${(a==='hsort'?GAS.hSort:GAS.hp)===id?'#fff':'inherit'};font:inherit;font-size:11px;font-weight:600;cursor:pointer">${l}</button>`;
     h+=`${GAS.charges.length?`<div style="padding:10px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-size:13px;color:var(--text2)">${GAS.charges.length} fuel charge${GAS.charges.length===1?'':'s'} still waiting for a receipt. Tag them on the Gas Receipts page.</div>`:''}<div style="${box};display:flex;flex-direction:column;gap:10px">
       <div class="stats-period-bar">${[['week','Week'],['month','Month'],['year','Year'],['all','All']].map(([id,l])=>`<button type="button" class="stats-period-btn${GAS.hp===id?' active':''}" data-hp="${id}">${l}</button>`).join('')}</div>
       ${GAS.hp!=='all'?`<div class="stats-step" style="border-radius:8px"><button type="button" data-hstep="1" title="Previous">‹</button><span>${gasEsc(lbl)}</span><button type="button" data-hstep="-1" ${GAS.hOff===0?'disabled':''} title="Next">›</button>${GAS.hOff>0?'<a data-hstep="reset">back to current</a>':''}</div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:baseline"><div class="dash-sec" style="margin:0">${rows.length} receipt${rows.length===1?'':'s'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700">$${sum(rows).toFixed(2)}</div></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text3)">Sort</span>${[['date','Date'],['car','Car'],['stock','Stock #'],['station','Gas station']].map(([id,l])=>chip('hsort',id,l)).join('')}</div>
+      <div style="display:flex;gap:5px;flex-wrap:nowrap;align-items:center">${[['date','Date'],['who','Salesperson'],['stock','Stock #'],['station','Gas station']].map(([id,l])=>chip('hsort',id,l)).join('')}</div>
       ${body}</div></div>`;
     c.innerHTML=h;
     c.querySelectorAll('[data-gtab]').forEach(b=>b.onclick=()=>{GAS.tab=b.dataset.gtab;render();});
