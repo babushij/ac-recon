@@ -6882,10 +6882,15 @@ function openSalesServiceCheckinModal(vehicleId){
     <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:700;color:#fff">🔧 Enter for service</div>
     <div style="padding:20px">
       <div style="font-size:13px;color:#cdd3de;margin-bottom:16px">${v.year||''} ${v.make||''} ${v.model||''} · #${v.stockNumber||'—'} · VIN ...${(v.vin||'------').slice(-6)}</div>
-      <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:6px">CUSTOMER CONCERNS *</label>
-      <div style="font-size:11px;color:#f59e0b;margin-bottom:8px;line-height:1.4">For multiple concerns, add each concern separately — the manager approves them one by one.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#fff">Customer concerns</div>
+          <div id="sfc-con-count" style="font-size:12px;color:#9aa3b8;margin-top:2px">0 logged</div>
+        </div>
+        <button type="button" id="sfc-con-add" style="background:#f59e0b;border:none;color:#000;font-size:12px;font-weight:700;padding:8px 14px;border-radius:8px;cursor:pointer">+ Add concern</button>
+      </div>
+      <div style="font-size:11px;color:#f59e0b;margin-bottom:8px;line-height:1.4">For multiple concerns, add each concern separately.</div>
       <div id="sfc-con-list"></div>
-      <button type="button" id="sfc-con-add" style="width:100%;background:#1a1200;border:1px dashed #f59e0b55;color:#f59e0b;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer">+ Add concern</button>
       <label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin:14px 0 8px">IS THIS CAR SOLD OR ABOUT TO BE SOLD?</label>
       <div id="sfc-sale" style="display:flex;gap:6px">${[['','Regular service','#3b82f6'],['sale_pending','🤝 Sale pending','#f59e0b'],['sold','💰 Sold','#10b981']].map(([id,l,col])=>`<button type="button" data-sfs="${id}" data-col="${col}" onclick="sfcPickSale(this)" style="flex:1;padding:10px 4px;border-radius:8px;border:1px solid #2a2f3f;background:transparent;color:#cdd3de;font-size:12px;font-weight:700;cursor:pointer">${l}</button>`).join('')}</div>
       <div id="sfc-sale-hint" style="font-size:11px;color:#9aa3b8;margin-top:6px;min-height:15px"></div>
@@ -6899,7 +6904,7 @@ function openSalesServiceCheckinModal(vehicleId){
   document.body.appendChild(overlay);
   overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
   window._sfcCons=[];
-  const renderCons=()=>{overlay.querySelector('#sfc-con-list').innerHTML=window._sfcCons.map((t,i)=>`<div style="display:flex;gap:8px;align-items:center;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;color:#e2e4ea"><span style="flex:1">${String(t).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}</span><button type="button" data-rc="${i}" style="background:none;border:0;color:#9aa3b8;cursor:pointer;font-size:15px">✕</button></div>`).join('');overlay.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{window._sfcCons.splice(+b.dataset.rc,1);renderCons();});};
+  const renderCons=()=>{overlay.querySelector('#sfc-con-list').innerHTML=window._sfcCons.map((t,i)=>`<div style="display:flex;gap:8px;align-items:center;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;color:#e2e4ea"><span style="flex:1">${String(t).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}</span><button type="button" data-rc="${i}" style="background:none;border:0;color:#9aa3b8;cursor:pointer;font-size:15px">✕</button></div>`).join('');overlay.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{window._sfcCons.splice(+b.dataset.rc,1);renderCons();});overlay.querySelector('#sfc-con-count').textContent=window._sfcCons.length+' logged';};
   window._queueConcern=t=>{window._sfcCons.push(t);renderCons();};
   overlay.querySelector('#sfc-con-add').onclick=()=>openAddConcernModal('__queue');
   // a car that is already Sold / Sale pending keeps that tag by default
