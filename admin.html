@@ -790,6 +790,8 @@ const DEFAULT_SETTINGS={
   taxRate:0,
   vendors:{parts:[],sublet:[]}
 };
+// Sales team: each salesperson has their own PIN (starts at 1111, they change it on first login; Ilya/Mary can reset it)
+const DEFAULT_SALES_TEAM=['Alina','Christian','Diego','Thomas','Steve','AJ','Isaiah','Dino','Jose'].map(n=>({name:n,pin:'1111'}));
 let SETTINGS=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); // deep copy
 // Update a specific field on a mechanic — used by settings inputs
 function updateMechField(mechId, field, value){
@@ -997,6 +999,7 @@ function ensureSettingsDefaults(){
   ['manager','sales','detailer','mech1','mech2'].forEach(k=>{
     if(!SETTINGS.pins[k]) SETTINGS.pins[k]=DEFAULT_SETTINGS.pins[k]||'0000';
   });
+  if(!Array.isArray(SETTINGS.salesTeam)||!SETTINGS.salesTeam.length) SETTINGS.salesTeam=JSON.parse(JSON.stringify(DEFAULT_SALES_TEAM));
   // Master PIN is fixed — always force it to the default, never user-editable
   SETTINGS.pins.master = '7918';
 }
@@ -1916,7 +1919,54 @@ function renderRoleScreen(){
   });
 }
 
+// Sales: pick your name first, then your own PIN
+function showSalesNamePicker(role){
+  document.getElementById('pin-overlay')?.remove();
+  const people=(SETTINGS.salesTeam||[]);
+  const ov=document.createElement('div');
+  ov.id='pin-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML=`<div style="width:100%;max-width:320px;max-height:92vh;overflow:auto">
+    <div style="text-align:center;margin-bottom:18px"><div style="font-size:32px;margin-bottom:8px">${role.icon}</div>
+    <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">Sales</div><div style="font-size:12px;color:#9aa3b8">Who are you?</div></div>
+    ${people.map((p,i)=>`<button data-sn="${i}" style="display:block;width:100%;text-align:left;background:#161921;border:1px solid #2a2f3f;color:#fff;font-size:15px;font-weight:600;padding:14px 16px;border-radius:10px;margin-bottom:8px;cursor:pointer">${String(p.name).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</button>`).join('')}
+    <button id="sn-back" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">← Back to roles</button></div>`;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('[data-sn]').forEach(b=>b.onclick=()=>{const n=people[+b.dataset.sn].name;showPinPad({...role,label:n,salesName:n});});
+  ov.querySelector('#sn-back').onclick=()=>ov.remove();
+}
+// Change your own PIN (forced the first time, while it is still the starting 1111)
+window.openSalesPinChange=function(forced){
+  const me=(SETTINGS.salesTeam||[]).find(p=>p.name===ST.salesUser);
+  if(!me)return;
+  document.getElementById('pin-change')?.remove();
+  const ov=document.createElement('div');
+  ov.id='pin-change';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+  const inp='width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:12px;color:#fff;font-size:20px;letter-spacing:8px;text-align:center;font-family:monospace;margin-top:8px';
+  ov.innerHTML=`<div style="width:100%;max-width:320px;background:#111318;border:1px solid #2a2f3f;border-radius:16px;padding:22px">
+    <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">${forced?'Choose your PIN':'Change my PIN'}</div>
+    <div style="font-size:12px;color:#9aa3b8;line-height:1.5;margin-bottom:12px">${forced?'You are using the starting PIN. ':''}Pick a new 4-digit PIN — it works on every device you use.</div>
+    <input id="pc-1" type="password" inputmode="numeric" maxlength="4" placeholder="New PIN" style="${inp}">
+    <input id="pc-2" type="password" inputmode="numeric" maxlength="4" placeholder="Type it again" style="${inp}">
+    <div id="pc-err" style="color:#f87171;font-size:12px;min-height:16px;margin-top:8px"></div>
+    <button id="pc-save" style="width:100%;margin-top:6px;background:#C8102E;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Save PIN</button>
+    ${forced?'':'<button id="pc-cancel" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>'}</div>`;
+  document.body.appendChild(ov);
+  const digits=e=>{e.target.value=e.target.value.replace(/[^0-9]/g,'').slice(0,4);};
+  ov.querySelector('#pc-1').oninput=digits;ov.querySelector('#pc-2').oninput=digits;
+  ov.querySelector('#pc-1').focus();
+  const cancel=ov.querySelector('#pc-cancel');if(cancel)cancel.onclick=()=>ov.remove();
+  ov.querySelector('#pc-save').onclick=()=>{
+    const a=ov.querySelector('#pc-1').value,b=ov.querySelector('#pc-2').value,err=ov.querySelector('#pc-err');
+    if(a.length!==4){err.textContent='Use 4 digits';return;}
+    if(a==='1111'){err.textContent='Pick something other than 1111';return;}
+    if(a!==b){err.textContent='The two PINs do not match';return;}
+    me.pin=a;saveSettings();ov.remove();toast('PIN saved');
+  };
+};
 function showPinPad(role){
+  if(role.id==='sales'&&!role.salesName){showSalesNamePicker(role);return;}
   // Remove any existing pin pad
   document.getElementById('pin-overlay')?.remove();
   let entered='';
@@ -1972,13 +2022,15 @@ function showPinPad(role){
     if(errEl)errEl.style.display='none';
     if(k==='←'){entered=entered.slice(0,-1);}
     else if(k==='✓'){
-      const correct=(SETTINGS.pins&&SETTINGS.pins[role.id])||'0000';
+      const correct=role.salesName?String(((SETTINGS.salesTeam||[]).find(p=>p.name===role.salesName)||{}).pin||''):((SETTINGS.pins&&SETTINGS.pins[role.id])||'0000');
       if(entered===correct){
         overlay.remove();
         ST.role=role.id;
         const mechIds=getMechs().map(m=>m.id);
         ST.view=role.id==='manager'?'dashboard':role.id==='detailer'?'detailer':role.id==='sales'?'salespipeline':mechIds.includes(role.id)?'mechdash':'dashboard';
+        if(role.salesName){ST.salesUser=role.salesName;ST.salesFilter='all';}
         render();
+        if(role.salesName&&correct==='1111')setTimeout(()=>openSalesPinChange(true),150);
       }else{
         entered='';
         updateDots();
@@ -2073,8 +2125,8 @@ function buildSidebar(){
     navEl.appendChild(d);
   });
 
-  const mechObj=getMMAP()[ST.role];const initials=ST.role==='manager'?'MGR':ST.role==='sales'?'SLS':ST.role==='detailer'?'DET':mechObj?(mechObj.name.substring(0,3).toUpperCase()):'???';
-  const roleName=getRoles().find(r=>r.id===ST.role)?.label||'';
+  const mechObj=getMMAP()[ST.role];const initials=ST.role==='manager'?'MGR':ST.role==='sales'?((ST.salesUser||'SLS').substring(0,3).toUpperCase()):ST.role==='detailer'?'DET':mechObj?(mechObj.name.substring(0,3).toUpperCase()):'???';
+  const roleName=(ST.role==='sales'&&ST.salesUser)?ST.salesUser:(getRoles().find(r=>r.id===ST.role)?.label||'');
   userEl.innerHTML=`<div class="sb-avatar">${initials}</div><div><div class="sb-user-name">${roleName}</div><div class="sb-user-role">Automotive Connection</div></div><button class="sb-switch" onclick="ST.role=null;render()">Switch</button>`;
 }
 
@@ -3005,6 +3057,7 @@ function renderAdd(c){
   window.createNewVehicleFromInputs=function(inputs){
     const vehicle={
       id:uid(),
+      salesperson:ST.role==='sales'?(ST.salesUser||''):'',
       vin:inputs.vin,
       stockNumber:inputs.stock,
       year:inputs.year,
@@ -6488,13 +6541,19 @@ function pendingConcernCount(){
 
 function renderSalesPipeline(c){
   const isSales=ST.role==='sales';
-  const pending=ST.vehicles.filter(v=>(v.statuses||[]).includes('sale_pending'));
-  const sold=ST.vehicles.filter(v=>(v.statuses||[]).includes('sold'));
+  const mineOnly=isSales&&ST.salesFilter==='mine';
+  const mineOk=v=>!mineOnly||(v.salesperson||'')===(ST.salesUser||'');
+  const pending=ST.vehicles.filter(v=>(v.statuses||[]).includes('sale_pending')&&mineOk(v));
+  const sold=ST.vehicles.filter(v=>(v.statuses||[]).includes('sold')&&mineOk(v));
 
   setTopbar(isSales?'My sales pipeline':'Sale pending & sold',
     isSales?`<button class="btn-red" onclick="openSalesAddVehicleModal()">+ Add vehicle</button>`:``);
 
   let html='';
+  if(isSales){
+    const seg=(id,l)=>`<button type="button" onclick="ST.salesFilter='${id}';render()" style="flex:1;padding:9px 6px;border:0;background:${(ST.salesFilter||'all')===id?'#C8102E':'transparent'};color:${(ST.salesFilter||'all')===id?'#fff':'#cdd3de'};font-size:12px;font-weight:700;cursor:pointer">${l}</button>`;
+    html+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px"><div style="display:flex;flex:1;border:1px solid #2a2f3f;border-radius:10px;overflow:hidden">${seg('all','All vehicles')}${seg('mine','Mine')}</div><button type="button" onclick="openSalesPinChange(false)" style="background:transparent;border:1px solid #2a2f3f;color:#cdd3de;font-size:12px;font-weight:600;padding:9px 12px;border-radius:10px;cursor:pointer">🔑 My PIN</button></div>`;
+  }
 
   // ── SALE PENDING ──
   if(pending.length){
@@ -6862,12 +6921,13 @@ window.submitSalesServiceCheckin=function(vehicleId, btn){
   const statuses=['received'];
   if(sale) statuses.push(sale);
   if(appt) statuses.push('customer_appt');
+  if(ST.salesUser)v.salesperson=ST.salesUser;
   startNewVisit(v,{statuses,priority:sale?'high':'medium',apptDate:appt});
   applyVisitShim(v);
 
   // Log the request as a pending concern → manager approval flow
   writeToCurrentVisit(v,'concerns',[{
-    id:uid(), description:desc, addedBy:'Sales',
+    id:uid(), description:desc, addedBy:ST.salesUser||'Sales',
     status:'pending', createdAt:Date.now()
   }]);
 
@@ -9212,6 +9272,9 @@ function saleIcon(){return`<path d="M2 4h5l7 7-5 5-7-7V4z" stroke="currentColor"
 // ═══════════════════════════════════════════════
 // SETTINGS — manager edits PINs + mechanic names
 // ═══════════════════════════════════════════════
+window.resetSalesPin=function(i){const p=(SETTINGS.salesTeam||[])[i];if(!p)return;if(!confirm('Reset '+p.name+'\'s PIN to 1111?'))return;p.pin='1111';saveSettings();toast(p.name+' reset to 1111');renderSettings(document.getElementById('content'));};
+window.addSalesName=function(){const e=document.getElementById('st-newname');const n=(e&&e.value||'').trim().slice(0,30);if(!n)return;if((SETTINGS.salesTeam||[]).some(p=>p.name.toLowerCase()===n.toLowerCase())){toast('Already on the list','err');return;}SETTINGS.salesTeam.push({name:n,pin:'1111'});saveSettings();renderSettings(document.getElementById('content'));};
+window.removeSalesName=function(i){const p=(SETTINGS.salesTeam||[])[i];if(!p)return;if(!confirm('Remove '+p.name+' from the sales team?'))return;SETTINGS.salesTeam.splice(i,1);saveSettings();renderSettings(document.getElementById('content'));};
 function renderSettings(c){
   if(ST.role!=='manager'){c.innerHTML='<div class="empty"><div class="empty-msg">Manager access only</div></div>';return;}
   setTopbar('Settings & PINs','');
@@ -9228,7 +9291,6 @@ function renderSettings(c){
 
       ${[
         {id:'manager',label:'Manager / Dealer',icon:'👔'},
-        {id:'sales',label:'Sales',icon:'🤝'},
         {id:'detailer',label:'Detailer',icon:'🧹'},
       ].map(r=>`
       <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1e2230">
@@ -9240,6 +9302,17 @@ function renderSettings(c){
           oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
           onchange="SETTINGS.pins[this.dataset.pinRole]=this.value.padStart(4,'0');saveSettings();toast('PIN updated')">
       </div>`).join('')}
+    </div>
+    <div class="panel">
+      <div class="panel-title">SALES TEAM</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:12px;line-height:1.5">Each salesperson logs in with their name and their own PIN (starts at 1111; they change it themselves on first login). You never see their PIN — you can only reset it.</div>
+      ${(SETTINGS.salesTeam||[]).map((p,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #1e2230">
+        <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#e2e4ea">${String(p.name).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</div><div style="font-size:11px;color:#9aa3b8">${p.pin==='1111'?'Still on 1111':'PIN changed by them'}</div></div>
+        <button class="btn-ghost" style="font-size:11px;padding:5px 10px" onclick="resetSalesPin(${i})" ${p.pin==='1111'?'disabled':''}>Reset to 1111</button>
+        <button class="btn-ghost" style="font-size:11px;padding:5px 9px" title="Remove" onclick="removeSalesName(${i})">✕</button>
+      </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:12px"><input id="st-newname" type="text" placeholder="Add a name" style="flex:1;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:9px 11px;color:#fff;font-size:14px"><button class="btn-red" onclick="addSalesName()">Add</button></div>
     </div>
     ` : `
     <div class="panel">
