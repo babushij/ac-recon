@@ -7417,11 +7417,11 @@ async function frazerLoad(){
       if(inv.status!=='filed'||inv.filedMode!=='parts_added')return;
       const sent=inv.frazerSent||{};
       inv.lines.forEach(l=>{
-        const a=l.assign;if(!a||a.kind!=='vehicle')return;
+        const a=l.assign;if(!a||(a.kind!=='vehicle'&&a.kind!=='stock'))return;
         if(sent[l.idx])return;
-        const v=getV(a.vehicleId);
+        const v=a.kind==='vehicle'?getV(a.vehicleId):null;
         const amt=(typeof l.lineTotal==='number'?l.lineTotal:(parseFloat(l.eachCost)||0)*(parseInt(l.quantity)||1));
-        rows.push({key:inv.id+'|'+l.idx,invId:inv.id,idx:l.idx,vid:a.vehicleId,vehicle:v?vehName(v):'(vehicle removed)',stock:v?(v.stockNumber||''):'',vin:v?String(v.vin||''):'',veh:v?[v.year,v.make,v.model].map(x=>String(x||'').replace(/[|\t\r\n]/g,' ').trim()).join('|'):'',
+        rows.push({key:inv.id+'|'+l.idx,invId:inv.id,idx:l.idx,vid:a.vehicleId||'',vehicle:a.kind==='stock'?('Stock '+(a.stock||a.vin6||'?')+' (gas/card, not tied to AC Recon)'):(v?vehName(v):'(vehicle removed)'),stock:a.kind==='stock'?(a.stock||''):(v?(v.stockNumber||''):''),vin:a.kind==='stock'?String(a.vin6||''):(v?String(v.vin||''):''),veh:v?[v.year,v.make,v.model].map(x=>String(x||'').replace(/[|\t\r\n]/g,' ').trim()).join('|'):'',
           dateMs:inv.invoiceMs,vendorName:inv.vendorName||inv.vendor||'',desc:l.description||'',pn:l.partNumber||'',qty:parseInt(l.quantity)||1,amount:Math.round(amt*100)/100,order:inv.orderNumber||''});
       });
     });
