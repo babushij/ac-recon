@@ -903,8 +903,8 @@ function mergeDuplicateVins(){
 function currentVisit(v){
   if(!v || !Array.isArray(v.visits) || !v.visits.length) return null;
   // Current = most recent non-booked, or last if all booked
-  const open = v.visits.find(visit => !(visit.statuses||[]).includes('booked'));
-  return open || v.visits[v.visits.length-1];
+  for(let i=v.visits.length-1;i>=0;i--){ if(!(v.visits[i].statuses||[]).includes('booked')) return v.visits[i]; }
+  return v.visits[v.visits.length-1];
 }
 
 // Write a field value to BOTH the vehicle's current visit AND the top-level
@@ -10255,6 +10255,15 @@ function applyVisitShim(v){
   if(!v || !Array.isArray(v.visits) || !v.visits.length) return v;
   const cur = currentVisit(v);
   if(!cur) return v;
+  // Repair: before this fix, a new check-in's concerns were filed on the OLDEST open visit.
+  // Move any concern created after the current visit began back onto it.
+  if(v.visits.length>1){
+    v.visits.forEach(o=>{
+      if(o===cur||!Array.isArray(o.concerns)||!o.concerns.length) return;
+      const mv=o.concerns.filter(c=>(c.createdAt||0)>=(cur.dateIn||0)&&(cur.dateIn||0)>(o.dateIn||0));
+      if(mv.length){ o.concerns=o.concerns.filter(c=>!mv.includes(c)); cur.concerns=[...(cur.concerns||[]),...mv]; v.updatedAt=Date.now(); }
+    });
+  }
   // Copy visit fields onto top-level of v so existing reads work
   const SHIM_FIELDS = ['stockNumber','statuses','assignedTo','assignedTo2','priority',
     'apptDate','parts','laborLines','repairs','receipts','photos','notes',
