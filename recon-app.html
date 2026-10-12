@@ -2892,7 +2892,7 @@ function renderAdd(c){
     ${ST.role==='sales'?`<div class="field"><label>Customer concerns</label>
       <div style="font-size:11px;color:#f59e0b;margin:-2px 0 8px;line-height:1.4">Each concern must be added individually — the manager approves them one by one.</div>
       <div id="av-con-list"></div>
-      <div style="display:flex;gap:8px"><input id="av-con-in" type="text" placeholder="One concern, e.g. Turn signal not working" style="flex:1"><button type="button" class="btn-ghost" id="av-con-add">+ Add</button></div></div>`
+      <button type="button" id="av-con-add" style="width:100%;background:#1a1200;border:1px dashed #f59e0b55;color:#f59e0b;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer">+ Add concern</button></div>`
     :`<div class="field"><label>Notes</label><textarea id="av-notes" placeholder="Additional notes about this vehicle..."></textarea></div>`}
   </div>
 
@@ -3045,7 +3045,7 @@ function renderAdd(c){
       assignedTo:c.querySelector('#av-mech').value,
       priority:autoHighPri?'high':c.querySelector('#av-priority').value,
       notes:(c.querySelector('#av-notes')||{value:''}).value.trim(),
-      concerns:(()=>{const pend=(c.querySelector('#av-con-in')||{value:''}).value.trim();const l=[...(formData.concerns||[])];if(pend)l.push(pend);return l;})(),
+      concerns:[...(formData.concerns||[])],
       apptDate:formData.apptDate||''
     };
 
@@ -3062,9 +3062,8 @@ function renderAdd(c){
 
   const mkConcerns=l=>(l||[]).map(t=>({id:uid(),description:t,addedBy:ST.salesUser||'Sales',status:'pending',createdAt:Date.now()}));
   const avRenderCons=()=>{const el=c.querySelector('#av-con-list');if(!el)return;el.innerHTML=formData.concerns.map((t,i)=>`<div style="display:flex;gap:8px;align-items:center;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px"><span style="flex:1">${String(t).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m]))}</span><button type="button" data-rc="${i}" style="background:none;border:0;color:#9aa3b8;cursor:pointer;font-size:15px">✕</button></div>`).join('');el.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{formData.concerns.splice(+b.dataset.rc,1);avRenderCons();});};
-  const avAdd=()=>{const i=c.querySelector('#av-con-in');const t=(i&&i.value||'').trim();if(!t)return;formData.concerns.push(t);i.value='';avRenderCons();i.focus();};
-  c.querySelector('#av-con-add')&&(c.querySelector('#av-con-add').onclick=avAdd);
-  c.querySelector('#av-con-in')&&c.querySelector('#av-con-in').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();avAdd();}});
+  window._avAddConcern=t=>{formData.concerns.push(t);avRenderCons();};
+  c.querySelector('#av-con-add')&&(c.querySelector('#av-con-add').onclick=()=>openAddConcernModal('__new'));
   window.createNewVehicleFromInputs=function(inputs){
     const vehicle={
       id:uid(),
@@ -7069,6 +7068,7 @@ function openAddConcernModal(vehicleId){
 window.submitConcern=function(vehicleId, btn){
   const text=document.getElementById('concern-text')?.value.trim();
   if(!text){toast('Please describe the concern','err');return;}
+  if(vehicleId==='__new'){window._avAddConcern&&window._avAddConcern(text);btn.closest('div[style*=fixed]').remove();return;}
   const v=ST.vehicles.find(x=>x.id===vehicleId);
   if(!v) return;
   const newConcerns=[...(v.concerns||[]),{
