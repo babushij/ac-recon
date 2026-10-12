@@ -112,7 +112,7 @@ async function tag(){
     const ts=firebase.firestore.FieldValue.serverTimestamp(),upd={};
     if(G.who)upd.pumpedBy=G.who;
     if(G.useVin?G.vin.trim():G.stock.trim()){if(G.useVin){upd.vin6Entered=G.vin.trim().toUpperCase();upd.stockEntered='';}else{upd.stockEntered=G.stock.trim().toUpperCase();upd.vin6Entered='';}}
-    if(G.photo){const up=await upload(await compress(G.photo,1600,.85),`gas-receipts/${ch.id}.jpg`);upd.receiptUrl=up.url;upd.receiptPath=up.path;}
+    if(G.photo){const up=await upload(await compress(G.photo,1600,.85),`shops/automotive_connection/gas-receipts/${ch.id}.jpg`);upd.receiptUrl=up.url;upd.receiptPath=up.path;}
     const m={...ch,...upd},stock=m.stockEntered||'',vin6=m.vin6Entered||'',dima=/^d/i.test(stock);
     let car=null;
     if(!dima&&(stock||vin6))car=G.vehicles.find(v=>stock?String(v.stockNumber||'').trim().toUpperCase()===stock:(vin6.length===6&&String(v.vin||'').toUpperCase().slice(-6)===vin6))||null;
