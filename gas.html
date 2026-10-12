@@ -170,9 +170,10 @@ function tagView(){
     <label class="f"><span>Who pumped the gas <small>${G.who?'✓':'required'}</small></span><select id="who"><option value="">Choose employee</option>${pumpers().map(n=>`<option ${G.who===n?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
     <button type="button" class="ghost" id="names" style="margin-top:-8px">Edit names</button>
     ${G.editNames?`<input id="names-in" value="${esc(pumpers().join(', '))}"><div style="font-size:11px;color:var(--text3);margin-top:-8px">Separate names with commas, then tap outside the box.</div>`:''}
-    ${G.useVin
-      ?`<label class="f"><span>Last 6 of the VIN</span><input id="vin" maxlength="6" value="${esc(G.vin)}" style="font-family:ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase" autocomplete="off"></label><button type="button" class="ghost" id="tostock" style="margin-top:-8px">Use the stock number instead</button>`
-      :`<label class="f"><span>Stock number</span><input id="stock" value="${esc(G.stock)}" autocomplete="off" autocapitalize="characters"></label><button type="button" class="ghost" id="tovin" style="margin-top:-8px">No stock number? Use the last 6 of the VIN</button>`}
+    <div class="two">
+      <label class="f"><span>Stock number</span><input id="stock" value="${esc(G.stock)}" autocomplete="off" autocapitalize="characters" placeholder="A260615"></label>
+      <label class="f"><span>or VIN last 6</span><input id="vin" maxlength="6" value="${esc(G.vin)}" autocomplete="off" placeholder="694707" style="text-transform:uppercase"></label>
+    </div>
     <div id="carline" style="font-size:13px;color:${car||isDima()?'var(--text2)':'var(--text3)'};margin-top:-6px">${carLine}</div>
     <div class="f" style="display:flex;flex-direction:column;gap:5px"><span style="font-weight:600;font-size:14px">Receipt photo <small style="color:var(--red)">${hasPhoto?'✓':'required'}</small></span>
       <label class="photo"><input id="photo" type="file" accept="image/*" capture="environment" style="display:none">${G.photoUrl?`<img src="${G.photoUrl}" alt="Receipt">`:`<i>${ch.receiptUrl?'saved ✓':'no photo'}</i>`}<span>${G.photo?'Tap to retake':(ch.receiptUrl?'Photo saved · tap to replace':'Take a photo of the receipt')}</span></label></div>
@@ -209,8 +210,8 @@ function wire(app){
   app.querySelectorAll('[data-hstep]').forEach(b=>b.onclick=()=>{const d=b.dataset.hstep;G.hOff=d==='reset'?0:Math.max(0,G.hOff+Number(d));render();});
   const refresh=()=>{const ch=charge(),b=$('go');if(b){b.disabled=!anyInput()||G.busy;b.textContent=missingList(ch).length?'Save for now':'Save and file to car';}const c=$('carline');if(c){const k=findCar();c.textContent=isDima()?"Dima's charge · goes on his list, no car":(G.useVin?G.vin.trim().length===6:G.stock.trim())?(k?vehName(k)+' · stock '+(k.stockNumber||'—'):'No matching car yet'):'';}};
   on('who','change',e=>{G.who=e.target.value;render();});
-  on('stock','input',e=>{G.stock=e.target.value;refresh();});on('vin','input',e=>{G.vin=e.target.value;refresh();});
-  on('tovin','click',()=>{G.useVin=true;render();});on('tostock','click',()=>{G.useVin=false;render();});
+  on('stock','input',e=>{G.stock=e.target.value;if(G.stock){G.vin='';const v=$('vin');if(v)v.value='';}G.useVin=false;refresh();});on('vin','input',e=>{G.vin=e.target.value.toUpperCase();if(G.vin){G.stock='';const t=$('stock');if(t)t.value='';}G.useVin=!!G.vin;refresh();});
+  
   on('photo','change',e=>pickPhoto(e.target.files&&e.target.files[0]));
   on('go','click',tag);
   on('names','click',()=>{G.editNames=!G.editNames;render();});
