@@ -973,7 +973,7 @@ function startNewVisit(v, overrides={}){
     id: v.id + '-v' + ((v.visits||[]).length + 1),
     dateIn: Date.now(),
     dateOut: null,
-    stockNumber: overrides.stockNumber || '',
+    stockNumber: overrides.stockNumber || v.stockNumber || ((v.visits||[]).slice().reverse().find(x=>x.stockNumber)||{}).stockNumber || '',
     statuses: overrides.statuses || ['received'],
     assignedTo: overrides.assignedTo || '',
     assignedTo2: overrides.assignedTo2 || '',
@@ -6881,7 +6881,11 @@ function openSalesServiceCheckinModal(vehicleId){
   <div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:420px">
     <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:700;color:#fff">🔧 Enter for service</div>
     <div style="padding:20px">
-      <div style="font-size:13px;color:#cdd3de;margin-bottom:16px">${v.year||''} ${v.make||''} ${v.model||''} · #${v.stockNumber||'—'} · VIN ...${(v.vin||'------').slice(-6)}</div>
+      <div style="font-size:13px;color:#cdd3de;margin-bottom:12px">${v.year||''} ${v.make||''} ${v.model||''} · VIN ...${(v.vin||'------').slice(-6)}</div>
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <div style="flex:1"><label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:6px">STOCK # *</label><input id="sfc-stock" type="text" value="${String(v.stockNumber||'').replace(/"/g,'&quot;')}" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px;color:#e2e4ea;font-size:14px"></div>
+        <div style="flex:1"><label style="display:block;font-size:11px;font-weight:600;color:#9aa3b8;margin-bottom:6px">MILES *</label><input id="sfc-miles" type="text" inputmode="numeric" value="${String(v.mileage||'').replace(/"/g,'&quot;')}" style="width:100%;background:#0d0f14;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px;color:#e2e4ea;font-size:14px"></div>
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div>
           <div style="font-size:14px;font-weight:600;color:#fff">Customer concerns</div>
@@ -6926,6 +6930,11 @@ window.submitSalesServiceCheckin=function(vehicleId, btn){
   if(!cons.length){toast('Add at least one concern','err');return;}
   const v=ST.vehicles.find(x=>x.id===vehicleId);
   if(!v) return;
+  const stk=(document.getElementById('sfc-stock')?.value||'').trim();
+  const mi=(document.getElementById('sfc-miles')?.value||'').replace(/[^0-9]/g,'');
+  if(!stk){toast('Enter the stock #','err');return;}
+  if(!mi){toast('Enter the miles','err');return;}
+  v.stockNumber=stk;v.mileage=mi;
 
   // Start a fresh visit — car is returning for service
   const sale=window._sfcSale||'';
@@ -6933,7 +6942,7 @@ window.submitSalesServiceCheckin=function(vehicleId, btn){
   if(sale) statuses.push(sale);
   if(appt) statuses.push('customer_appt');
   if(ST.salesUser)v.salesperson=ST.salesUser;
-  startNewVisit(v,{statuses,priority:sale?'high':'medium',apptDate:appt});
+  startNewVisit(v,{statuses,stockNumber:stk,priority:sale?'high':'medium',apptDate:appt});
   applyVisitShim(v);
 
   // Log the request as a pending concern → manager approval flow
@@ -10253,6 +10262,7 @@ function applyVisitShim(v){
   SHIM_FIELDS.forEach(f => {
     if(cur[f] !== undefined) v[f] = cur[f];
   });
+  if(!v.stockNumber){const p=v.visits.slice().reverse().find(x=>x.stockNumber);if(p)v.stockNumber=p.stockNumber;}
   return v;
 }
 
