@@ -973,7 +973,7 @@ function startNewVisit(v, overrides={}){
     id: v.id + '-v' + ((v.visits||[]).length + 1),
     dateIn: Date.now(),
     dateOut: null,
-    stockNumber: overrides.stockNumber || '',
+    stockNumber: overrides.stockNumber || v.stockNumber || ((v.visits||[]).slice().reverse().find(x=>x.stockNumber)||{}).stockNumber || '',
     statuses: overrides.statuses || ['received'],
     assignedTo: overrides.assignedTo || '',
     assignedTo2: overrides.assignedTo2 || '',
@@ -2836,7 +2836,8 @@ function vRowHTML(v){
 // ═══════════════════════════════════════════════
 function renderAdd(c){
   setTopbar('Add vehicle','');
-  const formData={vin:'',stockNumber:'',year:'',make:'',model:'',color:'',mileage:'',source:'auction',statuses:['auction'],assignedTo:'',priority:'medium',notes:'',apptDate:''};
+  const formData={vin:'',stockNumber:'',year:'',make:'',model:'',color:'',mileage:'',source:'auction',statuses:['auction'],assignedTo:'',priority:'medium',notes:'',apptDate:'',concerns:[]};
+  window._avCons=formData.concerns;
 
   c.innerHTML=`
   <div style="max-width:680px">
@@ -2888,7 +2889,11 @@ function renderAdd(c){
       <div class="field"><label>Color</label><input id="av-color" placeholder="Silver"></div>
       <div class="field"><label>Mileage</label><input id="av-mileage" type="number" placeholder="45000"></div>
     </div>
-    <div class="field"><label>Notes</label><textarea id="av-notes" placeholder="Additional notes about this vehicle..."></textarea></div>
+    ${ST.role==='sales'?`<div class="field"><label>Customer concerns</label>
+      <div style="font-size:11px;color:#f59e0b;margin:-2px 0 8px;line-height:1.4">Each concern must be added individually — the manager approves them one by one.</div>
+      <div id="av-con-list"></div>
+      <div style="display:flex;gap:8px"><input id="av-con-in" type="text" placeholder="One concern, e.g. Turn signal not working" style="flex:1"><button type="button" class="btn-ghost" id="av-con-add">+ Add</button></div></div>`
+    :`<div class="field"><label>Notes</label><textarea id="av-notes" placeholder="Additional notes about this vehicle..."></textarea></div>`}
   </div>
 
   <div class="panel">
@@ -3039,7 +3044,8 @@ function renderAdd(c){
       statuses:[...formData.statuses],
       assignedTo:c.querySelector('#av-mech').value,
       priority:autoHighPri?'high':c.querySelector('#av-priority').value,
-      notes:c.querySelector('#av-notes').value.trim(),
+      notes:(c.querySelector('#av-notes')||{value:''}).value.trim(),
+      concerns:(()=>{const pend=(c.querySelector('#av-con-in')||{value:''}).value.trim();const l=[...(formData.concerns||[])];if(pend)l.push(pend);return l;})(),
       apptDate:formData.apptDate||''
     };
 
@@ -3054,6 +3060,11 @@ function renderAdd(c){
     createNewVehicleFromInputs(inputs);
   };
 
+  const mkConcerns=l=>(l||[]).map(t=>({id:uid(),description:t,addedBy:ST.salesUser||'Sales',status:'pending',createdAt:Date.now()}));
+  const avRenderCons=()=>{const el=c.querySelector('#av-con-list');if(!el)return;el.innerHTML=formData.concerns.map((t,i)=>`<div style="display:flex;gap:8px;align-items:center;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px"><span style="flex:1">${String(t).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m]))}</span><button type="button" data-rc="${i}" style="background:none;border:0;color:#9aa3b8;cursor:pointer;font-size:15px">✕</button></div>`).join('');el.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>{formData.concerns.splice(+b.dataset.rc,1);avRenderCons();});};
+  const avAdd=()=>{const i=c.querySelector('#av-con-in');const t=(i&&i.value||'').trim();if(!t)return;formData.concerns.push(t);i.value='';avRenderCons();i.focus();};
+  c.querySelector('#av-con-add')&&(c.querySelector('#av-con-add').onclick=avAdd);
+  c.querySelector('#av-con-in')&&c.querySelector('#av-con-in').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();avAdd();}});
   window.createNewVehicleFromInputs=function(inputs){
     const vehicle={
       id:uid(),
@@ -3072,6 +3083,7 @@ function renderAdd(c){
       notes:inputs.notes,
       apptDate:inputs.apptDate,
       repairs:[],photos:[],receipts:[],comments:[],
+      concerns:mkConcerns(inputs.concerns),
       createdAt:Date.now(),updatedAt:Date.now()
     };
     ST.vehicles.push(vehicle);
@@ -3099,7 +3111,7 @@ function renderAdd(c){
       apptDate: inputs.apptDate,
       parts: [], laborLines: [], repairs: [],
       receipts: [], photos: [], notes: inputs.notes,
-      concerns: [], comments: [], timeSessions: []
+      concerns: mkConcerns(inputs.concerns), comments: [], timeSessions: []
     };
     v.visits = [...(v.visits||[]), visit];
     // Keep vehicle-level static info updated if new values are supplied
@@ -7060,7 +7072,7 @@ window.submitConcern=function(vehicleId, btn){
   const v=ST.vehicles.find(x=>x.id===vehicleId);
   if(!v) return;
   const newConcerns=[...(v.concerns||[]),{
-    id:uid(), description:text, addedBy:'Sales',
+    id:uid(), description:text, addedBy:ST.salesUser||'Sales',
     status:'pending', createdAt:Date.now()
   }];
   writeToCurrentVisit(v, 'concerns', newConcerns);
@@ -10241,6 +10253,7 @@ function applyVisitShim(v){
   SHIM_FIELDS.forEach(f => {
     if(cur[f] !== undefined) v[f] = cur[f];
   });
+  if(!v.stockNumber){const p=v.visits.slice().reverse().find(x=>x.stockNumber);if(p)v.stockNumber=p.stockNumber;}
   return v;
 }
 
