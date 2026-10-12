@@ -78,7 +78,7 @@ $('theme').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?
 const SHOP=()=>db.collection('shops').doc('automotive_connection');
 const gasCol=()=>SHOP().collection('gas_charges');
 const PUMPERS_DEFAULT=['Alina','Christian','Diego','Thomas','Steve','AJ','Isaiah','Dino','Jose'];
-const G={authed:false,tab:'tag',charges:[],hist:[],vehicles:[],loaded:false,sel:null,who:'',stock:'',vin:'',useVin:false,photo:null,photoUrl:'',busy:false,note:null,pumpers:null,editNames:false,hp:'month',hOff:0,hSort:'date'};
+const G={authed:false,tab:'tag',charges:[],hist:[],vehicles:[],loaded:false,sel:null,who:'',stock:'',vin:'',useVin:false,cat:null,what:'',pinOpen:false,mpin:'',photo:null,photoUrl:'',busy:false,note:null,pumpers:null,editNames:false,hp:'month',hOff:0,hSort:'date'};
 const pumpers=()=>G.pumpers&&G.pumpers.length?G.pumpers:PUMPERS_DEFAULT;
 const sortNew=(a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||''));
 const money=n=>'$'+Number(n||0).toFixed(2);
@@ -91,34 +91,40 @@ function subscribe(){
   SHOP().collection('vehicles').onSnapshot(s=>{G.vehicles=s.docs.map(d=>{try{return JSON.parse(d.data().json);}catch(e){return null;}}).filter(v=>v&&v.id);render();},e=>console.warn('vehicles',e));
   SHOP().collection('agent_state').doc('gas_pumpers').onSnapshot(d=>{if(d.exists&&Array.isArray(d.data().names)){G.pumpers=d.data().names;render();}},()=>{});
 }
-function reset(){G.who='';G.stock='';G.vin='';G.useVin=false;G.photo=null;if(G.photoUrl){try{URL.revokeObjectURL(G.photoUrl);}catch(e){}}G.photoUrl='';G.note=null;}
-function prefill(){const c=G.charges.find(x=>x.id===G.sel);if(!c)return;if(!G.who&&c.pumpedBy)G.who=c.pumpedBy;if(!G.stock&&!G.vin){if(c.stockEntered)G.stock=c.stockEntered;else if(c.vin6Entered){G.vin=c.vin6Entered;G.useVin=true;}}}
+function reset(){G.cat=null;G.what='';G.pinOpen=false;G.mpin='';G.who='';G.stock='';G.vin='';G.useVin=false;G.photo=null;if(G.photoUrl){try{URL.revokeObjectURL(G.photoUrl);}catch(e){}}G.photoUrl='';G.note=null;}
+function prefill(){const c=G.charges.find(x=>x.id===G.sel);if(!c)return;if(!G.what&&c.note)G.what=c.note;if(!G.who&&c.pumpedBy)G.who=c.pumpedBy;if(!G.stock&&!G.vin){if(c.stockEntered)G.stock=c.stockEntered;else if(c.vin6Entered){G.vin=c.vin6Entered;G.useVin=true;}}}
 const charge=()=>G.charges.find(c=>c.id===G.sel)||null;
 const isDima=()=>!G.useVin&&/^d/i.test(G.stock.trim());
 function findCar(){
   if(G.useVin){const l=G.vin.trim().toLowerCase();return l.length===6?G.vehicles.find(v=>String(v.vin||'').toLowerCase().slice(-6)===l)||null:null;}
   const s=G.stock.trim().toLowerCase();return s?G.vehicles.find(v=>String(v.stockNumber||'').trim().toLowerCase()===s)||null:null;
 }
-const anyInput=()=>!!(G.who||G.stock.trim()||G.vin.trim()||G.photo);
-function missingList(ch){const m=[];if(!G.who)m.push('who pumped it');if(!(G.useVin?G.vin.trim().length===6:G.stock.trim()))m.push('stock number or VIN');if(!G.photo&&!(ch&&ch.receiptUrl))m.push('receipt photo');return m;}
+const CATS=[['gas','⛽ Gas'],['parts','Parts / service'],['misc','Misc']];
+// gas stations default to Gas; any other merchant starts on Parts / service (the manager can change it)
+const curCat=ch=>G.cat||(ch&&(ch.category==='parts'||ch.category==='misc')?ch.category:(ch&&ch.category==='other'?'parts':'gas'));
+const anyInput=()=>!!(G.who||G.stock.trim()||G.vin.trim()||G.photo||G.what.trim());
+function missingList(ch){const c=curCat(ch),m=[];if(c==='misc')return m;if(c==='gas'&&!G.who)m.push('who pumped it');if(!(G.useVin?G.vin.trim().length===6:G.stock.trim()))m.push('stock number or VIN');if(!G.photo&&!(ch&&ch.receiptUrl))m.push(c==='parts'?'receipt or invoice photo':'receipt photo');return m;}
+const hasPic=ch=>!!(G.photo||(ch&&ch.receiptUrl));
+const btnLabel=ch=>{const c=curCat(ch);if(c==='misc')return hasPic(ch)?'Save':'Save for now';return missingList(ch).length?'Save for now':'Save and file to car';};
 function compress(file,maxW,q){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const k=Math.min(1,maxW/img.width),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error('compress')),'image/jpeg',q);};img.onerror=()=>rej(new Error('image'));const r=new FileReader();r.onload=()=>img.src=r.result;r.onerror=()=>rej(new Error('read'));r.readAsDataURL(file);});}
 function pickPhoto(file){if(!file)return;G.photo=file;G.photoUrl=URL.createObjectURL(file);G.note=null;render();}
 const WORKER='https://ac-recon-mail.babushij.workers.dev';
 function blobB64(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=()=>rej(new Error('read'));r.readAsDataURL(b);});}
 async function upload(blob,path){const ref=storage.ref(path);const s=await ref.put(blob);return{url:await s.ref.getDownloadURL(),path,uploadedAt:Date.now()};}
 // Save whatever is entered. It files only once who + stock/VIN + receipt photo are all there.
-async function tag(){
+async function tag(skip){
   const ch=charge();if(!ch||!anyInput()||G.busy)return;
   G.busy=true;G.note=null;render();
   try{
-    const body={id:ch.id};
+    const cat=curCat(ch),body={id:ch.id,category:cat};
     if(G.who)body.who=G.who;
-    if(G.useVin?G.vin.trim().length===6:G.stock.trim()){if(G.useVin)body.vin6=G.vin.trim();else body.stock=G.stock.trim();}
+    if(cat==='misc'){body.note=G.what.trim();if(skip){body.skipReceipt=true;body.masterPin=G.mpin;}}
+    else{if(G.what.trim())body.note=G.what.trim();if(G.useVin?G.vin.trim().length===6:G.stock.trim()){if(G.useVin)body.vin6=G.vin.trim();else body.stock=G.stock.trim();}}
     if(G.photo)body.photo=(await blobB64(await compress(G.photo,1600,.85)));
     const r=await fetch(WORKER+'/gas/tag',{method:'POST',headers:{'content-type':'application/json','x-gas-pin':'5200'},body:JSON.stringify(body)});
     const j=await r.json().catch(()=>({}));
     if(!r.ok||j.ok===false)throw new Error(j.error||('worker '+r.status));
-    if(j.filed){toast(j.dima?'Filed to Dima':'Filed to '+(j.car||'the car'));G.sel=(G.charges.find(c=>c.id!==ch.id)||{}).id||null;reset();}
+    if(j.filed||j.pending){toast(j.pending?'Saved — the owner will review it':j.misc?'Filed as Misc':j.dima?'Filed to Dima':'Filed to '+(j.car||'the car'));G.sel=(G.charges.find(c=>c.id!==ch.id)||{}).id||null;reset();}
     else{
       if(body.who)ch.pumpedBy=body.who;
       G.note={k:'warn',t:'Saved. Still needed to file it: '+(j.missing||[]).join(', ')+'.'};G.photo=null;G.photoUrl='';
@@ -148,27 +154,36 @@ function render(){
 function tagView(){
   const ch=charge();
   if(!G.loaded)return'<div class="empty">Loading charges…</div>';
-  if(!G.charges.length||!ch)return'<div class="empty">No fuel charges need a receipt</div>';
-  const car=findCar(),miss=missingList(ch),hasPhoto=!!(G.photo||ch.receiptUrl);
+  if(!G.charges.length||!ch)return'<div class="empty">No card charges need a receipt</div>';
+  const cat=curCat(ch),car=findCar(),miss=missingList(ch),hasPhoto=hasPic(ch);
   const carLine=isDima()?"Dima's charge · goes on his list, no car":(G.useVin?G.vin.trim().length===6:G.stock.trim())?(car?esc(vehName(car))+' · stock '+esc(car.stockNumber||'—'):'No matching car yet'):'';
-  return`<div class="box"><div class="sec">Needs a receipt · ${G.charges.length}</div>${G.charges.map(x=>`<button type="button" data-ch="${x.id}" class="row${x.id===G.sel?' sel':''}"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} ${esc(x.time||'')}${x.pumpedBy?' · '+esc(x.pumpedBy):''}</span></button>`).join('')}</div>
-  <div class="box" style="gap:14px">
-    <label class="f"><span>Who pumped the gas <small>${G.who?'✓':'required'}</small></span><select id="who"><option value="">Choose employee</option>${pumpers().map(n=>`<option ${G.who===n?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
-    <button type="button" class="ghost" id="names" style="margin-top:-8px">Edit names</button>
-    ${G.editNames?`<input id="names-in" value="${esc(pumpers().join(', '))}"><div style="font-size:11px;color:var(--text3);margin-top:-8px">Separate names with commas, then tap outside the box.</div>`:''}
-    <div class="two">
+  const camOnly=cat!=='parts'; // gas + misc: camera only. parts/service: camera or a file from the phone
+  const photoLbl=cat==='parts'?'Receipt / invoice photo':'Receipt photo';
+  const need=cat==='misc'?'optional':(hasPhoto?'✓':'required');
+  const carBlock=cat==='misc'?'':`<div class="two">
       <label class="f"><span>Stock number</span><input id="stock" value="${esc(G.stock)}" autocomplete="off" autocapitalize="characters" placeholder="A260615"></label>
       <label class="f"><span>or VIN last 6</span><input id="vin" maxlength="6" value="${esc(G.vin)}" autocomplete="off" placeholder="694707" style="text-transform:uppercase"></label>
     </div>
-    <div id="carline" style="font-size:13px;color:${car||isDima()?'var(--text2)':'var(--text3)'};margin-top:-6px">${carLine}</div>
-    <div class="f" style="display:flex;flex-direction:column;gap:5px"><span style="font-weight:600;font-size:14px">Receipt photo <small style="color:var(--red)">${hasPhoto?'✓':'required'}</small></span>
-      <label class="photo"><input id="photo" type="file" accept="image/*" capture="environment" style="display:none">${G.photoUrl?`<img src="${G.photoUrl}" alt="Receipt">`:`<i>${ch.receiptUrl?'saved ✓':'no photo'}</i>`}<span>${G.photo?'Tap to retake':(ch.receiptUrl?'Photo saved · tap to replace':'Take a photo of the receipt')}</span></label></div>
+    <div id="carline" style="font-size:13px;color:${car||isDima()?'var(--text2)':'var(--text3)'};margin-top:-6px">${carLine}</div>`;
+  const whoBlock=cat==='gas'?`<label class="f"><span>Who pumped the gas <small>${G.who?'✓':'required'}</small></span><select id="who"><option value="">Choose employee</option>${pumpers().map(n=>`<option ${G.who===n?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+    <button type="button" class="ghost" id="names" style="margin-top:-8px">Edit names</button>
+    ${G.editNames?`<input id="names-in" value="${esc(pumpers().join(', '))}"><div style="font-size:11px;color:var(--text3);margin-top:-8px">Separate names with commas, then tap outside the box.</div>`:''}`:'';
+  const whatBlock=cat==='gas'?'':`<label class="f"><span>${cat==='misc'?'What for':'Note'} <small style="color:var(--text3)">optional</small></span><input id="what" value="${esc(G.what)}" autocomplete="off" placeholder="${cat==='misc'?'Saturday team lunch':'Alignment after new tires'}"></label>`;
+  const pinBlock=cat==='misc'&&!hasPhoto?`<button type="button" class="ghost" id="mpin-ask">No receipt? File it without one (master PIN)</button>${G.pinOpen?`<div style="display:flex;gap:8px"><input id="mpin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Master PIN" value="${esc(G.mpin)}"><button class="btn" id="mpin-go" type="button" style="width:auto;padding:0 16px" ${G.mpin.length<4||G.busy?'disabled':''}>File</button></div>`:''}`:'';
+  const hint=cat==='misc'?(hasPhoto?'':'No receipt yet: Save for now sends it to the owner to review.'):(miss.length?`Still needed to file it: ${esc(miss.join(', '))}. You can save what you have now.`:'');
+  return`<div class="box"><div class="sec">Needs a receipt · ${G.charges.length}</div>${G.charges.map(x=>`<button type="button" data-ch="${x.id}" class="row${x.id===G.sel?' sel':''}"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} ${esc(x.time||'')}${x.pumpedBy?' · '+esc(x.pumpedBy):''}</span></button>`).join('')}</div>
+  <div class="box" style="gap:14px">
+    <div><div style="font-weight:600;font-size:14px;margin-bottom:6px">What was it?</div><div class="tabs" id="cats">${CATS.map(([id,l])=>`<button type="button" data-cat="${id}" class="${cat===id?'on':''}">${l}</button>`).join('')}</div></div>
+    ${whoBlock}${carBlock}${whatBlock}
+    <div class="f" style="display:flex;flex-direction:column;gap:5px"><span style="font-weight:600;font-size:14px">${photoLbl} <small style="color:${need==='optional'?'var(--text3)':'var(--red)'}">${need}</small></span>
+      <label class="photo"><input id="photo" type="file" accept="image/*"${camOnly?' capture="environment"':''} style="display:none">${G.photoUrl?`<img src="${G.photoUrl}" alt="Receipt">`:`<i>${ch.receiptUrl?'saved ✓':'no photo'}</i>`}<span>${G.photo?(camOnly?'Tap to retake':'Tap to replace'):(ch.receiptUrl?'Photo saved · tap to replace':(camOnly?'Take a photo of the receipt':'Take a photo or choose a file'))}</span></label></div>
     ${G.note?`<div class="note ${G.note.k==='warn'?'bad':'ok'}">${esc(G.note.t)}</div>`:''}
-    <button class="btn" id="go" type="button" ${anyInput()&&!G.busy?'':'disabled'}>${G.busy?'Saving…':(miss.length?'Save for now':'Save and file to car')}</button>
-    ${miss.length?`<div style="font-size:12px;color:var(--text3);margin-top:-6px">Still needed to file it: ${esc(miss.join(', '))}. You can save what you have now.</div>`:''}
+    <button class="btn" id="go" type="button" ${anyInput()&&!G.busy?'':'disabled'}>${G.busy?'Saving…':btnLabel(ch)}</button>
+    ${hint?`<div style="font-size:12px;color:var(--text3);margin-top:-6px">${hint}</div>`:''}
+    ${pinBlock}
   </div>`;
 }
-function carName(x){if(x.dima)return'Dima';const v=G.vehicles.find(v=>v.id===x.vehicleId);return v?vehName(v):'—';}
+function carName(x){if(x.dima)return'Dima';if(x.category==='misc')return'Misc';const v=G.vehicles.find(v=>v.id===x.vehicleId);return v?vehName(v):'—';}
 function histView(){
   const [from,to,lbl]=histRange();
   const rows=G.hist.filter(x=>(x.date||'')>=from&&(x.date||'')<to);
@@ -176,7 +191,7 @@ function histView(){
   rows.sort(keyOf?(a,b)=>String(keyOf(a)).localeCompare(String(keyOf(b)),undefined,{numeric:true})||sortNew(a,b):sortNew);
   const row=x=>`<div class="row"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} · stock ${esc(x.stock||'—')} · ${esc(carName(x))} · ${esc(x.pumpedBy||'')}${x.check==='mismatch'?' · <span style="color:var(--bad)">flagged</span>':''}</span><span class="r">${x.receiptUrl?`<a href="${esc(x.receiptUrl)}" target="_blank" rel="noopener">Receipt</a>`:''}</span></div>`;
   let body;
-  if(!rows.length)body='<div class="empty">No gas receipts in this period</div>';
+  if(!rows.length)body='<div class="empty">No receipts in this period</div>';
   else if(!keyOf)body=rows.map(row).join('');
   else{const g=[];rows.forEach(x=>{const k=String(keyOf(x));let e=g.find(q=>q.k===k);if(!e)g.push(e={k,r:[]});e.r.push(x);});
     body=g.map(e=>`<div class="flex" style="margin-top:6px"><div class="sec">${esc(e.k)} · ${e.r.length}</div><div class="big" style="font-size:16px">${money(sum(e.r))}</div></div>`+e.r.map(row).join('')).join('');}
@@ -194,12 +209,13 @@ function wire(app){
   app.querySelectorAll('[data-hp]').forEach(b=>b.onclick=()=>{G.hp=b.dataset.hp;G.hOff=0;render();});
   app.querySelectorAll('[data-hsort]').forEach(b=>b.onclick=()=>{G.hSort=b.dataset.hsort;render();});
   app.querySelectorAll('[data-hstep]').forEach(b=>b.onclick=()=>{const d=b.dataset.hstep;G.hOff=d==='reset'?0:Math.max(0,G.hOff+Number(d));render();});
-  const refresh=()=>{const ch=charge(),b=$('go');if(b){b.disabled=!anyInput()||G.busy;b.textContent=missingList(ch).length?'Save for now':'Save and file to car';}const c=$('carline');if(c){const k=findCar();c.textContent=isDima()?"Dima's charge · goes on his list, no car":(G.useVin?G.vin.trim().length===6:G.stock.trim())?(k?vehName(k)+' · stock '+(k.stockNumber||'—'):'No matching car yet'):'';}};
+  const refresh=()=>{const ch=charge(),b=$('go');if(b){b.disabled=!anyInput()||G.busy;b.textContent=btnLabel(ch);}const c=$('carline');if(c){const k=findCar();c.textContent=isDima()?"Dima's charge · goes on his list, no car":(G.useVin?G.vin.trim().length===6:G.stock.trim())?(k?vehName(k)+' · stock '+(k.stockNumber||'—'):'No matching car yet'):'';}};
+  app.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{G.cat=b.dataset.cat;G.note=null;render();});
   on('who','change',e=>{G.who=e.target.value;render();});
   on('stock','input',e=>{G.stock=e.target.value;if(G.stock){G.vin='';const v=$('vin');if(v)v.value='';}G.useVin=false;refresh();});on('vin','input',e=>{G.vin=e.target.value.toUpperCase();if(G.vin){G.stock='';const t=$('stock');if(t)t.value='';}G.useVin=!!G.vin;refresh();});
   
   on('photo','change',e=>pickPhoto(e.target.files&&e.target.files[0]));
-  on('go','click',tag);
+  on('go','click',()=>tag(false));on('mpin-ask','click',()=>{G.pinOpen=!G.pinOpen;render();});on('mpin','input',e=>{G.mpin=e.target.value;const b=$('mpin-go');if(b)b.disabled=G.mpin.length<4||G.busy;});on('mpin-go','click',()=>tag(true));on('what','input',e=>{G.what=e.target.value;refresh();});
   on('names','click',()=>{G.editNames=!G.editNames;render();});
   on('names-in','change',async e=>{const n=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);if(n.length){G.pumpers=n;try{await SHOP().collection('agent_state').doc('gas_pumpers').set({names:n});}catch(err){toast('Names saved on this phone only','err');}}render();});
 }

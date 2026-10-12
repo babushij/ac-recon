@@ -1820,7 +1820,7 @@ function load(){
     try{subscribeToDeliveries();}catch(e){console.warn('deliveries subscribe:',e);}
     try{subscribeToCharges();}catch(e){console.warn('charges subscribe:',e);}
     try{subscribeToCores();}catch(e){console.warn('cores subscribe:',e);}
-    try{gasSubscribe();}catch(e){console.warn('gas subscribe:',e);}
+    try{gasSubscribe();gasSubscribeMisc();}catch(e){console.warn('gas subscribe:',e);}
   }
 }
 
@@ -2018,7 +2018,7 @@ function buildSidebar(){
     {id:'partspipeline',label:'Parts pipeline',icon:partsIcon(),badge:getAllPendingParts().length},
     {id:'toinstall',label:'Needs installing',icon:wrenchIcon(),badge:getAllToInstall().length},
     {id:'filing',label:'Needs filing',icon:filingIcon(),badge:filingCount()},
-    {id:'gasreceipts',label:'Gas receipts',icon:filingIcon(),badge:(GAS.charges&&GAS.charges.length)||0},
+    {id:'gasreceipts',label:'Gas receipts',icon:filingIcon(),badge:((GAS.charges&&GAS.charges.length)||0)+((GAS.misc&&GAS.misc.length)||0)},
     {id:'frazer',label:'Send to Frazer',icon:filingIcon(),badge:(FRZ.loaded&&FRZ.rows.length)||0},
     {id:'cores',label:'Cores',icon:coreIcon(),badge:overdueCoreCount()||openCoreCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
@@ -8979,7 +8979,8 @@ try{new MutationObserver(()=>{if((ST.view==='mechdash'&&MD.car)||ST.view==='deta
 // ═══════════════════════════════════════════════
 // GAS RECEIPTS — tag each Citi fuel charge to a car, with the receipt photo, checked against the card alert
 // ═══════════════════════════════════════════════
-const GAS={charges:[],sel:null,who:'',stock:'',vin:'',useVin:false,photo:null,photoUrl:'',total:'',date:'',reading:false,readMsg:'',busy:false,loaded:false,unsub:null,editNames:false,tab:'hist',dima:[],dimaUnsub:null,showPaid:false,confirmAll:false,hist:[],histUnsub:null,hp:'month',hOff:0,hSort:'date'};
+const GAS_WORKER='https://ac-recon-mail.babushij.workers.dev';
+const GAS={misc:[],miscUnsub:null,miscPhoto:{},miscNote:{},miscBusy:null,charges:[],sel:null,who:'',stock:'',vin:'',useVin:false,photo:null,photoUrl:'',total:'',date:'',reading:false,readMsg:'',busy:false,loaded:false,unsub:null,editNames:false,tab:'hist',dima:[],dimaUnsub:null,showPaid:false,confirmAll:false,hist:[],histUnsub:null,hp:'month',hOff:0,hSort:'date'};
 const gasCol=()=>db.collection('shops').doc('automotive_connection').collection('gas_charges');
 const gasEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function gasSubscribe(){
@@ -8992,6 +8993,30 @@ function gasSubscribe(){
     },err=>{console.warn('gas charges:',err);GAS.loaded=true;});
   }catch(e){console.warn('gasSubscribe',e);}
 }
+function gasSubscribeMisc(){
+  if(!db||GAS.miscUnsub)return;
+  try{
+    GAS.miscUnsub=gasCol().where('status','==','misc_pending').onSnapshot(snap=>{
+      GAS.misc=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||'')));
+      if(ST.view==='gasreceipts'&&!GAS.miscBusy&&!document.activeElement.matches('[data-gm-note]'))render();
+    },err=>console.warn('misc charges:',err));
+  }catch(e){console.warn('gasSubscribeMisc',e);}
+}
+function gasPhotoB64(file){return new Promise((res,rej)=>{const img=new Image(),r=new FileReader();r.onload=()=>{img.src=r.result;};r.onerror=()=>rej(new Error('read'));img.onerror=()=>rej(new Error('image'));img.onload=()=>{const k=Math.min(1,1600/img.width),cv=document.createElement('canvas');cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);res(cv.toDataURL('image/jpeg',.85).split(',')[1]);};r.readAsDataURL(file);});}
+// owner files a Misc charge the manager parked: optional note + receipt, then it moves to My receipts
+window.gasMiscFile=async id=>{
+  const x=GAS.misc.find(m=>m.id===id);if(!x||GAS.miscBusy)return;
+  GAS.miscBusy=id;render();
+  try{
+    const body={id,category:'misc',fileNow:true,note:GAS.miscNote[id]!=null?GAS.miscNote[id]:(x.note||'')};
+    if(GAS.miscPhoto[id])body.photo=await gasPhotoB64(GAS.miscPhoto[id]);
+    const r=await fetch(GAS_WORKER+'/gas/tag',{method:'POST',headers:{'content-type':'application/json','x-gas-pin':'7918'},body:JSON.stringify(body)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||j.ok===false)throw new Error(j.error||('worker '+r.status));
+    delete GAS.miscPhoto[id];delete GAS.miscNote[id];toast('Filed as Misc');
+  }catch(e){toast('Could not file: '+(e.message||e),'err');}
+  GAS.miscBusy=null;render();
+};
 function gasSubscribeHist(){
   if(!db||GAS.histUnsub)return;
   try{
@@ -9026,17 +9051,38 @@ window.gasMarkAllPaid=async()=>{
   catch(e){toast('Could not save: '+(e.message||e),'err');}
 };
 function renderGasReceipts(c){
-  gasSubscribe();gasSubscribeDima();gasSubscribeHist();
+  gasSubscribe();gasSubscribeDima();gasSubscribeHist();gasSubscribeMisc();
   setTopbar('Gas receipts','');
   const box='background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px';
   const dOpen=GAS.dima.filter(x=>!x.dimaPaid),dPaid=GAS.dima.filter(x=>x.dimaPaid);
   const dTot=a=>a.reduce((n,x)=>n+(Number(x.amount)||0),0);
   const tabBtn=(id,label)=>`<button type="button" data-gtab="${id}" style="flex:1;padding:10px;border-radius:8px;border:1px solid ${GAS.tab===id?'var(--red)':'var(--border)'};background:${GAS.tab===id?'var(--red)':'var(--surface)'};color:${GAS.tab===id?'#fff':'inherit'};font:inherit;font-weight:600;cursor:pointer">${label}</button>`;
-  let h=`<div style="max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px"><div style="display:flex;gap:8px">${tabBtn('hist','My receipts')}${tabBtn('dima','Dima · $'+dTot(dOpen).toFixed(2))}</div>`;
+  let h=`<div style="max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px"><div style="display:flex;gap:8px">${tabBtn('hist','My receipts')}${tabBtn('misc','Misc review · '+GAS.misc.length)}${tabBtn('dima','Dima · $'+dTot(dOpen).toFixed(2))}</div>`;
+  if(GAS.tab==='misc'){
+    const card=x=>{const busy=GAS.miscBusy===x.id,ph=GAS.miscPhoto[x.id];
+      return `<div style="display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface2)">
+        <div style="display:flex;justify-content:space-between;gap:10px"><span style="font-weight:600;min-width:0">${gasEsc(x.merchant)}</span><span style="font-family:var(--font-mono);font-weight:600">$${Number(x.amount).toFixed(2)}</span></div>
+        <div style="font-size:12px;color:var(--text3)">${gasEsc(x.date||'')} ${gasEsc(x.time||'')}${x.pumpedBy?' · '+gasEsc(x.pumpedBy):''} · saved by a manager, no receipt</div>
+        <input data-gm-note="${x.id}" value="${gasEsc(GAS.miscNote[x.id]!=null?GAS.miscNote[x.id]:(x.note||''))}" placeholder="What for (e.g. Saturday team lunch)" style="padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:inherit;font:inherit;width:100%">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${x.receiptUrl?`<a href="${gasEsc(x.receiptUrl)}" target="_blank" rel="noopener" style="font-size:12px;color:var(--text2)">Receipt</a>`:''}
+          <label class="btn-ghost" style="font-size:12px;padding:5px 10px;cursor:pointer">${ph?'Receipt added ✓ · replace':'Add receipt'}<input type="file" accept="image/*" data-gm-file="${x.id}" style="display:none"></label>
+          <button type="button" class="btn-red" data-gm-do="${x.id}" ${busy?'disabled':''} style="margin-left:auto;padding:7px 16px">${busy?'Filing…':'File it'}</button>
+        </div></div>`;};
+    h+=`<div style="${box};display:flex;flex-direction:column;gap:10px"><div class="dash-sec" style="margin:0">Misc charges to review · ${GAS.misc.length}</div>
+      <div style="font-size:12px;color:var(--text3)">Managers saved these without a receipt. Add a note or receipt if you have one, then file it.</div>
+      ${GAS.misc.length?GAS.misc.map(card).join(''):'<div class="empty"><div class="empty-msg">Nothing waiting</div></div>'}</div></div>`;
+    c.innerHTML=h;
+    c.querySelectorAll('[data-gtab]').forEach(b=>b.onclick=()=>{GAS.tab=b.dataset.gtab;render();});
+    c.querySelectorAll('[data-gm-note]').forEach(i=>i.oninput=()=>{GAS.miscNote[i.dataset.gmNote]=i.value;});
+    c.querySelectorAll('[data-gm-file]').forEach(i=>i.onchange=()=>{if(i.files&&i.files[0]){GAS.miscPhoto[i.dataset.gmFile]=i.files[0];render();}});
+    c.querySelectorAll('[data-gm-do]').forEach(b=>b.onclick=()=>gasMiscFile(b.dataset.gmDo));
+    return;
+  }
   if(GAS.tab!=='dima'){
     const [from,to,lbl]=gasHistRange();
     const carOf=x=>x.dima?null:(ST.vehicles||[]).find(v=>v.id===x.vehicleId);
-    const carName=x=>x.dima?'Dima':(carOf(x)?vehName(carOf(x)):'—');
+    const carName=x=>x.dima?'Dima':x.category==='misc'?'Misc':(carOf(x)?vehName(carOf(x)):'—');
     const rows=GAS.hist.filter(x=>!x.dima&&(x.date||'')>=from&&(x.date||'')<to);
     const keyOf={date:null,car:carName,stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[GAS.hSort];
     const cmp=(a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||''));
