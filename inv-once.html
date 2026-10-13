@@ -9332,7 +9332,13 @@ function invPlan(items){
   const byVin=new Map(ST.vehicles.map(v=>[String(v.vin||'').trim().toUpperCase(),v]));
   const plan={add:[],stock:[],same:0,conflict:[]};
   items.forEach(it=>{
-    const v=byVin.get(it.vin);
+    let v=byVin.get(it.vin);
+    if(!v){ // fallback: same last-6 VIN and same make, or same stock # and same make
+      const l6=it.vin.slice(-6),mk=it.make.toLowerCase();
+      v=ST.vehicles.find(x=>String(x.vin||'').trim().toUpperCase().slice(-6)===l6&&String(x.make||'').toLowerCase()===mk)
+       ||ST.vehicles.find(x=>it.stock&&String(x.stockNumber||'').trim().toUpperCase()===it.stock&&String(x.make||'').toLowerCase()===mk);
+      if(v)plan.fuzzy=(plan.fuzzy||0)+1;
+    }
     if(!v){plan.add.push(it);return;}
     const cur=String(v.stockNumber||'').trim().toUpperCase();
     if(it.stock&&cur!==it.stock) plan.stock.push({v,it,from:cur}); else plan.same++;
@@ -9348,7 +9354,7 @@ window.invPickFile=async function(input){
     const X=await invLoadXlsx();
     const wb=X.read(await f.arrayBuffer(),{type:'array'});
     const rows=X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
-    const items=invParseRows(rows);
+    const items=invParseRows(rows);window._invFile=f.name+', sheet '+wb.SheetNames[0];
     if(!items.length){toast('No cars found — check the columns (Stock #, Year, Make, Model, VIN, Mileage, Color)','err');return;}
     window._invItems=items;window._invPlan=invPlan(items);invShowPreview();
   }catch(e){toast('Import failed: '+(e.message||e),'err');}
@@ -9363,13 +9369,14 @@ function invShowPreview(){
   ov.innerHTML=`<div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:440px;max-height:90vh;overflow:auto">
     <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:700;color:#fff">Import inventory</div>
     <div style="padding:20px;font-size:13px;color:#cdd3de;line-height:1.6">
-      <div style="margin-bottom:12px">${n} cars in the file, matched to AC Recon by VIN.</div>
+      <div style="margin-bottom:12px">${n} cars in the file${window._invFile?' ('+e(window._invFile)+')':''}. AC Recon currently has ${ST.vehicles.length} cars loaded. Matched by VIN${p.fuzzy?' ('+p.fuzzy+' by last-6 VIN / stock #)':''}.</div>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px"><span>New cars to add</span><b style="color:#4ade80">${p.add.length}</b></div>
         <div style="display:flex;justify-content:space-between;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px"><span>Stock # updated to Frazer's</span><b style="color:#f59e0b">${p.stock.length}</b></div>
         <div style="display:flex;justify-content:space-between;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px"><span>Already correct</span><b>${p.same}</b></div>
       </div>
       ${p.stock.length?`<div style="font-size:11px;color:#9aa3b8;margin-bottom:6px">STOCK # CHANGES${p.stock.length>8?' (first 8)':''}</div>${p.stock.slice(0,8).map(x=>`<div style="font-size:12px;padding:3px 0">${e([x.v.year,x.v.make,x.v.model].join(' '))}: <span style="color:#9aa3b8">${e(x.from||'(none)')}</span> → <b>${e(x.it.stock)}</b></div>`).join('')}`:''}
+      ${p.add.length?`<div style="font-size:11px;color:#9aa3b8;margin:10px 0 6px">NEW CARS (first 5)</div>${p.add.slice(0,5).map(x=>`<div style="font-size:12px;padding:3px 0">${e([x.year,x.make,x.model].join(' '))} · #${e(x.stock)} · ${e(x.vin)}</div>`).join('')}`:''}
       ${p.conflict.length?`<div style="font-size:11px;color:#f87171;margin-top:10px">${p.conflict.length} car(s) in AC Recon still carry a stock # that Frazer gave to a different VIN. They are not in this file's VIN match — check them after.</div>`:''}
       <div style="font-size:11px;color:#9aa3b8;margin-top:12px">New cars come in with no recon work, so they will not show in the dashboard tiles. Existing cars keep everything except the stock #; blank miles and color are filled in.</div>
       <button id="inv-apply" style="width:100%;margin-top:14px;background:#C8102E;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Import ${p.add.length+p.stock.length?'':'(nothing to change)'}</button>
@@ -9389,7 +9396,7 @@ function invApply(){
     v.updatedAt=Date.now();upd++;
   });
   // blank miles / color on cars whose stock # was already right
-  window._invItems.forEach(it=>{const v=ST.vehicles.find(x=>String(x.vin||'').trim().toUpperCase()===it.vin);if(!v)return;let ch=false;
+  window._invItems.forEach(it=>{const l6=it.vin.slice(-6),mk=it.make.toLowerCase();const v=ST.vehicles.find(x=>String(x.vin||'').trim().toUpperCase()===it.vin)||ST.vehicles.find(x=>!x.imported&&String(x.vin||'').trim().toUpperCase().slice(-6)===l6&&String(x.make||'').toLowerCase()===mk)||ST.vehicles.find(x=>!x.imported&&it.stock&&String(x.stockNumber||'').trim().toUpperCase()===it.stock&&String(x.make||'').toLowerCase()===mk);if(!v)return;let ch=false;
     if(!v.mileage&&it.mileage){v.mileage=it.mileage;ch=true;}if(!v.color&&it.color){v.color=it.color;ch=true;}if(ch)v.updatedAt=Date.now();});
   p.add.forEach(it=>{
     const id=uid(),now=Date.now();
