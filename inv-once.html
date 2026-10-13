@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="AC Recon">
-<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-title" content="AC Admin">
+<link rel="manifest" href="admin-manifest.json">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="theme-color" content="#C8102E">
@@ -1909,7 +1909,7 @@ function renderRoleScreen(){
   const el=document.getElementById('role-list');
   el.innerHTML='';
   // Show manager only on /admin URL
-  const isAdminPage=window.location.pathname.includes("admin")||new URLSearchParams(window.location.search).get("admin")==="1";
+  const isAdminPage=true;
   getRoles().filter(r=>isAdminPage||r.id!=='manager').forEach(r=>{
     const btn=document.createElement('button');
     btn.className='role-btn';
