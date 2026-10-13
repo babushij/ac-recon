@@ -9296,6 +9296,112 @@ function saleIcon(){return`<path d="M2 4h5l7 7-5 5-7-7V4z" stroke="currentColor"
 window.resetSalesPin=function(i){const p=(SETTINGS.salesTeam||[])[i];if(!p)return;if(!confirm('Reset '+p.name+'\'s PIN to 1111?'))return;p.pin='1111';saveSettings();toast(p.name+' reset to 1111');renderSettings(document.getElementById('content'));};
 window.addSalesName=function(){const e=document.getElementById('st-newname');const n=(e&&e.value||'').trim().slice(0,30);if(!n)return;if((SETTINGS.salesTeam||[]).some(p=>p.name.toLowerCase()===n.toLowerCase())){toast('Already on the list','err');return;}SETTINGS.salesTeam.push({name:n,pin:'1111'});saveSettings();renderSettings(document.getElementById('content'));};
 window.removeSalesName=function(i){const p=(SETTINGS.salesTeam||[])[i];if(!p)return;if(!confirm('Remove '+p.name+' from the sales team?'))return;SETTINGS.salesTeam.splice(i,1);saveSettings();renderSettings(document.getElementById('content'));};
+
+// ═══════════════════════════════════════════════
+// INVENTORY IMPORT — Frazer inventory export (.xlsx / .csv). Match by VIN; add missing cars; Frazer's stock # wins.
+// ═══════════════════════════════════════════════
+function invLoadXlsx(){
+  return new Promise((res,rej)=>{
+    if(window.XLSX) return res(window.XLSX);
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=()=>res(window.XLSX);s.onerror=()=>rej(new Error('Could not load the spreadsheet reader (check the internet connection)'));
+    document.head.appendChild(s);
+  });
+}
+function invParseRows(rows){
+  const norm=h=>String(h||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const pick=(r,names)=>{for(const k of Object.keys(r)){if(names.includes(norm(k)))return r[k];}return '';};
+  const out=[];
+  rows.forEach(r=>{
+    const vin=String(pick(r,['vehiclevin','vin'])||'').trim().toUpperCase();
+    const stock=String(pick(r,['stock','stockno','stocknumber'])||'').trim().toUpperCase();
+    if(!vin||vin.length<11) return;
+    const src=String(pick(r,['vehiclesource','source'])||'').toLowerCase();
+    out.push({vin,stock,
+      year:String(pick(r,['vehicleyear','year'])||'').trim(),
+      make:String(pick(r,['vehiclemake','make'])||'').trim(),
+      model:String(pick(r,['vehiclemodel','model'])||'').trim(),
+      mileage:String(Math.round(Number(pick(r,['mileage','miles']))||0)||''),
+      color:String(pick(r,['vehiclecolor','color'])||'').trim(),
+      source:src.startsWith('repo')?'repo':src.startsWith('trade')?'trade':'auction'});
+  });
+  return out;
+}
+function invPlan(items){
+  const byVin=new Map(ST.vehicles.map(v=>[String(v.vin||'').trim().toUpperCase(),v]));
+  const plan={add:[],stock:[],same:0,conflict:[]};
+  items.forEach(it=>{
+    const v=byVin.get(it.vin);
+    if(!v){plan.add.push(it);return;}
+    const cur=String(v.stockNumber||'').trim().toUpperCase();
+    if(it.stock&&cur!==it.stock) plan.stock.push({v,it,from:cur}); else plan.same++;
+  });
+  const stockOwner=new Map();
+  items.forEach(it=>{if(it.stock) stockOwner.set(it.stock,it.vin);});
+  ST.vehicles.forEach(v=>{const s=String(v.stockNumber||'').trim().toUpperCase();const o=stockOwner.get(s);if(s&&o&&o!==String(v.vin||'').trim().toUpperCase()) plan.conflict.push({stock:s,car:[v.year,v.make,v.model].join(' ')});});
+  return plan;
+}
+window.invPickFile=async function(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  try{
+    const X=await invLoadXlsx();
+    const wb=X.read(await f.arrayBuffer(),{type:'array'});
+    const rows=X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    const items=invParseRows(rows);
+    if(!items.length){toast('No cars found — check the columns (Stock #, Year, Make, Model, VIN, Mileage, Color)','err');return;}
+    window._invItems=items;window._invPlan=invPlan(items);invShowPreview();
+  }catch(e){toast('Import failed: '+(e.message||e),'err');}
+  input.value='';
+};
+function invShowPreview(){
+  const p=window._invPlan,n=window._invItems.length;
+  document.getElementById('inv-prev')?.remove();
+  const ov=document.createElement('div');ov.id='inv-prev';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  const e=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  ov.innerHTML=`<div style="background:#111318;border:1px solid #2a2f3f;border-radius:16px;width:100%;max-width:440px;max-height:90vh;overflow:auto">
+    <div style="padding:16px 20px;border-bottom:1px solid #1e2230;font-size:15px;font-weight:700;color:#fff">Import inventory</div>
+    <div style="padding:20px;font-size:13px;color:#cdd3de;line-height:1.6">
+      <div style="margin-bottom:12px">${n} cars in the file, matched to AC Recon by VIN.</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px"><span>New cars to add</span><b style="color:#4ade80">${p.add.length}</b></div>
+        <div style="display:flex;justify-content:space-between;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px"><span>Stock # updated to Frazer's</span><b style="color:#f59e0b">${p.stock.length}</b></div>
+        <div style="display:flex;justify-content:space-between;background:#161921;border:1px solid #2a2f3f;border-radius:8px;padding:10px 12px"><span>Already correct</span><b>${p.same}</b></div>
+      </div>
+      ${p.stock.length?`<div style="font-size:11px;color:#9aa3b8;margin-bottom:6px">STOCK # CHANGES${p.stock.length>8?' (first 8)':''}</div>${p.stock.slice(0,8).map(x=>`<div style="font-size:12px;padding:3px 0">${e([x.v.year,x.v.make,x.v.model].join(' '))}: <span style="color:#9aa3b8">${e(x.from||'(none)')}</span> → <b>${e(x.it.stock)}</b></div>`).join('')}`:''}
+      ${p.conflict.length?`<div style="font-size:11px;color:#f87171;margin-top:10px">${p.conflict.length} car(s) in AC Recon still carry a stock # that Frazer gave to a different VIN. They are not in this file's VIN match — check them after.</div>`:''}
+      <div style="font-size:11px;color:#9aa3b8;margin-top:12px">New cars come in with no recon work, so they will not show in the dashboard tiles. Existing cars keep everything except the stock #; blank miles and color are filled in.</div>
+      <button id="inv-apply" style="width:100%;margin-top:14px;background:#C8102E;border:none;color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:9px;cursor:pointer">Import ${p.add.length+p.stock.length?'':'(nothing to change)'}</button>
+      <button id="inv-cancel" style="width:100%;margin-top:8px;background:transparent;border:1px solid #2a2f3f;color:#9aa3b8;font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#inv-cancel').onclick=()=>ov.remove();
+  ov.querySelector('#inv-apply').onclick=()=>{invApply();ov.remove();};
+}
+function invApply(){
+  const p=window._invPlan;let added=0,upd=0;
+  p.stock.forEach(({v,it})=>{
+    v.stockNumber=it.stock;
+    (v.visits||[]).forEach(vi=>{vi.stockNumber=it.stock;});
+    if(!v.mileage&&it.mileage)v.mileage=it.mileage;
+    if(!v.color&&it.color)v.color=it.color;
+    v.updatedAt=Date.now();upd++;
+  });
+  // blank miles / color on cars whose stock # was already right
+  window._invItems.forEach(it=>{const v=ST.vehicles.find(x=>String(x.vin||'').trim().toUpperCase()===it.vin);if(!v)return;let ch=false;
+    if(!v.mileage&&it.mileage){v.mileage=it.mileage;ch=true;}if(!v.color&&it.color){v.color=it.color;ch=true;}if(ch)v.updatedAt=Date.now();});
+  p.add.forEach(it=>{
+    const id=uid(),now=Date.now();
+    ST.vehicles.push({id,vin:it.vin,stockNumber:it.stock,year:it.year,make:it.make,model:it.model,color:it.color,mileage:it.mileage,source:it.source,imported:true,
+      visits:[{id:id+'-v1',dateIn:now,dateOut:null,stockNumber:it.stock,statuses:[],assignedTo:'',assignedTo2:'',statusChangedAt:now,priority:'medium',apptDate:'',
+        parts:[],laborLines:[],repairs:[],receipts:[],photos:[],notes:'',concerns:[],comments:[],timeSessions:[],obdScans:[]}],
+      createdAt:now,updatedAt:now});added++;
+  });
+  save();toast(`Imported: ${added} added, ${upd} stock # updated`);
+  if(ST.view==='settings')renderSettings(document.getElementById('content'));
+}
+
 function renderSettings(c){
   if(ST.role!=='manager'){c.innerHTML='<div class="empty"><div class="empty-msg">Manager access only</div></div>';return;}
   setTopbar('Settings & PINs','');
@@ -9323,6 +9429,12 @@ function renderSettings(c){
           oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
           onchange="SETTINGS.pins[this.dataset.pinRole]=this.value.padStart(4,'0');saveSettings();toast('PIN updated')">
       </div>`).join('')}
+    </div>
+    <div class="panel">
+      <div class="panel-title">INVENTORY IMPORT</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:12px;line-height:1.5">Load the Frazer inventory export (.xlsx). Cars are matched by VIN: missing ones are added and Frazer's stock # replaces the one in AC Recon. You see a summary before anything changes.</div>
+      <input type="file" id="inv-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="invPickFile(this)">
+      <button class="btn-red" onclick="document.getElementById('inv-file').click()">Choose inventory file</button>
     </div>
     <div class="panel">
       <div class="panel-title">SALES TEAM</div>
