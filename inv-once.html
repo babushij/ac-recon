@@ -9411,6 +9411,12 @@ function renderSettings(c){
     return`
     <div style="max-width:600px">
 
+    <div class="panel">
+      <div class="panel-title">INVENTORY IMPORT</div>
+      <div style="font-size:12px;color:#9aa3b8;margin-bottom:12px;line-height:1.5">Load the Frazer inventory export (.xlsx). Cars are matched by VIN: missing ones are added and Frazer's stock # replaces the one in AC Recon. You see a summary before anything changes.</div>
+      <input type="file" id="inv-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="invPickFile(this)">
+      <button class="btn-red" onclick="document.getElementById('inv-file').click()">Choose inventory file</button>
+    </div>
     ${ST.masterPinUnlocked ? `
     <div class="panel">
       <div class="panel-title">ROLE PINS</div>
@@ -9429,12 +9435,6 @@ function renderSettings(c){
           oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
           onchange="SETTINGS.pins[this.dataset.pinRole]=this.value.padStart(4,'0');saveSettings();toast('PIN updated')">
       </div>`).join('')}
-    </div>
-    <div class="panel">
-      <div class="panel-title">INVENTORY IMPORT</div>
-      <div style="font-size:12px;color:#9aa3b8;margin-bottom:12px;line-height:1.5">Load the Frazer inventory export (.xlsx). Cars are matched by VIN: missing ones are added and Frazer's stock # replaces the one in AC Recon. You see a summary before anything changes.</div>
-      <input type="file" id="inv-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="invPickFile(this)">
-      <button class="btn-red" onclick="document.getElementById('inv-file').click()">Choose inventory file</button>
     </div>
     <div class="panel">
       <div class="panel-title">SALES TEAM</div>
