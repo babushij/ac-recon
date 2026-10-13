@@ -190,7 +190,7 @@ function histView(){
   const rows=G.hist.filter(x=>(x.date||'')>=from&&(x.date||'')<to);
   const keyOf={date:null,who:x=>x.pumpedBy||'—',stock:x=>x.stock||'—',station:x=>x.merchant||'—'}[G.hSort];
   rows.sort(keyOf?(a,b)=>String(keyOf(a)).localeCompare(String(keyOf(b)),undefined,{numeric:true})||sortNew(a,b):sortNew);
-  const row=x=>`<div class="row"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} · stock ${esc(x.stock||'—')} · ${esc(carName(x))} · ${esc(x.pumpedBy||'')}${x.check==='mismatch'?' · <span style="color:var(--bad)">flagged</span>':''}</span><span class="r">${x.receiptUrl?`<a href="${esc(x.receiptUrl)}" target="_blank" rel="noopener">Receipt</a>`:''}</span></div>`;
+  const row=x=>`<div class="row"><span class="m">${esc(x.merchant)}</span><span class="a">${money(x.amount)}</span><span class="s">${esc(x.date||'')} · ${x.stock?'stock '+esc(x.stock):(x.vin6Entered?'VIN …'+esc(x.vin6Entered):'stock —')} · ${esc(carName(x))} · ${esc(x.pumpedBy||'')}${x.check==='mismatch'?' · <span style="color:var(--bad)">flagged</span>':''}</span><span class="r">${x.receiptUrl?`<a href="${esc(x.receiptUrl)}" target="_blank" rel="noopener">Receipt</a>`:''}</span></div>`;
   let body;
   if(!rows.length)body='<div class="empty">No receipts in this period</div>';
   else if(!keyOf)body=rows.map(row).join('');
