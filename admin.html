@@ -7390,7 +7390,7 @@ let _vendorTab = 'parts'; // module-scope to persist tab choice across re-render
 // → it writes frazer_results.tsv → load that file here and the lines are marked sent. Nothing is ever sent twice.
 // Only invoices filed AFTER the start date are queued (older history is not re-sent). Vehicles/parts are never touched.
 // ═══════════════════════════════════════
-let FRZ={loaded:false,busy:false,rows:[],cfg:null,msg:'',results:{}};
+let FRZ={loaded:false,busy:false,rows:[],cfg:null,msg:'',results:{},off:{}};
 const frazerCfgRef=()=>db.collection('shops').doc('automotive_connection').collection('config').doc('frazer');
 async function frazerLoadCfg(){
   try{const d=await frazerCfgRef().get();if(d.exists)return d.data();}catch(e){}
@@ -7438,7 +7438,7 @@ function frazerProblem(r){
 }
 function frazerQueueTsv(){
   const head=['key','stock','last6','date','vendor','description','amount','vehicle'].join('\t');
-  const lines=FRZ.rows.filter(r=>!frazerProblem(r)).map(r=>[r.key,frazerClean(r.stock),r.vin.slice(-6).toUpperCase(),frazerDate(r.dateMs),frazerClean(frazerVendorName(r.vendorName)),frazerClean(r.desc).slice(0,60),r.amount.toFixed(2),r.veh||''].join('\t'));
+  const lines=FRZ.rows.filter(r=>!frazerProblem(r)&&!FRZ.off[r.key]).map(r=>[r.key,frazerClean(r.stock),r.vin.slice(-6).toUpperCase(),frazerDate(r.dateMs),frazerClean(frazerVendorName(r.vendorName)),frazerClean(r.desc).slice(0,60),r.amount.toFixed(2),r.veh||''].join('\t'));
   return head+'\n'+lines.join('\n')+'\n';
 }
 window.frazerDownload=()=>{
@@ -7452,6 +7452,8 @@ async function frazerMarkSent(keys,note){
   Object.keys(byInv).forEach(i=>batch.set(invoicesCol().doc(i),{frazerSent:byInv[i]},{merge:true}));
   await batch.commit();
 }
+window.frazerPick=(key,on)=>{if(on)delete FRZ.off[key];else FRZ.off[key]=1;render();};
+window.frazerTog=()=>{const ok=FRZ.rows.filter(r=>!frazerProblem(r));const allOn=ok.every(r=>!FRZ.off[r.key]);FRZ.off={};if(allOn)ok.forEach(r=>{FRZ.off[r.key]=1;});render();};
 window.frazerSkip=async key=>{
   if(!confirm('Mark this line as already in Frazer? It will not be queued again.'))return;
   try{await frazerMarkSent([key],'manual');FRZ.rows=FRZ.rows.filter(r=>r.key!==key);toast('Marked as in Frazer');render();}catch(e){toast('Failed: '+(e.message||e),'err');}
@@ -7498,20 +7500,21 @@ function renderFrazer(c){
   const vm=(FRZ.cfg.vendorMap)||{};
   const byCar={};ok.forEach(r=>{(byCar[r.vid]=byCar[r.vid]||{name:r.vehicle,stock:r.stock,rows:[]}).rows.push(r);});
   const resBad=Object.entries(FRZ.results).filter(([k,v])=>v.status!=='ADDED'&&v.status!=='DUPLICATE');
-  const total=ok.reduce((a,r)=>a+r.amount,0);
+  const picked=ok.filter(r=>!FRZ.off[r.key]);const total=picked.reduce((a,r)=>a+r.amount,0);
   let h=`<div style="font-size:13px;color:#cdd3de;margin-bottom:12px">Costs you filed to cars since <b>${new Date(FRZ.cfg.startMs).toLocaleDateString()}</b> that are not in Frazer yet. Download the file, run the Frazer script on the Frazer PC, then load the results file it creates.</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-    <button style="${btn};${ok.length?'background:#c0392b;border-color:#c0392b;color:#fff':'opacity:.5'}" ${ok.length?'':'disabled'} onclick="frazerDownload()">1 · Download frazer_queue.tsv (${ok.length} lines · ${money(total)})</button>
+    <button style="${btn};${picked.length?'background:#c0392b;border-color:#c0392b;color:#fff':'opacity:.5'}" ${picked.length?'':'disabled'} onclick="frazerDownload()">1 · Download frazer_queue.tsv (${picked.length} lines · ${money(total)})</button>
     <label style="${btn}">2 · Load frazer_results.tsv<input type="file" accept=".tsv,.txt" style="display:none" onchange="frazerLoadResults(this)"></label>
-    <button style="${btn}" onclick="FRZ.loaded=false;render()">Refresh</button></div>`;
+    <button style="${btn}" onclick="FRZ.loaded=false;render()">Refresh</button></div>
+  ${ok.length?`<div style="margin-bottom:14px"><button style="${btn}" onclick="frazerTog()">${picked.length===ok.length?'Unselect all':'Select all'}</button></div>`:''}`;
   if(FRZ.msg)h+=`<div style="color:#f87171;font-size:12px;margin-bottom:10px">${esc(FRZ.msg)}</div>`;
   if(resBad.length)h+=`<div style="background:#2a1216;border:1px solid #5c1420;border-radius:10px;padding:12px;margin-bottom:14px"><div style="font-weight:700;color:#f87171;margin-bottom:6px">Needs your attention (${resBad.length}) <button style="${btn};padding:4px 10px;font-size:11px;float:right" onclick="frazerClearResults()">Clear list</button></div>${resBad.map(([k,v])=>{const r=rows.find(x=>x.key===k);return`<div style="font-size:12px;color:#e6ebf7;margin:4px 0"><b>${esc(v.status)}</b> · ${r?esc(r.vehicle)+' #'+esc(r.stock)+' · '+esc(r.desc)+' '+money(r.amount):esc(k)}<div style="color:#9aa3b8">${esc(v.note)}</div></div>`;}).join('')}</div>`;
   if(vendors.length)h+=`<details style="margin-bottom:14px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#9aa3b8;letter-spacing:.5px">VENDOR NAMES IN FRAZER (${vendors.length})</summary><div style="font-size:12px;color:#9aa3b8;margin:8px 0">The script types this name into Frazer's vendor search and picks the exact match. It must match the Frazer vendor list.</div>${vendors.map(v=>{const k=v.trim().toLowerCase();return`<div style="display:flex;gap:8px;align-items:center;margin:6px 0"><span style="width:200px;font-size:12px;color:#cdd3de">${esc(v)}</span>→<input value="${esc(vm[k]||'')}" placeholder="${esc(v)}" onchange="frazerVendor('${esc(k).replace(/'/g,"\\'")}',this.value)" style="flex:1;max-width:260px;padding:7px 9px;border-radius:7px;border:1px solid #364b7d;background:#0f1a31;color:#e6ebf7;font-family:inherit"></div>`;}).join('')}</details>`;
   if(bad.length)h+=`<div style="background:#2a2412;border:1px solid #5c4a14;border-radius:10px;padding:12px;margin-bottom:14px"><div style="font-weight:700;color:#fbbf24;margin-bottom:6px">Not queued (${bad.length}) — fix these first</div>${bad.map(r=>`<div style="font-size:12px;color:#e6ebf7;margin:4px 0">${esc(r.vehicle)} · ${esc(r.desc)} ${money(r.amount)} — <span style="color:#fbbf24">${frazerProblem(r)}</span></div>`).join('')}</div>`;
   if(!ok.length&&!bad.length)h+=`<div style="padding:30px;text-align:center;color:#9aa3b8;border:1px dashed #364b7d;border-radius:12px">Nothing waiting for Frazer.</div>`;
   Object.values(byCar).forEach(g=>{
-    h+=`<div style="background:#1c2b4d;border:1px solid #2b3d68;border-radius:12px;padding:12px 14px;margin-bottom:10px"><div style="font-weight:700;margin-bottom:6px">${esc(g.name)} <span style="color:#9aa3b8;font-weight:500">#${esc(g.stock)}</span><span style="float:right;color:#9aa3b8;font-weight:500">${money(g.rows.reduce((a,r)=>a+r.amount,0))}</span></div>`+
-      g.rows.map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-top:1px solid #2b3d68;font-size:12px"><span style="color:#9aa3b8;width:62px">${frazerDate(r.dateMs)}</span><span style="width:140px;color:#818cf8">${esc(frazerVendorName(r.vendorName))}</span><span style="flex:1">${esc(r.desc)}${r.qty>1?' ×'+r.qty:''}</span><b>${money(r.amount)}</b><button style="${btn};padding:4px 8px;font-size:11px" onclick="frazerSkip('${esc(r.key)}')" title="Already entered in Frazer by hand">In Frazer</button></div>`).join('')+`</div>`;
+    h+=`<div style="background:#1c2b4d;border:1px solid #2b3d68;border-radius:12px;padding:12px 14px;margin-bottom:10px"><div style="font-weight:700;margin-bottom:6px">${esc(g.name)} <span style="color:#9aa3b8;font-weight:500">#${esc(g.stock)}</span><span style="float:right;color:#9aa3b8;font-weight:500">${money(g.rows.filter(r=>!FRZ.off[r.key]).reduce((a,r)=>a+r.amount,0))}</span></div>`+
+      g.rows.map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-top:1px solid #2b3d68;font-size:12px${FRZ.off[r.key]?';opacity:.45':''}"><input type="checkbox" ${FRZ.off[r.key]?'':'checked'} onchange="frazerPick('${esc(r.key)}',this.checked)" style="width:20px;height:20px;accent-color:#22c55e;flex:none;cursor:pointer"><span style="color:#9aa3b8;width:62px">${frazerDate(r.dateMs)}</span><span style="width:140px;color:#818cf8">${esc(frazerVendorName(r.vendorName))}</span><span style="flex:1">${esc(r.desc)}${r.qty>1?' ×'+r.qty:''}</span><b>${money(r.amount)}</b><button style="${btn};padding:4px 8px;font-size:11px" onclick="frazerSkip('${esc(r.key)}')" title="Already entered in Frazer by hand">In Frazer</button></div>`).join('')+`</div>`;
   });
   c.innerHTML=h;
 }
