@@ -1237,6 +1237,29 @@ function partToStock(vid,idx){
   writeToCurrentVisit(v,'parts',upd);
   syncPartsStatus(v); save();
 }
+// Loose part goes to an employee's account (open charge, same record the filing screen makes) or to the shop (tools & supplies)
+function looseRemove(vid,idx){
+  const v=_vById(vid); if(!v||!(v.looseParts||[])[idx]) return null;
+  const p=v.looseParts[idx];
+  v.looseParts=v.looseParts.filter((_,i)=>i!==idx);
+  v.updatedAt=Date.now();
+  return p;
+}
+async function looseToEmployee(vid,idx,employeeId){
+  const v=_vById(vid); const p=v&&(v.looseParts||[])[idx]; const emp=getEmployee(employeeId);
+  if(!p||!emp) return false;
+  const qty=parseInt(p.qty)||1, each=parseFloat(p.cost)||0;
+  const vn=p.vendor?((getVendorById(p.vendor)||{}).name||''):'';
+  await chargesCol().doc('loose_'+vid+'_'+Date.now()).set({
+    employeeId,employeeName:emp.name,invoiceId:p.invoiceId||'',lineIdx:null,vendor:p.vendor||'',vendorName:vn,orderNumber:p.orderNumber||'',
+    description:p.name||'',partNumber:p.partNum||'',quantity:qty,eachCost:each,amount:Math.round(each*qty*100)/100,
+    date:new Date(p.receivedDate||p.stockedDate||Date.now()),status:'open',settledAt:null,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:ST.role||'manager',receiptUrl:null,fromLooseInventory:true,fromStock:p.fromStock||''
+  });
+  looseRemove(vid,idx); save();
+  return true;
+}
+function looseToShop(vid,idx){ if(!looseRemove(vid,idx)) return false; save(); return true; }
 function stockToCar(fromVid,idx,toVid){
   const from=_vById(fromVid), to=_vById(toVid);
   if(!from||!to||!(from.looseParts||[])[idx]) return;
@@ -7572,6 +7595,8 @@ function renderToInstall(c){
         <div style="flex:1;min-width:160px"><div style="font-size:13px;color:#e2e4ea">${esc(p.name)}</div><div style="font-size:10px;color:#9aa3b8">${fmt$((parseFloat(p.cost)||0)*(parseInt(p.qty)||1))}${p.fromStock?' · was on #'+esc(p.fromStock):''}</div></div>
         <button class="ppl-btn ti-back" data-vid="${it.vehicle.id}" data-i="${it.idx}" style="min-height:42px">↩ Put back on ${it.vehicle.stockNumber?'#'+esc(it.vehicle.stockNumber):'its car'}</button>
         <select class="ti-car" data-vid="${it.vehicle.id}" data-i="${it.idx}" style="background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:7px;border-radius:7px;font-size:12px;max-width:220px"><option value="">Put on a car…</option>${opts}</select>
+        <select class="ti-emp" data-vid="${it.vehicle.id}" data-i="${it.idx}" style="background:#111318;border:1px solid #2a2f3f;color:#e2e4ea;padding:7px;border-radius:7px;font-size:12px;max-width:220px"><option value="">Charge to employee…</option>${getEmployees().map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
+        <button class="ppl-btn ti-shop" data-vid="${it.vehicle.id}" data-i="${it.idx}" style="min-height:42px">🏪 Shop</button>
       </div>`;
     });
   }
@@ -7582,6 +7607,8 @@ function renderToInstall(c){
   c.querySelectorAll('.ti-stock').forEach(b=>b.onclick=()=>{if(!confirm('Take this part off the car and keep it as loose inventory?\n\n(You can put it back from the Loose inventory list.)'))return;partToStock(b.dataset.vid,parseInt(b.dataset.i));toast('Moved to loose inventory');render();});
   c.querySelectorAll('.ti-back').forEach(b=>b.onclick=()=>{stockToCar(b.dataset.vid,parseInt(b.dataset.i),b.dataset.vid);toast('Put back on the car');render();});
   c.querySelectorAll('.ti-car').forEach(s=>s.onchange=()=>{if(!s.value)return;stockToCar(s.dataset.vid,parseInt(s.dataset.i),s.value);toast('Put on car');render();});
+  c.querySelectorAll('.ti-emp').forEach(s=>s.onchange=async()=>{if(!s.value)return;const e=getEmployee(s.value);if(!confirm('Charge this part to '+(e?e.name:'this employee')+"'s account?\n\nIt leaves Loose inventory and becomes an open charge on their account."))return render();try{if(await looseToEmployee(s.dataset.vid,parseInt(s.dataset.i),s.value))toast('Charged to '+e.name);}catch(err){toast('Failed: '+(err.message||err),'err');}render();});
+  c.querySelectorAll('.ti-shop').forEach(b=>b.onclick=()=>{if(!confirm('Move this part to the Shop (tools & supplies)?\n\nIt leaves Loose inventory and is not tied to any car.'))return;if(looseToShop(b.dataset.vid,parseInt(b.dataset.i)))toast('Moved to Shop');render();});
   const all=c.querySelector('#ti-all');
   if(all) all.onclick=()=>{ if(confirm(`Mark all ${allItems.length} received parts on ${new Set(allItems.map(x=>x.vehicle.id)).size} vehicle(s) as installed?\n\nUse this once to clear the backlog of parts that are already on the cars.`)){const n=installAllReceived();toast(`${n} parts marked installed`);render();} };
 }
