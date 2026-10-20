@@ -7557,16 +7557,18 @@ let _aucSeq=0;const _aucWait={};
 window.addEventListener('message',ev=>{
   if(ev.source!==window||!ev.data||!ev.data.acAuction)return;const d=ev.data;
   if(d.acAuction==='hello'){const had=!!AUC.helper;AUC.helper={version:d.version};if(!had&&ST.view==='auction')render();}
-  else if(d.acAuction==='res'&&_aucWait[d.id]){const w=_aucWait[d.id];delete _aucWait[d.id];d.ok?w.res(d.data):w.rej(new Error(d.error||'The helper ran into a problem.'));}
-  else if(d.acAuction==='progress'&&_aucWait[d.id]&&_aucWait[d.id].onp)_aucWait[d.id].onp(d.text);
+  else if(d.acAuction==='res'&&_aucWait[d.id]){const w=_aucWait[d.id];delete _aucWait[d.id];clearTimeout(w.t);d.ok?w.res(d.data):w.rej(new Error(d.error||'The helper ran into a problem.'));}
+  else if(d.acAuction==='progress'&&_aucWait[d.id]){const w=_aucWait[d.id];w.arm&&w.arm();if(w.onp)w.onp(d.text);}
 });
 try{window.postMessage({acAuction:'ping'},'*');}catch(e){}
 function aucCall(cmd,args,onp){
   return new Promise((res,rej)=>{
     if(!AUC.helper)return rej(new Error('The AC Auction Helper extension is not installed in this Chrome.'));
-    const id=++_aucSeq;_aucWait[id]={res,rej,onp};
+    // Gives up only after 3 quiet minutes: every progress note from the helper restarts the clock.
+    const id=++_aucSeq;const w=_aucWait[id]={res,rej,onp};
+    w.arm=()=>{clearTimeout(w.t);w.t=setTimeout(()=>{if(_aucWait[id]){delete _aucWait[id];rej(new Error('The helper did not answer in time.'));}},180000);};
+    w.arm();
     window.postMessage({acAuction:'req',id,cmd,args},'*');
-    setTimeout(()=>{if(_aucWait[id]){delete _aucWait[id];rej(new Error('The helper did not answer in time.'));}},(cmd==='docs'||cmd==='cfs')?240000:90000);
   });
 }
 const aucSiteName=s=>s==='manheim'?'Manheim':'ADESA';
@@ -7656,7 +7658,7 @@ async function aucImport(){
       const auctionDocs={site:aucSiteName(c.site),saleDate:c.saleDate,price:c.price,fee:c.fee,fees:c.fees,transport:c.transport||0,bos:docs.bos||null};
       ex=aucExisting(c.vin);
       if(ex){
-        if(docs.cr&&!ex.conditionReport)ex.conditionReport=docs.cr;
+        if(docs.cr)ex.conditionReport=docs.cr; // a fresh import replaces an older (or blank) report
         if(docs.bos&&!(ex.auctionDocs&&ex.auctionDocs.bos))ex.auctionDocs=auctionDocs;
         if(docs.photo&&!(ex.photos||[]).length)writeToCurrentVisit(ex,'photos',[docs.photo]);
         ex.updatedAt=Date.now();
