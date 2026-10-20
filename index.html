@@ -2095,6 +2095,7 @@ function buildSidebar(){
     {id:'filing',label:'Needs filing',icon:filingIcon(),badge:filingCount()},
     {id:'gasreceipts',label:'Gas receipts',icon:filingIcon(),badge:((GAS.charges&&GAS.charges.length)||0)+((GAS.misc&&GAS.misc.length)||0)},
     {id:'frazer',label:'Send to Frazer',icon:filingIcon(),badge:(FRZ.loaded&&FRZ.rows.length)||0},
+    {id:'auction',label:'Auction import',icon:carIcon()},
     {id:'cores',label:'Cores',icon:coreIcon(),badge:overdueCoreCount()||openCoreCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
     {id:'board',label:'Shop board (TV)',icon:tvIcon()},
@@ -2231,6 +2232,7 @@ function renderContent(){
     case 'partspipeline':renderPartsPipeline(c);break;
     case 'toinstall':    renderToInstall(c);break;
     case 'frazer':       renderFrazer(c);break;
+    case 'auction':      renderAuction(c);break;
     case 'filing':       renderFiling(c);break;
     case 'gasreceipts':  renderGasReceipts(c);break;
     case 'mechdash':     renderMechDash(c);break;
@@ -5060,6 +5062,7 @@ function renderDetail(c,v){
     const cost=_pc+_lc+_rc;
     el.innerHTML=`
     ${(v.statuses||[]).includes('customer_appt')&&v.apptDate?`<div style="background:#0a1f28;border:1px solid #06b6d455;border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px"><span style="font-size:22px">📅</span><div><div style="font-size:11px;font-weight:600;color:#06b6d4;letter-spacing:.5px;margin-bottom:3px">APPOINTMENT</div><div style="font-size:15px;font-weight:700;color:#fff">${new Date(v.apptDate).toLocaleString([],{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div><button onclick="ST.activeTab='statuses';refreshDetail()" style="margin-left:auto;background:none;border:1px solid #06b6d455;color:#06b6d4;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Edit</button></div>`:''}
+    ${aucOverviewCard(v)}
     <div class="ov-grid">
       <div class="ov-card"><div class="ov-label">Recon cost</div><div class="ov-val" style="color:${RED}">${fmt$(cost)}</div></div>
       <div class="ov-card"><div class="ov-label">Parts</div><div class="ov-val">${(v.parts||[]).length+(v.repairs||[]).length}</div></div>
@@ -7540,6 +7543,291 @@ function renderFrazer(c){
       g.rows.map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-top:1px solid #2b3d68;font-size:12px${FRZ.off[r.key]?';opacity:.45':''}"><input type="checkbox" ${FRZ.off[r.key]?'':'checked'} onchange="frazerPick('${esc(r.key)}',this.checked)" style="width:20px;height:20px;accent-color:#22c55e;flex:none;cursor:pointer"><span style="color:#9aa3b8;width:62px">${frazerDate(r.dateMs)}</span><span style="width:140px;color:#818cf8">${esc(frazerVendorName(r.vendorName))}</span><span style="flex:1">${esc(r.desc)}${r.qty>1?' ×'+r.qty:''}</span><b>${money(r.amount)}</b><button style="${btn};padding:4px 8px;font-size:11px" onclick="frazerSkip('${esc(r.key)}')" title="Already entered in Frazer by hand">In Frazer</button></div>`).join('')+`</div>`;
   });
   c.innerHTML=h;
+}
+
+// ═══════════════════════════════════════════════
+// AUCTION IMPORT — ADESA (Tue) / Manheim (Thu) purchases → AC Recon, CarsForSale, Frazer
+// The "AC Auction Helper" Chrome extension does the parts a page can't: reading the auction sites with your
+// signed-in session, saving their PDFs/photos to Storage, and filling in CarsForSale. It talks to this page
+// through window.postMessage (bridge.js).
+// ═══════════════════════════════════════════════
+const AUC={helper:null,site:'adesa',from:'',to:'',cars:null,busy:false,loading:false,err:'',cfg:null,cfgLoaded:false,sel:null,run:{},off:{},noCfs:{}};
+const aucCfgRef=()=>db.collection('shops').doc('automotive_connection').collection('config').doc('auction');
+let _aucSeq=0;const _aucWait={};
+window.addEventListener('message',ev=>{
+  if(ev.source!==window||!ev.data||!ev.data.acAuction)return;const d=ev.data;
+  if(d.acAuction==='hello'){const had=!!AUC.helper;AUC.helper={version:d.version};if(!had&&ST.view==='auction')render();}
+  else if(d.acAuction==='res'&&_aucWait[d.id]){const w=_aucWait[d.id];delete _aucWait[d.id];d.ok?w.res(d.data):w.rej(new Error(d.error||'The helper ran into a problem.'));}
+  else if(d.acAuction==='progress'&&_aucWait[d.id]&&_aucWait[d.id].onp)_aucWait[d.id].onp(d.text);
+});
+try{window.postMessage({acAuction:'ping'},'*');}catch(e){}
+function aucCall(cmd,args,onp){
+  return new Promise((res,rej)=>{
+    if(!AUC.helper)return rej(new Error('The AC Auction Helper extension is not installed in this Chrome.'));
+    const id=++_aucSeq;_aucWait[id]={res,rej,onp};
+    window.postMessage({acAuction:'req',id,cmd,args},'*');
+    setTimeout(()=>{if(_aucWait[id]){delete _aucWait[id];rej(new Error('The helper did not answer in time.'));}},(cmd==='docs'||cmd==='cfs')?240000:90000);
+  });
+}
+const aucSiteName=s=>s==='manheim'?'Manheim':'ADESA';
+function aucYmd(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function aucDefaultRange(site){
+  // From the most recent sale day (Tuesday for ADESA, Thursday for Manheim) through today.
+  const want=site==='manheim'?4:2;const d=new Date();while(d.getDay()!==want)d.setDate(d.getDate()-1);
+  return{from:aucYmd(d),to:aucYmd(new Date())};
+}
+async function aucLoadCfg(){
+  let c=null;try{const d=await aucCfgRef().get();if(d.exists)c=d.data();}catch(e){}
+  if(!c){try{c=JSON.parse(localStorage.getItem('aucCfg')||'null');}catch(e){}}
+  AUC.cfg=Object.assign({lastStock:'',svc:500,del:65,done:{}},c||{});AUC.cfg.done=AUC.cfg.done||{};AUC.cfgLoaded=true;
+  if(!AUC.cfg.lastStock)AUC.cfg.lastStock=aucHighestStock()||'';
+}
+async function aucSaveCfg(){
+  try{localStorage.setItem('aucCfg',JSON.stringify(AUC.cfg));}catch(e){}
+  try{await aucCfgRef().set(AUC.cfg);}catch(e){console.warn('auction cfg (this device only):',e);}
+}
+// Highest "A YY MM NN" stock number this month across AC Recon — a starting point when nothing was saved yet.
+function aucHighestStock(){
+  const now=new Date(),yy=String(now.getFullYear()).slice(2),mm=String(now.getMonth()+1).padStart(2,'0');let best=0;
+  (ST.vehicles||[]).forEach(v=>{[v.stockNumber,...(v.visits||[]).map(x=>x.stockNumber)].forEach(s=>{const m=/^A(\d{2})(\d{2})(\d{2})$/.exec(String(s||'').trim().toUpperCase());if(m&&m[1]===yy&&m[2]===mm)best=Math.max(best,+m[3]);});});
+  return best?`A${yy}${mm}${String(best).padStart(2,'0')}`:'';
+}
+function aucStockTaken(s){
+  s=String(s).toUpperCase();
+  if((ST.vehicles||[]).some(v=>String(v.stockNumber||'').toUpperCase()===s||(v.visits||[]).some(x=>String(x.stockNumber||'').toUpperCase()===s)))return true;
+  return Object.values((AUC.cfg&&AUC.cfg.done)||{}).some(d=>String(d.stock||'').toUpperCase()===s);
+}
+// Stock rule: A + 2-digit year + 2-digit month + 2-digit count; a new month starts at 01; taken numbers are skipped.
+function aucNextStocks(n,from){
+  const now=new Date(),yy=String(now.getFullYear()).slice(2),mm=String(now.getMonth()+1).padStart(2,'0');
+  const m=/^A(\d{2})(\d{2})(\d{2})$/.exec(String(from||'').trim().toUpperCase());
+  let k=(m&&m[1]===yy&&m[2]===mm)?+m[3]:0;const out=[];
+  while(out.length<n&&k<99){k++;const s=`A${yy}${mm}${String(k).padStart(2,'0')}`;if(!aucStockTaken(s))out.push(s);}
+  return out;
+}
+function aucExisting(vin){vin=String(vin||'').toUpperCase();return (ST.vehicles||[]).find(v=>String(v.vin||'').trim().toUpperCase()===vin)||null;}
+function aucPreview(){
+  // Which stock # each not-yet-imported, checked car would get, in list order.
+  const cars=AUC.cars||[];const need=cars.filter(c=>!AUC.off[c.vin]&&!aucExisting(c.vin)&&!(AUC.cfg.done[c.vin]&&AUC.cfg.done[c.vin].stock));
+  const nums=aucNextStocks(need.length,AUC.cfg.lastStock);const map={};need.forEach((c,i)=>map[c.vin]=nums[i]);return map;
+}
+function aucStockOf(c){const d=AUC.cfg.done[c.vin];if(d&&d.stock)return d.stock;const ex=aucExisting(c.vin);if(ex)return currentVisit(ex)?.stockNumber||ex.stockNumber||'';return '';}
+async function aucList(){
+  AUC.loading=true;AUC.err='';AUC.cars=null;render();
+  try{
+    const cars=await aucCall('list',{site:AUC.site,from:AUC.from,to:AUC.to});
+    cars.sort((a,b)=>String(b.saleDate).localeCompare(String(a.saleDate)));
+    AUC.cars=cars;AUC.sel=cars[0]?cars[0].vin:null;
+    // Cars already in AC Recon were entered by hand: leave them unchecked, and never re-list them or send them to Frazer.
+    cars.forEach(c=>{if(aucExisting(c.vin)&&!(AUC.cfg.done[c.vin]&&AUC.cfg.done[c.vin].recon)){if(AUC.off[c.vin]===undefined)AUC.off[c.vin]=true;AUC.noCfs[c.vin]=true;}});
+  }catch(e){AUC.err=e.message;}
+  AUC.loading=false;render();
+}
+function aucPill(state,label,title){
+  const st={ok:'background:rgba(34,197,94,.14);color:#4ade80',run:'background:rgba(96,165,250,.14);color:#93c5fd;border:1px solid #60a5fa',warn:'background:rgba(245,158,11,.14);color:#fbbf24',off:'background:#233559;color:#7f91bb'}[state]||'background:#233559;color:#7f91bb';
+  return `<span title="${title||''}" style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;${st}">${state==='ok'?'✓ ':''}${label}${state==='run'?'…':''}</span>`;
+}
+function aucSteps(c){
+  const d=AUC.cfg.done[c.vin]||{},r=AUC.run[c.vin]||{},ex=aucExisting(c.vin);
+  const s=k=>r.step===k?'run':(d[k]?'ok':(r.warn&&r.warnStep===k?'warn':'off'));
+  return aucPill(s('docs'),'Docs')+aucPill(ex&&!r.step&&!d.recon?'ok':s('recon'),'AC Recon')+aucPill(d.cfs?'ok':(AUC.noCfs[c.vin]&&!d.cfs?'off':s('cfs')),'CarsForSale',r.warnStep==='cfs'?r.warn:'')+aucPill(d.frazer?'ok':(d.recon&&!d.prior?'warn':'off'),d.frazer?'Frazer':(d.recon&&!d.prior?'Frazer: run script':'Frazer'));
+}
+async function aucImport(){
+  if(AUC.busy)return;
+  const cars=(AUC.cars||[]).filter(c=>!AUC.off[c.vin]);if(!cars.length)return;
+  const before=ST.vehicles.length;AUC.busy=true;render();
+  for(const c of cars){
+    const r=AUC.run[c.vin]={step:'docs',msg:''};render();
+    try{
+      const done=AUC.cfg.done[c.vin]=AUC.cfg.done[c.vin]||{};
+      let ex=aucExisting(c.vin);
+      if(ex&&!done.recon)done.prior=true;
+      let stock=done.stock||(ex?(currentVisit(ex)?.stockNumber||ex.stockNumber):'');
+      if(!stock){stock=aucNextStocks(1,AUC.cfg.lastStock)[0];if(!stock)throw new Error('No stock number left this month');}
+      done.stock=stock;done.site=c.site;done.saleDate=c.saleDate;done.vehicle=`${c.year} ${c.make} ${c.model}`;
+      const vid=ex?ex.id:uid();
+      // 1) bill of sale, condition report, first photo
+      const docs=await aucCall('docs',{car:c,vid},t=>{r.msg=t;render();});
+      done.docs=!!(docs.bos||docs.cr||docs.photo);
+      const notes=[docs.bosError&&'bill of sale: '+docs.bosError,docs.crError&&'condition report: '+docs.crError,docs.photoError&&'photo: '+docs.photoError].filter(Boolean);
+      if(notes.length){r.warn='Missing '+notes.join('; ');r.warnStep='docs';}
+      // 2) AC Recon
+      r.step='recon';render();
+      const auctionDocs={site:aucSiteName(c.site),saleDate:c.saleDate,price:c.price,fee:c.fee,fees:c.fees,transport:c.transport||0,bos:docs.bos||null};
+      ex=aucExisting(c.vin);
+      if(ex){
+        if(docs.cr&&!ex.conditionReport)ex.conditionReport=docs.cr;
+        if(docs.bos&&!(ex.auctionDocs&&ex.auctionDocs.bos))ex.auctionDocs=auctionDocs;
+        if(docs.photo&&!(ex.photos||[]).length)writeToCurrentVisit(ex,'photos',[docs.photo]);
+        ex.updatedAt=Date.now();
+      }else{
+        const now=Date.now();
+        ST.vehicles.push({id:vid,salesperson:'',vin:c.vin,stockNumber:stock,year:c.year,make:c.make,model:c.model,
+          color:c.extColor?c.extColor.charAt(0).toUpperCase()+c.extColor.slice(1).toLowerCase():'',mileage:String(c.miles||''),
+          source:'auction',imported:true,statuses:['auction'],assignedTo:'',priority:'medium',notes:'',apptDate:'',
+          repairs:[],photos:docs.photo?[docs.photo]:[],receipts:[],comments:[],
+          conditionReport:docs.cr||null,auctionDocs,createdAt:now,updatedAt:now,statusChangedAt:now});
+      }
+      save();done.recon=true;
+      // 3) CarsForSale
+      if(!AUC.noCfs[c.vin]&&!done.cfs&&!done.prior){
+        r.step='cfs';r.msg='';render();
+        try{
+          const res=await aucCall('cfs',{car:{vin:c.vin,miles:c.miles,extColor:c.extColor,intColor:c.intColor},stock},t=>{r.msg=t;render();});
+          if(res.published)done.cfs=true;else{r.warn=res.needsYou||'CarsForSale needs a look';r.warnStep='cfs';}
+        }catch(e){r.warn='CarsForSale: '+e.message;r.warnStep='cfs';}
+      }
+      // remember the newest stock number used
+      if(/^A\d{6}$/.test(stock)&&(!AUC.cfg.lastStock||stock>AUC.cfg.lastStock))AUC.cfg.lastStock=stock;
+      done.at=Date.now();await aucSaveCfg();
+      r.step='';
+    }catch(e){r.step='';r.warn=e.message;r.warnStep=r.warnStep||'docs';}
+    render();
+  }
+  AUC.busy=false;
+  const added=ST.vehicles.length-before;
+  toast(`Import finished · ${added} car${added!==1?'s':''} added to AC Recon`);
+  render();
+}
+function aucDl(name,text){const blob=new Blob([text],{type:'text/tab-separated-values'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+function aucFrazerCars(){return (AUC.cars||[]).filter(c=>{const d=AUC.cfg.done[c.vin];return d&&d.recon&&d.stock&&!d.frazer&&!d.prior;});}
+window.aucFrazerFiles=()=>{
+  const cars=aucFrazerCars();if(!cars.length){toast('No cars waiting for Frazer','err');return;}
+  const clean=s=>String(s==null?'':s).replace(/[\t\r\n]+/g,' ').trim();
+  const dt=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s||'');return m?`${m[2]}/${m[3]}/${m[1].slice(2)}`:frazerDate(Date.now());};
+  const svc=(+AUC.cfg.svc||0).toFixed(2),del=(+AUC.cfg.del||0).toFixed(2);
+  const veh=['stock\tvin\tcolor\tmiles\tdate\tcost\tfee\tvehicle'],q=['key\tstock\tlast6\tdate\tvendor\tdescription\tamount\tvehicle'];
+  cars.forEach(c=>{
+    const st=AUC.cfg.done[c.vin].stock;
+    veh.push([st,c.vin,clean(c.extColor).toUpperCase(),Math.round(+c.miles||0),dt(c.saleDate),Math.round(c.price),Math.round(c.fee),clean(`${c.year} ${c.make} ${c.model}`).toUpperCase()].join('\t'));
+    const y=clean(`${c.year}|${c.make}|${c.model}`).toUpperCase();
+    if(+svc)q.push([`auction_${st}_service|0`,st,c.vin.slice(-6),dt(c.saleDate),'Automotive Connection Service','Service',svc,y].join('\t'));
+    if(+del)q.push([`auction_${st}_delivery|0`,st,c.vin.slice(-6),dt(c.saleDate),`${aucSiteName(c.site)} Delivery`,'Delivery',del,y].join('\t'));
+  });
+  aucDl('frazer_vehicles.tsv',veh.join('\r\n')+'\r\n');
+  setTimeout(()=>aucDl('frazer_queue.tsv',q.join('\r\n')+'\r\n'),700);
+  toast(`Frazer files downloaded · ${cars.length} car${cars.length!==1?'s':''}`);
+};
+window.aucFrazerResults=async input=>{
+  const f=input.files&&input.files[0];input.value='';if(!f)return;
+  const lines=(await f.text()).split(/\r?\n/).slice(1).map(l=>l.split('\t')).filter(x=>x[0]);
+  let n=0;
+  Object.entries(AUC.cfg.done).forEach(([vin,d])=>{const hit=lines.filter(x=>x[0].trim().toUpperCase()===String(d.stock).toUpperCase()).pop();if(hit&&/^ADDED$/i.test((hit[1]||'').trim())){if(!d.frazer)n++;d.frazer=true;}});
+  await aucSaveCfg();toast(n?`${n} car${n!==1?'s':''} marked as in Frazer`:'No new cars in that results file');render();
+};
+window.aucMarkFrazer=async vin=>{const d=AUC.cfg.done[vin];if(!d)return;d.frazer=!d.frazer;await aucSaveCfg();render();};
+window.aucOpenPdf=url=>{if(url)window.open(url,'_blank','noopener');};
+// One PDF with every bill of sale on screen, for printing.
+window.aucPrintAll=async()=>{
+  const urls=(AUC.cars||[]).map(c=>{const v=aucExisting(c.vin);return v&&v.auctionDocs&&v.auctionDocs.bos&&v.auctionDocs.bos.url;}).filter(Boolean);
+  if(!urls.length){toast('No bills of sale saved yet','err');return;}
+  if(urls.length===1){window.open(urls[0],'_blank','noopener');return;}
+  const w=window.open('','_blank');
+  try{
+    if(!window.PDFLib)await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    const out=await PDFLib.PDFDocument.create();
+    for(const u of urls){const src=await PDFLib.PDFDocument.load(await (await fetch(u)).arrayBuffer());(await out.copyPages(src,src.getPageIndices())).forEach(p=>out.addPage(p));}
+    const blob=new Blob([await out.save()],{type:'application/pdf'});
+    if(w)w.location.href=URL.createObjectURL(blob);else window.open(URL.createObjectURL(blob),'_blank');
+  }catch(e){if(w)w.close();console.warn(e);toast('Could not combine them — opening each one instead','err');urls.forEach(u=>window.open(u,'_blank','noopener'));}
+};
+
+function renderAuction(c){
+  setTopbar('Auction import','');
+  if(ST.role!=='manager'){c.innerHTML='<div style="color:#9aa3b8;padding:20px">Managers only.</div>';return;}
+  if(!AUC.cfgLoaded){c.innerHTML='<div style="color:#9aa3b8;padding:20px">Loading…</div>';aucLoadCfg().then(render);return;}
+  if(!AUC.from){const r=aucDefaultRange(AUC.site);AUC.from=r.from;AUC.to=r.to;}
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  const money=n=>'$'+(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const btn='font-size:12px;font-weight:600;padding:9px 14px;border-radius:8px;border:1px solid #364b7d;background:#1c2b4d;color:#e6ebf7;cursor:pointer;font-family:inherit';
+  const red='font-size:12px;font-weight:700;padding:10px 16px;border-radius:8px;border:0;background:#C8102E;color:#fff;cursor:pointer;font-family:inherit;letter-spacing:.4px;text-transform:uppercase';
+  const inp='background:#1c2b4d;border:1px solid #364b7d;border-radius:8px;padding:8px 10px;color:#e6ebf7;font-size:13px;font-family:inherit';
+  const lab='display:flex;flex-direction:column;gap:3px;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#9fb0d6';
+  const segB=on=>`border:0;padding:9px 16px;font-weight:700;font-size:13px;text-align:left;cursor:pointer;font-family:inherit;${on?'background:#C8102E;color:#fff':'background:#1c2b4d;color:#9fb0d6'}`;
+  const cars=AUC.cars||[],prev=AUC.cfgLoaded?aucPreview():{};
+  const picked=cars.filter(c=>!AUC.off[c.vin]);
+  let h=`<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
+    <div style="display:flex;border:1px solid #364b7d;border-radius:8px;overflow:hidden">
+      <button style="${segB(AUC.site==='adesa')}" onclick="aucSite('adesa')" ${AUC.busy?'disabled':''}>ADESA<small style="display:block;font-weight:500;font-size:10px;opacity:.85">Tuesday sale</small></button>
+      <button style="${segB(AUC.site==='manheim')}" onclick="aucSite('manheim')" ${AUC.busy?'disabled':''}>Manheim<small style="display:block;font-weight:500;font-size:10px;opacity:.85">Thursday sale</small></button></div>
+    <label style="${lab}">Bought from<input type="date" id="auc-from" value="${AUC.from}" style="${inp}" onchange="AUC.from=this.value"></label>
+    <label style="${lab}">to<input type="date" id="auc-to" value="${AUC.to}" style="${inp}" onchange="AUC.to=this.value"></label>
+    <button style="${btn}" onclick="aucList()" ${AUC.busy||AUC.loading||!AUC.helper?'disabled':''}>${AUC.loading?'Loading…':'Load purchases'}</button>
+    <label style="${lab}">Last stock # used<input id="auc-last" value="${esc(AUC.cfg.lastStock)}" style="${inp};width:110px;font-family:monospace" onchange="AUC.cfg.lastStock=this.value.trim().toUpperCase();aucSaveCfg();render()" ${AUC.busy?'disabled':''}></label>
+    <label style="${lab}">Service $<input id="auc-svc" value="${esc(AUC.cfg.svc)}" inputmode="decimal" style="${inp};width:80px" onchange="AUC.cfg.svc=+this.value||0;aucSaveCfg()"></label>
+    <label style="${lab}">Delivery $<input id="auc-del" value="${esc(AUC.cfg.del)}" inputmode="decimal" style="${inp};width:80px" onchange="AUC.cfg.del=+this.value||0;aucSaveCfg()"></label>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:8px;background:#1c2b4d;border:1px solid #2b3d68;border-radius:20px;padding:6px 12px;font-size:12px;color:#c3cfe8"><span style="width:8px;height:8px;border-radius:50%;background:${AUC.helper?'#22c55e':'#f59e0b'}"></span>${AUC.helper?'Chrome helper on (v'+esc(AUC.helper.version)+')':'Chrome helper not found'}</span>
+  </div>
+  <div style="font-size:12px;color:#7f91bb;margin-bottom:14px">Entered a trade-in or repo by hand? Change the last stock # and the next car continues from it. ${AUC.helper?`<a href="#" onclick="aucCall('open',{site:AUC.site});return false" style="color:#93c5fd">Open ${aucSiteName(AUC.site)}</a> and sign in first if you are signed out.`:''}</div>`;
+  if(!AUC.helper)h+=`<div style="background:#2a1e05;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:14px;font-size:13px;color:#fde68a;line-height:1.5"><b style="color:#fff">Install the AC Auction Helper in this Chrome.</b> It reads your ADESA and Manheim purchases with your own sign-in and fills in CarsForSale. Unzip <b>ac-auction-helper.zip</b>, open <b>chrome://extensions</b>, turn on Developer mode, click <b>Load unpacked</b> and pick the folder, then reload this page.</div>`;
+  if(AUC.err)h+=`<div style="background:#2a1216;border:1px solid #5c1420;border-radius:10px;padding:12px;margin-bottom:14px;color:#fca5a5;font-size:13px">${esc(AUC.err)}</div>`;
+  if(AUC.cars===null&&!AUC.loading&&AUC.helper)h+=`<div style="padding:30px;text-align:center;color:#9aa3b8;border:1px dashed #364b7d;border-radius:12px">Press <b>Load purchases</b> to see what you bought at ${aucSiteName(AUC.site)}.</div>`;
+  if(AUC.cars&&!cars.length)h+=`<div style="padding:30px;text-align:center;color:#9aa3b8;border:1px dashed #364b7d;border-radius:12px">No ${aucSiteName(AUC.site)} purchases in those dates.</div>`;
+  if(cars.length){
+    const sel=cars.find(x=>x.vin===AUC.sel)||cars[0];
+    h+=`<style>@media(max-width:1000px){.auc-grid{grid-template-columns:1fr!important}}</style><div style="display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;align-items:start" class="auc-grid">
+    <div style="background:#0f1a31;border:1px solid #2b3d68;border-radius:12px;min-width:0">
+      <div style="display:flex;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #2b3d68;flex-wrap:wrap;gap:8px"><b style="font-size:12px;letter-spacing:1.2px;text-transform:uppercase">${aucSiteName(AUC.site)} purchases</b><span style="font-size:12px;color:#9fb0d6">${cars.length} cars · ${picked.length} selected</span></div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px">
+      <thead><tr style="font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:#9fb0d6;text-align:left"><th style="padding:8px 10px"></th><th style="padding:8px 10px">Car</th><th style="padding:8px 10px">Stock #</th><th style="padding:8px 10px;text-align:right">Price</th><th style="padding:8px 10px;text-align:right">Buyer fee</th><th style="padding:8px 10px">Progress</th><th style="padding:8px 10px">List</th></tr></thead><tbody>`;
+    cars.forEach(c=>{
+      const ex=aucExisting(c.vin),st=aucStockOf(c)||prev[c.vin]||'—',r=AUC.run[c.vin]||{},v=ex;const ph=v&&v.photos&&v.photos[0]?photoUrl(v.photos[0]):'';
+      h+=`<tr style="border-top:1px solid #2b3d68;cursor:pointer;${AUC.sel===c.vin?'background:rgba(59,130,246,.12)':''}" onclick="if(!event.target.closest('input'))aucSel('${c.vin}')">
+        <td style="padding:10px"><input type="checkbox" ${AUC.off[c.vin]?'':'checked'} ${AUC.busy?'disabled':''} onchange="AUC.off['${c.vin}']=!this.checked;render()" style="width:18px;height:18px;accent-color:#C8102E"></td>
+        <td style="padding:10px"><div style="display:flex;gap:10px;align-items:center">${ph?`<img src="${esc(ph)}" style="width:64px;height:48px;object-fit:cover;border-radius:6px;flex:none">`:`<div style="width:64px;height:48px;border-radius:6px;background:#233559;flex:none"></div>`}<div style="min-width:0"><div style="font-weight:700">${esc(c.year)} ${esc(c.make)} ${esc(c.model)} ${esc(c.trim||'')}</div><div style="font-size:11px;color:#9fb0d6;font-family:monospace">${esc(c.vin)} · ${(+c.miles||0).toLocaleString()} mi · ${esc(c.extColor||'')} · sold ${esc(c.saleDate)}</div>${ex&&!r.step&&!(AUC.cfg.done[c.vin]||{}).recon?`<div style="font-size:11px;color:#fbbf24">Already in AC Recon — importing only adds missing documents</div>`:''}${r.step?`<div style="font-size:11px;color:#93c5fd">${esc(r.msg||'Working…')}</div>`:''}${r.warn?`<div style="font-size:11px;color:#fbbf24">${esc(r.warn)}</div>`:''}</div></div></td>
+        <td style="padding:10px;font-family:monospace;font-weight:700;color:#93c5fd">${esc(st)}</td>
+        <td style="padding:10px;text-align:right;font-family:monospace">${money(c.price)}</td><td style="padding:10px;text-align:right;font-family:monospace">${money(c.fee)}</td>
+        <td style="padding:10px"><div style="display:flex;gap:4px;flex-wrap:wrap">${aucSteps(c)}</div></td>
+        <td style="padding:10px"><label style="font-size:11px;color:#9fb0d6;display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" ${AUC.noCfs[c.vin]?'':'checked'} ${AUC.busy?'disabled':''} onchange="AUC.noCfs['${c.vin}']=!this.checked;render()" style="accent-color:#C8102E">CarsForSale</label></td></tr>`;
+    });
+    const frz=aucFrazerCars();
+    h+=`</tbody></table></div>
+      ${frz.length&&!AUC.busy?`<div style="margin:0 14px 12px;border:1px solid #f59e0b;background:#2a1e05;border-radius:8px;padding:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:#fde68a"><span style="flex:1;min-width:220px"><b style="color:#fff">Frazer is the step you start yourself.</b> Download the Frazer files and put them in the script folder on the Frazer PC. Run <b>frazer-add-vehicles</b>, then <b>frazer-entry</b> for service and delivery. Load the results file to turn the cars green.</span><button style="${btn}" onclick="aucFrazerFiles()">Download Frazer files (${frz.length})</button><label style="${btn}">Load results<input type="file" accept=".tsv,.txt" style="display:none" onchange="aucFrazerResults(this)"></label></div>`:''}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-top:1px solid #2b3d68">
+        <button style="${red}${picked.length&&!AUC.busy?'':';opacity:.45;cursor:not-allowed'}" ${picked.length&&!AUC.busy?'':'disabled'} onclick="aucImport()">${AUC.busy?'Importing…':`Import ${picked.length} car${picked.length!==1?'s':''}`}</button>
+        <button style="${btn}" onclick="aucPrintAll()">Print all bills of sale</button>
+        <span style="font-size:12px;color:#9fb0d6">Import saves the documents and photo, adds the car here, and publishes it on CarsForSale. Keep Chrome open while it runs.</span></div>
+    </div>
+    <div style="background:#0f1a31;border:1px solid #2b3d68;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:14px">${aucDetail(sel,esc,money,btn)}</div></div>`;
+  }
+  c.innerHTML=h;
+}
+window.aucSite=s=>{AUC.site=s;const r=aucDefaultRange(s);AUC.from=r.from;AUC.to=r.to;AUC.cars=null;AUC.err='';render();if(AUC.helper)aucList();};
+window.aucSel=vin=>{AUC.sel=vin;render();};
+window.aucList=aucList;window.aucImport=aucImport;window.aucCall=aucCall;window.aucSaveCfg=aucSaveCfg;window.AUC=AUC;
+function aucDetail(c,esc,money,btn){
+  const v=aucExisting(c.vin),d=AUC.cfg.done[c.vin]||{};
+  const bos=v&&v.auctionDocs&&v.auctionDocs.bos,cr=v&&v.conditionReport;
+  const svc=+AUC.cfg.svc||0,del=+AUC.cfg.del||0;
+  const row=(t,s,b)=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;background:#1c2b4d;border:1px solid #2b3d68;border-radius:8px;padding:9px 10px;font-size:13px"><span>${t}<small style="display:block;font-size:11px;color:#9fb0d6">${s}</small></span>${b}</div>`;
+  return `<div><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9fb0d6">${aucSiteName(c.site)} · sold ${esc(c.saleDate)}</div><div style="font-size:16px;font-weight:700;margin-top:2px">${esc(c.year)} ${esc(c.make)} ${esc(c.model)} ${esc(c.trim||'')}</div><div style="font-size:12px;color:#c3cfe8;font-family:monospace">${esc(c.vin)} · ${(+c.miles||0).toLocaleString()} mi · ${esc(c.extColor)} / ${esc(c.intColor)} interior</div></div>
+    <div><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9fb0d6;margin-bottom:6px">Documents</div><div style="display:flex;flex-direction:column;gap:6px">
+      ${row('Bill of sale + invoice',bos?'Saved with the car':'Saved when you import',bos?`<button style="${btn};padding:6px 10px" onclick="aucOpenPdf('${esc(bos.url)}')">View / print</button>`:'')}
+      ${row('<span style="color:#818cf8;font-size:10px;font-weight:800;letter-spacing:.6px">CONDITION REPORT</span><br>'+(cr&&cr.summary?esc(cr.summary):'PDF'),cr?'Also on the car\'s Overview':'Saved when you import',cr?`<button style="${btn};padding:6px 10px" onclick="aucOpenPdf('${esc(cr.url)}')">View</button>`:'')}
+    </div></div>
+    <div><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9fb0d6;margin-bottom:6px">What goes into Frazer</div><table style="width:100%;font-size:13px;border-collapse:collapse">
+      <tr><td style="padding:5px 0">Original Cost<small style="display:block;color:#7f91bb;font-size:11px">Sale price only</small></td><td style="text-align:right;font-family:monospace">${money(c.price)}</td></tr>
+      <tr><td style="padding:5px 0">Buyer's Fee<small style="display:block;color:#7f91bb;font-size:11px">${(c.fees||[]).map(f=>esc(f.desc)+' '+money(f.amount)).join(' + ')||'—'}</small></td><td style="text-align:right;font-family:monospace">${money(c.fee)}</td></tr>
+      <tr><td style="padding:5px 0">Lot Fee</td><td style="text-align:right;font-family:monospace">${money(600)}</td></tr>
+      <tr><td style="padding:5px 0">Added cost · Service<small style="display:block;color:#7f91bb;font-size:11px">Automotive Connection Service</small></td><td style="text-align:right;font-family:monospace">${money(svc)}</td></tr>
+      <tr><td style="padding:5px 0">Added cost · Delivery<small style="display:block;color:#7f91bb;font-size:11px">${aucSiteName(c.site)} Delivery</small></td><td style="text-align:right;font-family:monospace">${money(del)}</td></tr>
+      ${c.transport?`<tr style="color:#7f91bb"><td style="padding:5px 0">Auction transport line (left out)</td><td style="text-align:right;font-family:monospace">${money(c.transport)}</td></tr>`:''}
+      <tr style="font-weight:800"><td style="padding:6px 0;border-top:1px solid #2b3d68">Total in Frazer</td><td style="text-align:right;font-family:monospace;border-top:1px solid #2b3d68">${money(c.price+c.fee+600+svc+del)}</td></tr></table></div>
+    ${d.stock?`<div style="display:flex;gap:8px;flex-wrap:wrap">${v?`<button style="${btn}" onclick="ST.selectedId='${v.id}';ST.view='detail';ST.activeTab='overview';render()">Open in AC Recon</button>`:''}<button style="${btn}" onclick="aucMarkFrazer('${c.vin}')">${d.frazer?'Undo: in Frazer':'Mark as in Frazer'}</button></div>`:''}`;
+}
+// Condition report + bill of sale card on a car's Overview tab.
+function aucOverviewCard(v){
+  const cr=v.conditionReport,bos=v.auctionDocs&&v.auctionDocs.bos;if(!cr&&!bos)return '';
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const b='border-radius:8px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit';
+  const src=(cr&&cr.source)||(v.auctionDocs&&v.auctionDocs.site)||'Auction';
+  return `<div style="background:#111a2e;border:1px solid #6366f155;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="font-size:24px">📋</span>
+    <div style="flex:1;min-width:180px"><div style="font-size:11px;font-weight:700;color:#818cf8;letter-spacing:.6px">CONDITION REPORT · ${esc(String(src).toUpperCase())}</div>
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-top:2px">${cr?(esc(cr.summary)||'Condition report'):'No condition report saved'}</div>
+      <div style="font-size:11px;color:#9aa3b8;margin-top:2px">${cr&&cr.uploadedAt?'Saved '+new Date(cr.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' · PDF':''}${v.auctionDocs&&v.auctionDocs.saleDate?' · bought '+esc(v.auctionDocs.saleDate):''}</div></div>
+    ${cr?`<button style="${b};background:#6366f1;color:#fff;border:none" onclick="window.open('${esc(cr.url)}','_blank','noopener')">View</button>`:''}
+    ${bos?`<button style="${b};background:none;border:1px solid #6366f1;color:#a5b4fc" onclick="window.open('${esc(bos.url)}','_blank','noopener')">Bill of sale</button>`:''}</div>`;
 }
 
 function renderToInstall(c){
