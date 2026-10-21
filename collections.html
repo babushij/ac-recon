@@ -41,11 +41,13 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 .seg button{background:var(--surface2);border:none;color:var(--text3);font-size:10px;font-weight:700;letter-spacing:.8px;padding:8px 10px;text-transform:uppercase}
 .seg button.on{background:var(--red);color:#fff}
 .list{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
-.row{display:grid;grid-template-columns:minmax(0,1.6fr) 50px 100px 110px 150px;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.row{display:grid;grid-template-columns:minmax(0,1.6fr) 84px 96px 110px 150px 52px;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer}
 .row:last-child{border-bottom:none}.row:hover{background:var(--surface2)}
 .row.sel{background:var(--red-dim);box-shadow:inset 2px 0 0 var(--red)}
 .row.head{cursor:default;background:var(--surface2);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text3);text-transform:uppercase;padding-block:8px}
-@media (max-width:700px){.row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}.row.head{display:none}.row .c-lang,.row .c-due{display:none}.row .c-amt{grid-column:2;grid-row:1}.row .c-send{grid-column:1/-1}}
+@media (max-width:700px){.row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}.row.head{display:none}.row .c-due{display:none}.row .c-amt{grid-column:2;grid-row:1}.row .c-send{grid-column:1/-1;grid-row:3}.row .c-lang{grid-column:1;grid-row:2}.row .c-act{grid-column:2;grid-row:2;text-align:right}}
+.ls{display:inline-flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden}.ls button{background:var(--surface2);border:none;color:var(--text3);font:700 10px var(--mono);padding:6px 8px}.ls button.on{background:var(--red);color:#fff}
+.row.dim>div:not(.c-act){opacity:.4}
 .name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acct{font-family:var(--mono);font-size:10px;color:var(--text4)}
 .r{text-align:right}
@@ -140,7 +142,7 @@ const mdy=s=>{const m=String(s||"").match(/^(\d+)\/(\d+)\/(\d+)$/);return m?new 
 const todayD=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const lateDays=c=>{const d=mdy(c.due);return d?Math.round((todayD()-d)/864e5):null};
 const d10=s=>String(s||"").replace(/\D/g,"").slice(-10);
-let S={customers:null,cust:{},langs:{},offs:{},phones:{}},C=[],filt={grp:"all",lang:"all",q:""},selId=null;
+const keep=new Set();let S={customers:null,cust:{},langs:{},offs:{},phones:{}},C=[],filt={grp:"all",lang:"all",q:""},selId=null;
 
 function build(){
   const rows=(S.customers&&S.customers.rows)||[];
@@ -177,9 +179,12 @@ function render(){
   <div class="seg" id="seg"><button type="button" data-lang="all" class="on">All</button><button type="button" data-lang="EN">EN</button><button type="button" data-lang="ES">ES</button></div><span class="acct" id="count"></span></div>
   <section class="list" id="list"></section>`;
   $("#q").oninput=e=>{filt.q=e.target.value;list()};
-  $("#seg").onclick=e=>{const b=e.target.closest("button");if(!b)return;document.querySelectorAll("#seg button").forEach(x=>x.classList.toggle("on",x===b));filt.lang=b.dataset.lang;list()};
-  $("#tiles").onclick=e=>{const t=e.target.closest(".tile");if(!t)return;filt.grp=t.dataset.g;render()};
-  $("#list").onclick=e=>{const r=e.target.closest(".row[data-id]");if(r)openPanel(r.dataset.id)}}
+  $("#seg").onclick=e=>{const b=e.target.closest("button");if(!b)return;document.querySelectorAll("#seg button").forEach(x=>x.classList.toggle("on",x===b));filt.lang=b.dataset.lang;keep.clear();list();sendbar()};
+  $("#tiles").onclick=e=>{const t=e.target.closest(".tile");if(!t)return;filt.grp=t.dataset.g;keep.clear();render()};
+  $("#list").onclick=e=>{const r=e.target.closest(".row[data-id]");if(!r)return;const c=C.find(x=>x.id===r.dataset.id);
+    const lb=e.target.closest(".ls button");if(lb){if(lb.dataset.l!==c.lang){keep.add(c.id);save(c,null,{lang:lb.dataset.l})}return}
+    if(e.target.closest(".c-act"))return;openPanel(c.id)};
+  $("#list").onchange=e=>{const x=e.target.closest(".act");if(!x)return;const c=C.find(y=>y.id===x.closest(".row").dataset.id);keep.add(c.id);setActive(c,x.checked)}}
   const at=S.customers.at?new Date(S.customers.at):null;
   $("#note").innerHTML=`Frazer export${S.customers.file?" <b>"+esc(S.customers.file)+"</b>":""} uploaded ${at?at.toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):""} · ${C.length} accounts. Upload a fresh one each morning before sending.`;
   tiles();list();sendbar();if(selId)panel()}
@@ -191,22 +196,23 @@ function tiles(){
   $("#tiles").innerHTML=h}
 function rows(){const q=filt.q.toLowerCase();
   return C.filter(c=>{
-    if(filt.grp==="off"){if(!inactive(c))return false}else{if(inactive(c))return false;if(filt.grp!=="all"&&c.grp!==filt.grp)return false}
+    if(!keep.has(c.id)){if(filt.grp==="off"){if(!inactive(c))return false}else{if(inactive(c))return false;if(filt.grp!=="all"&&c.grp!==filt.grp)return false}}
     if(filt.lang!=="all"&&c.lang!==filt.lang)return false;
     return !q||(nm(c)+" "+c.id+" "+Object.values(c.phones).join(" ")+" "+c.car+" "+c.vin6).toLowerCase().includes(q)})
   .sort((a,b)=>b.days-a.days||nm(a).localeCompare(nm(b)))}
 function list(){const rs=rows();
-  let h=`<div class="row head"><div>Customer</div><div>Lang</div><div>Next due</div><div class="r">Amount due</div><div>Group · today</div></div>`;
+  let h=`<div class="row head"><div>Customer</div><div>Lang</div><div>Next due</div><div class="r">Amount due</div><div>Group · today</div><div>Active</div></div>`;
   if(!rs.length)h+=`<div class="row" style="cursor:default;color:var(--text3)">No customers match.</div>`;
   for(const c of rs){const p=plan(c),nu=numbers(c),g=GROUPS[c.grp];
     const amt=c.past>0?`<span class="${c.days>0?"late":""}">${money(c.past)}</span>${c.days>0?`<div class="acct">${c.days} days late</div>`:""}`:c.past<0?`<span class="okc">${money(-c.past)}</span><div class="acct">paid ahead</div>`:`<span style="color:var(--text3)">—</span>`;
-    h+=`<div class="row ${c.id===selId?"sel":""}" data-id="${c.id}" tabindex="0" role="button">
+    h+=`<div class="row ${c.id===selId?"sel":""} ${inactive(c)?"dim":""}" data-id="${c.id}" tabindex="0" role="button">
       <div style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${nu.use?esc(nu.use.v)+(nu.use.k!=="cell"?" ("+nu.use.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'}</div></div>
-      <div class="c-lang"><span class="lang">${c.lang}</span></div>
+      <div class="c-lang"><span class="ls">${["EN","ES"].map(l=>`<button type="button" data-l="${l}" class="${c.lang===l?"on":""}" aria-label="${l==="EN"?"English":"Spanish"}">${l}</button>`).join("")}</span></div>
       <div class="c-due num" style="font-size:12px">${esc(c.due||"No due date")}<div class="acct">${esc(c.sched||"")}</div></div>
       <div class="c-amt r num">${amt}</div>
       <div class="c-send">${inactive(c)?'<span class="pill g-off">Inactive</span>':`<span class="pill ${g.cls}">${g.label}</span>${c.manual?'<span class="acct"> by hand</span>':""}`}
-        <div class="sendnote ${p.group?"yes":"no"}">${p.group?"✓ "+p.label+" · "+money(p.amount):esc(p.no)}</div></div></div>`}
+        <div class="sendnote ${p.group?"yes":"no"}">${p.group?"✓ "+p.label+" · "+money(p.amount):esc(p.no)}</div></div>
+      <div class="c-act"><input type="checkbox" class="sw act" ${inactive(c)?"":"checked"} aria-label="Active"></div></div>`}
   $("#list").innerHTML=h;$("#count").textContent=rs.length+" shown"}
 function sendList(){return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
 function sendbar(){const L=sendList(),sb=$("#sendbar");sb.hidden=false;
@@ -243,9 +249,10 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
   $("#pClose").onclick=closePanel;
   $("#panel").querySelectorAll(".sw").forEach(sw=>sw.onchange=()=>save(c,{on:PH.map(x=>x[0]).filter(k=>{const e=$("#panel .sw[data-k='"+k+"']");return e?e.checked:c.on.includes(k)})}));
   $("#fLang").onchange=e=>save(c,null,{lang:e.target.value});
-  $("#fStat").onchange=e=>{const v=e.target.value;if(v==="inactive")save(c,{status:null},{off:true});else save(c,{status:autoInactive(c)?"active":null},{off:false})};
+  $("#fStat").onchange=e=>setActive(c,e.target.value==="active");
   $("#fGrp").onchange=e=>{const v=e.target.value;save(c,v==="ach"?{ach:true,grp:null}:{ach:null,grp:v===ag?null:v})};
   ["#fExtra","#fMin"].forEach(s=>{const e=$(s);if(e)e.onchange=()=>save(c,{[s==="#fExtra"?"extra":"min"]:e.value===""?null:+e.value})})}
+function setActive(c,on){if(on)save(c,{status:autoInactive(c)?"active":null},{off:false});else save(c,{status:null},{off:true})}
 async function save(c,patch,other={}){
   try{
     if(patch){const d=await api("/api/cust",{id:c.id,patch});if(Object.keys(d.cust).length)S.cust[c.id]=d.cust;else delete S.cust[c.id]}
