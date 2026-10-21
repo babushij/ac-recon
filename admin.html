@@ -2096,6 +2096,7 @@ function buildSidebar(){
     {id:'gasreceipts',label:'Gas receipts',icon:filingIcon(),badge:((GAS.charges&&GAS.charges.length)||0)+((GAS.misc&&GAS.misc.length)||0)},
     {id:'frazer',label:'Send to Frazer',icon:filingIcon(),badge:(FRZ.loaded&&FRZ.rows.length)||0},
     {id:'auction',label:'Auction import',icon:carIcon()},
+    {id:'collections',label:'Collections (WhatsApp)',icon:saleIcon(),url:'https://ac-collections.babushij.workers.dev/admin'},
     {id:'cores',label:'Cores',icon:coreIcon(),badge:overdueCoreCount()||openCoreCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
     {id:'board',label:'Shop board (TV)',icon:tvIcon()},
@@ -2145,7 +2146,7 @@ function buildSidebar(){
     d.className='sb-item'+(ST.view===item.id?' active':'');
     const badgeHtml=item.badge?`<span class="sb-badge">${item.badge}</span>`:'';
     d.innerHTML=`<svg class="sb-icon" viewBox="0 0 16 16" fill="none">${item.icon}</svg>${item.label}${badgeHtml}`;
-    d.onclick=()=>{if(item.id==='mechdash')MD.car=null;ST.view=item.id;closeSidebar();render()};
+    d.onclick=()=>{if(item.url){window.open(item.url,'_blank','noopener');closeSidebar();return;}if(item.id==='mechdash')MD.car=null;ST.view=item.id;closeSidebar();render()};
     navEl.appendChild(d);
   });
 
@@ -7819,7 +7820,7 @@ function aucDetail(c,esc,money,btn){
 }
 // Condition report + bill of sale card on a car's Overview tab.
 function aucOverviewCard(v){
-  const cr=v.conditionReport,bos=v.auctionDocs&&v.auctionDocs.bos;if(!cr&&!bos)return '';
+  const cr=v.conditionReport,bos=ST.role==='manager'&&v.auctionDocs&&v.auctionDocs.bos;if(!cr&&!bos)return '';
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const b='border-radius:8px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit';
   const src=(cr&&cr.source)||(v.auctionDocs&&v.auctionDocs.site)||'Auction';
