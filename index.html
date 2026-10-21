@@ -2096,7 +2096,7 @@ function buildSidebar(){
     {id:'gasreceipts',label:'Gas receipts',icon:filingIcon(),badge:((GAS.charges&&GAS.charges.length)||0)+((GAS.misc&&GAS.misc.length)||0)},
     {id:'frazer',label:'Send to Frazer',icon:filingIcon(),badge:(FRZ.loaded&&FRZ.rows.length)||0},
     {id:'auction',label:'Auction import',icon:carIcon()},
-    {id:'collections',label:'Collections (WhatsApp)',icon:saleIcon(),url:'https://ac-collections.babushij.workers.dev/admin'},
+    {id:'collections',label:'Collections (WhatsApp)',icon:saleIcon()},
     {id:'cores',label:'Cores',icon:coreIcon(),badge:overdueCoreCount()||openCoreCount()},
     {id:'digest',label:'Daily digest',icon:sunIcon()},
     {id:'board',label:'Shop board (TV)',icon:tvIcon()},
@@ -2234,6 +2234,7 @@ function renderContent(){
     case 'toinstall':    renderToInstall(c);break;
     case 'frazer':       renderFrazer(c);break;
     case 'auction':      renderAuction(c);break;
+    case 'collections':  renderCollections(c);break;
     case 'filing':       renderFiling(c);break;
     case 'gasreceipts':  renderGasReceipts(c);break;
     case 'mechdash':     renderMechDash(c);break;
@@ -7735,6 +7736,12 @@ window.aucPrintAll=async()=>{
   }catch(e){if(w)w.close();console.warn(e);toast('Could not combine them — opening each one instead','err');urls.forEach(u=>window.open(u,'_blank','noopener'));}
 };
 
+// Collections (WhatsApp bot): its own page, shown inside AC Recon
+function renderCollections(c){
+  setTopbar('Collections','<button class="btn-ghost" onclick="window.open(\'collections.html\',\'_blank\')">Open full screen</button>');
+  if(ST.role!=='manager'){c.innerHTML='<div style="color:#9aa3b8;padding:20px">Managers only.</div>';return;}
+  c.innerHTML='<iframe src="collections.html" title="Collections" style="display:block;width:100%;height:calc(100vh - 120px);min-height:520px;border:0;border-radius:12px;background:#14213d"></iframe>';
+}
 function renderAuction(c){
   setTopbar('Auction import','');
   if(ST.role!=='manager'){c.innerHTML='<div style="color:#9aa3b8;padding:20px">Managers only.</div>';return;}

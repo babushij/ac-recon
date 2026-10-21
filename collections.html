@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AC Collections</title>
+<style>
+:root{
+  --red:#C8102E;--red-hover:#a50d26;--red-dim:#23386a;
+  --bg:#14213d;--surface:#0f1a31;--surface2:#1c2b4d;--surface3:#233559;
+  --border:#2b3d68;--border2:#364b7d;--border3:#445a91;
+  --text:#f1f5ff;--text2:#c3cfe8;--text3:#9fb0d6;--text4:#7f91bb;
+  --ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--ach:#60a5fa;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI','Helvetica Neue',Arial,sans-serif;
+  --mono:'SF Mono','Fira Code','Cascadia Code','Courier New',monospace;
+  --r-md:8px;--r-lg:12px;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased;margin:0}
+button,input,select{font-family:var(--font)}button{cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.topbar{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:8px;margin-right:auto}
+.logo-dot{width:7px;height:7px;background:var(--red);border-radius:1px}
+.logo-mark{font-weight:800;letter-spacing:3px;font-size:15px;text-transform:uppercase}
+.logo-sub{font-size:9px;letter-spacing:2.5px;color:var(--text3);text-transform:uppercase;font-weight:700}
+.embedded .logo-mark{display:none}
+.btn-ghost{background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-size:11px;font-weight:600;padding:8px 12px;border-radius:var(--r-md)}
+.btn-ghost:hover{border-color:var(--border3);color:var(--text);background:var(--surface3)}
+.btn-red{background:var(--red);border:none;color:#fff;font-size:11px;font-weight:700;padding:9px 14px;border-radius:var(--r-md);letter-spacing:.5px;text-transform:uppercase}
+.btn-red:hover{background:var(--red-hover)}.btn-red:disabled,.btn-ghost:disabled{opacity:.45;cursor:default}
+main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.note{font-size:11px;color:var(--text3);border:1px dashed var(--border2);border-radius:var(--r-md);padding:8px 12px}
+.tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+@media (max-width:700px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.tile{background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--c,var(--border2));border-radius:var(--r-lg);padding:11px 12px;text-align:left;color:var(--text)}
+.tile:hover{background:var(--surface2)}.tile.on{background:var(--red-dim);border-color:var(--c,var(--red))}
+.tile-val{font-size:24px;font-weight:800;line-height:1;letter-spacing:-.5px}
+.tile-lbl{font-size:9px;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;font-weight:700;margin-top:4px}
+.tile-sub{font-size:10px;color:var(--text4);margin-top:2px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.toolbar input{flex:1;min-width:180px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:9px 12px;color:var(--text);font-size:13px}
+.seg{display:flex;border:1px solid var(--border2);border-radius:var(--r-md);overflow:hidden}
+.seg button{background:var(--surface2);border:none;color:var(--text3);font-size:10px;font-weight:700;letter-spacing:.8px;padding:8px 10px;text-transform:uppercase}
+.seg button.on{background:var(--red);color:#fff}
+.list{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(0,1.6fr) 50px 100px 110px 150px;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.row:last-child{border-bottom:none}.row:hover{background:var(--surface2)}
+.row.sel{background:var(--red-dim);box-shadow:inset 2px 0 0 var(--red)}
+.row.head{cursor:default;background:var(--surface2);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text3);text-transform:uppercase;padding-block:8px}
+@media (max-width:700px){.row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}.row.head{display:none}.row .c-lang,.row .c-due{display:none}.row .c-amt{grid-column:2;grid-row:1}.row .c-send{grid-column:1/-1}}
+.name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct{font-family:var(--mono);font-size:10px;color:var(--text4)}
+.r{text-align:right}
+.pill{display:inline-flex;align-items:center;font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;padding:3px 7px;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.g-ach{color:var(--ach)}.g-cur{color:var(--ok)}.g-30{color:var(--warn)}.g-60{color:var(--bad)}.g-off{color:var(--text4)}
+.lang{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;background:var(--surface3);color:var(--text2)}
+.late{color:var(--bad);font-weight:700}.okc{color:var(--ok);font-weight:700}
+.sendnote{font-size:10px;color:var(--text3);margin-top:3px}.sendnote.yes{color:var(--ok)}.sendnote.no{color:var(--text4)}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;opacity:0;pointer-events:none;transition:opacity .18s}
+.scrim.show{opacity:1;pointer-events:auto}
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--surface);border-left:1px solid var(--border);z-index:41;transform:translateX(100%);transition:transform .22s;display:flex;flex-direction:column}
+.panel.show{transform:none}
+.p-head{padding:14px 16px;border-bottom:1px solid var(--border);border-top:2px solid var(--red);display:flex;gap:10px;align-items:flex-start}
+.p-head h2{margin:0;font-size:16px;font-weight:800}
+.p-close{margin-left:auto;background:none;border:none;color:var(--text3);font-size:20px;padding:4px 8px}
+.p-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.fact{background:var(--surface2);padding:9px 10px}.fact b{display:block;font-size:16px;font-weight:800}
+.fact span{font-size:8px;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;font-weight:700}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.lbl{font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.field select,.field input:not(.sw){background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 12px;color:var(--text);font-size:14px;width:100%}
+.hint{font-size:11px;color:var(--text4);line-height:1.4}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.money{position:relative}.money::before{content:"$";position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)}.money input{padding-left:24px!important}
+.msg{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-lg) var(--r-lg) var(--r-lg) 3px;padding:11px 13px;font-size:13px;line-height:1.55}
+.msg b{color:#ff6b81}
+.rule{font-size:11px;color:var(--text2);background:var(--surface3);border-radius:var(--r-md);padding:9px 11px;line-height:1.45}
+.nums{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.num-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);border-bottom:1px solid var(--border);cursor:pointer}
+.num-row:last-child{border-bottom:none}.num-row b{display:block;font-size:12px}
+.num-row .acct{font-size:12px;display:block}.num-row.dead .acct{text-decoration:line-through}
+.badge{margin-left:auto;font-size:8px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;border:1px solid currentColor;border-radius:3px;padding:2px 5px;white-space:nowrap}
+.sw{appearance:none;-webkit-appearance:none;width:36px;height:20px;border-radius:10px;background:var(--border3);position:relative;cursor:pointer;flex-shrink:0;margin:0}
+.num-row > span:first-child+.sw{margin-left:auto}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.sw:checked{background:var(--ok)}.sw:checked::after{transform:translateX(16px)}
+.sendbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--border);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.sendbar .in{max-width:1100px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sendbar .what{margin-right:auto;font-size:12px;color:var(--text2)}.sendbar .what b{color:var(--text);font-size:15px}
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .18s}
+.modal.show{opacity:1;pointer-events:auto}
+.m-box{background:var(--surface);border:1px solid var(--border2);border-top:2px solid var(--red);border-radius:var(--r-lg);width:min(640px,100%);max-height:90vh;display:flex;flex-direction:column}
+.m-box h3{margin:0;padding:14px 16px;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--border)}
+.m-body{padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.m-body>*{flex-shrink:0}
+.m-foot{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap}
+.drop{display:block;cursor:pointer;border:1.5px dashed var(--border3);border-radius:var(--r-lg);padding:22px;text-align:center;color:var(--text3);font-size:12px}
+.drop b{display:block;color:var(--text);font-size:14px;margin-bottom:4px}
+.diff,.res{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.d-row{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);font-size:12px}
+.d-row:last-child{border-bottom:none}.d-n{font-weight:800;font-size:16px;min-width:28px}
+.d-row small{display:block;color:var(--text4);font-size:11px;margin-top:2px}
+.st-sent,.st-would{color:var(--ok)}.st-held{color:var(--warn)}.st-skipped,.st-failed{color:var(--bad)}
+.toast{position:fixed;left:50%;bottom:90px;transform:translate(-50%,20px);background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:9px 16px;border-radius:var(--r-md);font-size:12px;font-weight:600;opacity:0;transition:all .2s;z-index:60;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.gate{max-width:380px;margin:60px auto;background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--red);border-radius:var(--r-lg);padding:20px;display:flex;flex-direction:column;gap:12px}
+</style></head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="logo-dot"></span><div><div class="logo-mark">AC Collections</div><div class="logo-sub" id="sub">WhatsApp payment bot</div></div></div>
+  <button class="btn-ghost" id="logBtn" type="button">Send history</button>
+  <button class="btn-red" id="uploadBtn" type="button">Upload Frazer export</button>
+</header>
+<main id="main"></main>
+<div class="sendbar" id="sendbar" hidden><div class="in">
+  <div class="what" id="what"></div>
+  <button class="btn-ghost" id="dryBtn" type="button">Dry run</button>
+  <button class="btn-ghost" id="testBtn" type="button">Test to my phone</button>
+  <button class="btn-red" id="sendBtn" type="button">Send</button>
+</div></div>
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-label="Customer details"></aside>
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="m-box"><h3 id="mTitle"></h3><div class="m-body" id="mBody"></div><div class="m-foot" id="mFoot"></div></div></div>
+<div class="toast" id="toast"></div>
+<script>
+const API=new URLSearchParams(location.search).get("api")||"https://ac-collections.babushij.workers.dev";
+if(window.top!==window)document.body.classList.add("embedded");
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const money=n=>(n<0?"-":"")+"$"+Math.abs(+n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const nm=c=>c.first?c.first+" "+c.last:c.last;
+function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),2400)}
+let KEY="";try{KEY=localStorage.getItem("acColKey")||""}catch(e){}
+const api=(p,b)=>fetch(API+p,{method:b?"POST":"GET",headers:{"x-admin-key":KEY,"content-type":"application/json"},body:b?JSON.stringify(b):undefined}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(d.error||("Error "+r.status));e.status=r.status;throw e}return d});
+
+/* ---- groups & rules ---- */
+const GROUPS={cur:{label:"Current",cls:"g-cur",c:"var(--ok)",sub:"0–30 days"},"30":{label:"30–60",cls:"g-30",c:"var(--warn)",sub:"31–60 days"},"60":{label:"60–90+",cls:"g-60",c:"var(--bad)",sub:"61–180 days"},ach:{label:"ACH",cls:"g-ach",c:"var(--ach)",sub:"Autopay · no messages"}};
+const PH=[["cell","Signer cell"],["home","Signer home"],["work","Signer work"],["co_other","Cosigner cell"],["co_home","Cosigner home"],["co_work","Cosigner work"]];
+const autoGrp=d=>d<=30?"cur":d<=60?"30":"60";
+const mdy=s=>{const m=String(s||"").match(/^(\d+)\/(\d+)\/(\d+)$/);return m?new Date(+m[3],m[1]-1,+m[2]):null};
+const todayD=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
+const lateDays=c=>{const d=mdy(c.due);return d?Math.round((todayD()-d)/864e5):null};
+const d10=s=>String(s||"").replace(/\D/g,"").slice(-10);
+let S={customers:null,cust:{},langs:{},offs:{},phones:{}},C=[],filt={grp:"all",lang:"all",q:""},selId=null;
+
+function build(){
+  const rows=(S.customers&&S.customers.rows)||[];
+  C=rows.map(r=>{const k=S.cust[r.id]||{};
+    const grp=k.ach?"ach":(k.grp||autoGrp(r.days));
+    return {...r,k,grp,manual:!!k.grp,lang:S.langs[r.id]||(r.first?"EN":"ES"),on:k.on||PH.map(p=>p[0]).filter(x=>r.phones[x])}});
+}
+const autoInactive=c=>c.days>180||!c.due;
+const inactive=c=>!!S.offs[c.id]||(autoInactive(c)&&c.k.status!=="active");
+function numbers(c){const info=S.phones[c.id]||{},bad=new Set(info.bad||[]),seen=new Set(),out=[];
+  for(const [k,l] of PH){const v=c.phones[k];if(!v)continue;const n=d10(v);const dup=seen.has(n);seen.add(n);out.push({k,l,v,n,dup,bad:bad.has(n),on:c.on.includes(k)})}
+  const usable=out.filter(p=>p.on&&!p.bad&&!p.dup&&p.n.length===10);
+  const use=usable.find(p=>p.n===info.good)||usable[0]||null;
+  return {all:out,use,good:info.good}}
+// What happens to this customer on today's send
+function plan(c){
+  if(inactive(c))return {no:"Inactive"};
+  if(c.grp==="ach")return {no:"ACH autopay"};
+  const nu=numbers(c);
+  if(!nu.use)return {no:nu.all.some(p=>p.bad)?"No WhatsApp on any number":"No number switched on"};
+  if(c.grp==="cur"){const L=lateDays(c);
+    if(!(c.past>0))return {no:c.past<0?"Paid ahead":"Nothing owed"};
+    if(L===null||L<0)return {no:"Not due yet"};
+    return {group:L===0?"cur":"miss",amount:c.past,days:L,to:nu.use,label:L===0?"Due today":"Missed · every 2 days"}}
+  const amount=+c.k.extra?c.pay+(+c.k.extra):(c.past>0?c.past:c.pay);
+  return {group:c.grp,amount,days:c.days,to:nu.use,label:GROUPS[c.grp].label+" reminder"}}
+
+/* ---- render ---- */
+function render(){
+  if(!KEY)return gate();
+  if(!S.customers){$("#sendbar").hidden=true;$("#main").innerHTML=`<div class="gate"><b>No customers yet</b><div class="hint">Upload today's Frazer BHPH export to load customers. Your language, status, ACH and number settings are kept between uploads.</div><button class="btn-red" onclick="openUpload()">Upload Frazer export</button></div>`;return}
+  if(!$("#tiles")){$("#main").innerHTML=`<div class="note" id="note"></div><section class="tiles" id="tiles"></section>
+  <div class="toolbar"><input id="q" type="search" placeholder="Search name, account, phone, vehicle or VIN" aria-label="Search customers">
+  <div class="seg" id="seg"><button type="button" data-lang="all" class="on">All</button><button type="button" data-lang="EN">EN</button><button type="button" data-lang="ES">ES</button></div><span class="acct" id="count"></span></div>
+  <section class="list" id="list"></section>`;
+  $("#q").oninput=e=>{filt.q=e.target.value;list()};
+  $("#seg").onclick=e=>{const b=e.target.closest("button");if(!b)return;document.querySelectorAll("#seg button").forEach(x=>x.classList.toggle("on",x===b));filt.lang=b.dataset.lang;list()};
+  $("#tiles").onclick=e=>{const t=e.target.closest(".tile");if(!t)return;filt.grp=t.dataset.g;render()};
+  $("#list").onclick=e=>{const r=e.target.closest(".row[data-id]");if(r)openPanel(r.dataset.id)}}
+  const at=S.customers.at?new Date(S.customers.at):null;
+  $("#note").innerHTML=`Frazer export${S.customers.file?" <b>"+esc(S.customers.file)+"</b>":""} uploaded ${at?at.toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):""} · ${C.length} accounts. Upload a fresh one each morning before sending.`;
+  tiles();list();sendbar();if(selId)panel()}
+function tiles(){
+  const act=C.filter(c=>!inactive(c)),n=k=>act.filter(c=>c.grp===k).length,will=act.filter(c=>plan(c).group).length;
+  let h=`<button class="tile ${filt.grp==="all"?"on":""}" data-g="all" type="button" style="--c:var(--red)"><div class="tile-val num">${act.length}</div><div class="tile-lbl">All active</div><div class="tile-sub">${will} get a message today</div></button>`;
+  for(const k of ["cur","30","60","ach"])h+=`<button class="tile ${filt.grp===k?"on":""}" data-g="${k}" type="button" style="--c:${GROUPS[k].c}"><div class="tile-val num">${n(k)}</div><div class="tile-lbl">${GROUPS[k].label}</div><div class="tile-sub">${GROUPS[k].sub}</div></button>`;
+  h+=`<button class="tile ${filt.grp==="off"?"on":""}" data-g="off" type="button" style="--c:var(--text4)"><div class="tile-val num">${C.length-act.length}</div><div class="tile-lbl">Inactive</div><div class="tile-sub">Over 180 days or switched off</div></button>`;
+  $("#tiles").innerHTML=h}
+function rows(){const q=filt.q.toLowerCase();
+  return C.filter(c=>{
+    if(filt.grp==="off"){if(!inactive(c))return false}else{if(inactive(c))return false;if(filt.grp!=="all"&&c.grp!==filt.grp)return false}
+    if(filt.lang!=="all"&&c.lang!==filt.lang)return false;
+    return !q||(nm(c)+" "+c.id+" "+Object.values(c.phones).join(" ")+" "+c.car+" "+c.vin6).toLowerCase().includes(q)})
+  .sort((a,b)=>b.days-a.days||nm(a).localeCompare(nm(b)))}
+function list(){const rs=rows();
+  let h=`<div class="row head"><div>Customer</div><div>Lang</div><div>Next due</div><div class="r">Amount due</div><div>Group · today</div></div>`;
+  if(!rs.length)h+=`<div class="row" style="cursor:default;color:var(--text3)">No customers match.</div>`;
+  for(const c of rs){const p=plan(c),nu=numbers(c),g=GROUPS[c.grp];
+    const amt=c.past>0?`<span class="${c.days>0?"late":""}">${money(c.past)}</span>${c.days>0?`<div class="acct">${c.days} days late</div>`:""}`:c.past<0?`<span class="okc">${money(-c.past)}</span><div class="acct">paid ahead</div>`:`<span style="color:var(--text3)">—</span>`;
+    h+=`<div class="row ${c.id===selId?"sel":""}" data-id="${c.id}" tabindex="0" role="button">
+      <div style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${nu.use?esc(nu.use.v)+(nu.use.k!=="cell"?" ("+nu.use.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'}</div></div>
+      <div class="c-lang"><span class="lang">${c.lang}</span></div>
+      <div class="c-due num" style="font-size:12px">${esc(c.due||"No due date")}<div class="acct">${esc(c.sched||"")}</div></div>
+      <div class="c-amt r num">${amt}</div>
+      <div class="c-send">${inactive(c)?'<span class="pill g-off">Inactive</span>':`<span class="pill ${g.cls}">${g.label}</span>${c.manual?'<span class="acct"> by hand</span>':""}`}
+        <div class="sendnote ${p.group?"yes":"no"}">${p.group?"✓ "+p.label+" · "+money(p.amount):esc(p.no)}</div></div></div>`}
+  $("#list").innerHTML=h;$("#count").textContent=rs.length+" shown"}
+function sendList(){return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
+function sendbar(){const L=sendList(),sb=$("#sendbar");sb.hidden=false;
+  const where=filt.grp==="all"?"All active":filt.grp==="off"?"Inactive":GROUPS[filt.grp].label;
+  $("#what").innerHTML=L.length?`<b class="num">${L.length}</b> will get a message · ${where}${filt.lang!=="all"?" · "+filt.lang:""}${filt.q?" · search":""} <span class="acct">· each customer gets their own group's message</span>`:`Nothing to send in ${where}`;
+  ["#dryBtn","#testBtn","#sendBtn"].forEach(s=>$(s).disabled=!L.length);
+  $("#sendBtn").textContent=L.length?"Send "+L.length:"Send"}
+
+/* ---- customer panel ---- */
+function msgFor(c,p){if(!p.group)return null;const es=c.lang==="ES",n=c.first||c.last,b=t=>"<b>"+esc(t)+"</b>";
+  const head=(es?"Hola ":"Hi ")+b(n)+" · "+(es?"Cuenta ":"Account ")+b(c.id)+" · "+b(c.car)+" · VIN "+b(c.vin6)+"<br>";
+  const link="<br>"+(es?"Pague aquí: ":"Pay here: ")+b(es?"[link de pago]":"[payment link]");
+  if(p.group==="cur")return head+(es?"Su pago de ":"Your payment of ")+b(money(p.amount))+(es?" vence hoy, ":" is due today, ")+b(c.due)+"."+link;
+  if(p.group==="miss")return head+(es?"No hemos recibido su pago de ":"We haven't received your payment of ")+b(money(p.amount))+(es?" que venció el ":" that was due ")+b(c.due)+"."+link;
+  return head+(es?"Saldo vencido ":"Past due ")+b(money(c.past))+(es?" · pago acordado ":" · agreed payment ")+b(money(p.amount))+(p.group==="60"?" · "+b(c.days)+(es?" días de atraso":" days late"):"")+link}
+function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu=numbers(c),ag=autoGrp(c.days);
+  $("#panel").innerHTML=`<div class="p-head"><div style="min-width:0"><h2>${esc(nm(c))}</h2><div class="acct">#${c.id}${c.first?"":" · company account"}</div><div class="acct">${esc(c.car)}${c.vin6?" · VIN …"+esc(c.vin6):""} · last paid ${esc(c.lastpay||"—")}</div></div><button class="p-close" id="pClose" type="button" aria-label="Close">×</button></div>
+  <div class="p-body">
+    <div class="facts"><div class="fact"><b class="num">${money(c.pay)}</b><span>${esc(c.sched||"Payment")}</span></div>
+      <div class="fact"><b class="num ${c.days>0?"late":c.past<0?"okc":""}">${money(Math.abs(c.past))}</b><span>${c.past<0?"Paid ahead":"Amount due"}</span></div>
+      <div class="fact"><b class="num">${c.days}</b><span>Days late</span></div></div>
+    <div class="field"><span class="lbl">Numbers the bot tries, in order</span>
+      <div class="nums">${nu.all.map(x=>`<label class="num-row ${x.bad&&!x.dup?"dead":""}"><span style="min-width:0"><b>${x.l}</b><span class="acct">${esc(x.v)}</span></span>${x.dup?'<span class="badge" style="color:var(--text4)">Same number</span>':x.bad?'<span class="badge" style="color:var(--bad)">No WhatsApp</span>':nu.use&&x.k===nu.use.k?`<span class="badge" style="color:var(--ok)">${x.n===nu.good?"Works":"Next send"}</span>`:""}<input type="checkbox" class="sw" data-k="${x.k}" ${x.on?"checked":""} aria-label="Use ${x.l}"></label>`).join("")||'<div class="hint" style="padding:10px">No phone numbers in Frazer.</div>'}</div>
+      <div class="hint">When WhatsApp says a number can't receive, the bot moves to the next one the following day and remembers the one that works. Switch a number off to skip it.</div></div>
+    <div class="two"><div class="field"><label for="fStat">Status</label><select id="fStat"><option value="active" ${!inactive(c)?"selected":""}>Active</option><option value="inactive" ${inactive(c)?"selected":""}>Inactive${autoInactive(c)?" (auto)":""}</option></select></div>
+      <div class="field"><label for="fLang">Language</label><select id="fLang"><option value="EN" ${c.lang==="EN"?"selected":""}>English</option><option value="ES" ${c.lang==="ES"?"selected":""}>Español</option></select></div></div>
+    <div class="field"><label for="fGrp">Group</label><select id="fGrp">${["cur","30","60","ach"].map(k=>`<option value="${k}" ${c.grp===k?"selected":""}>${GROUPS[k].label}${k===ag?" (auto)":""}</option>`).join("")}</select>
+      <div class="hint">${c.grp==="ach"?"ACH autopay: no messages. Stays ACH on every upload.":c.manual?"Set by hand. Pick the (auto) group to go back to sorting by days late.":"Sorted by days late on each upload."}</div></div>
+    ${c.grp==="30"||c.grp==="60"?`<div class="two"><div class="field"><label for="fExtra">Catch-up extra</label><div class="money"><input id="fExtra" inputmode="decimal" value="${esc(c.k.extra||"")}" placeholder="0"></div></div>
+      <div class="field"><label for="fMin">Minimum to accept</label><div class="money"><input id="fMin" inputmode="decimal" value="${esc(c.k.min||"")}" placeholder="0"></div></div></div>
+      <div class="hint">${+c.k.extra?`Bot asks for ${money(c.pay)} + ${money(c.k.extra)} = <b>${money(c.pay+(+c.k.extra))}</b> instead of the full ${money(c.past)}.`:`No extra set: bot asks for the full amount due.`} Minimum is saved for automatic replies (not on yet).</div>`:""}
+    <div class="field"><span class="lbl">Today's send</span>${p.group?`<div class="msg">${msgFor(c,p)}</div><div class="hint">To ${esc(p.to.v)} (${p.to.l.toLowerCase()}) · ${p.label}</div>`:`<div class="rule">Nothing today: ${esc(p.no)}.</div>`}</div>
+  </div>`;
+  $("#pClose").onclick=closePanel;
+  $("#panel").querySelectorAll(".sw").forEach(sw=>sw.onchange=()=>save(c,{on:PH.map(x=>x[0]).filter(k=>{const e=$("#panel .sw[data-k='"+k+"']");return e?e.checked:c.on.includes(k)})}));
+  $("#fLang").onchange=e=>save(c,null,{lang:e.target.value});
+  $("#fStat").onchange=e=>{const v=e.target.value;if(v==="inactive")save(c,{status:null},{off:true});else save(c,{status:autoInactive(c)?"active":null},{off:false})};
+  $("#fGrp").onchange=e=>{const v=e.target.value;save(c,v==="ach"?{ach:true,grp:null}:{ach:null,grp:v===ag?null:v})};
+  ["#fExtra","#fMin"].forEach(s=>{const e=$(s);if(e)e.onchange=()=>save(c,{[s==="#fExtra"?"extra":"min"]:e.value===""?null:+e.value})})}
+async function save(c,patch,other={}){
+  try{
+    if(patch){const d=await api("/api/cust",{id:c.id,patch});if(Object.keys(d.cust).length)S.cust[c.id]=d.cust;else delete S.cust[c.id]}
+    if(other.lang){await api("/api/lang",{id:c.id,lang:other.lang});S.langs[c.id]=other.lang}
+    if("off" in other){await api("/api/off",{id:c.id,off:other.off});if(other.off)S.offs[c.id]=1;else delete S.offs[c.id]}
+    build();render();toast("Saved "+nm(c))
+  }catch(e){toast("Couldn't save: "+e.message)}}
+function openPanel(id){selId=id;panel();list();$("#panel").classList.add("show");$("#scrim").classList.add("show")}
+function closePanel(){selId=null;$("#panel").classList.remove("show");$("#scrim").classList.remove("show");if($("#list"))list()}
+
+/* ---- sending ---- */
+function modal(title,body,foot){$("#mTitle").textContent=title;$("#mBody").innerHTML=body;$("#mFoot").innerHTML=foot;$("#modal").classList.add("show")}
+const closeModal=()=>$("#modal").classList.remove("show");
+function payload(){return sendList().map(({c,p})=>({id:c.id,first:c.first,last:c.last,car:c.car,vin6:c.vin6,due:c.due,days:p.days,pastDue:c.past,pay:c.pay,amount:p.amount,group:p.group,lang:c.lang,
+  phone:p.to.v,phones:numbers(c).all.filter(x=>x.on).map(x=>({label:x.l.toLowerCase(),number:x.v}))}))}
+async function run(mode,extra={}){const list=payload();
+  modal(mode==="dry"?"Dry run":mode==="test"?"Test send":"Sending",'<div class="hint">Working…</div>',"");
+  try{const d=await api("/api/send",{mode,customers:list,origin:API,...extra});
+    const cnt=s=>d.results.filter(r=>r.status===s).length;
+    $("#mBody").innerHTML=`<div class="hint">${mode==="dry"?"Nothing was sent. This is what would happen.":mode==="test"?"Sent to your phone only, with $1 pay links.":"Done. Check WATI Campaigns for delivery."}</div>
+    <div class="diff"><div class="d-row"><span class="d-n st-sent">${cnt("sent")+cnt("would send")}</span>${mode==="dry"?"would send":"sent"}</div><div class="d-row"><span class="d-n st-held">${cnt("held")}</span>held (already messaged)</div><div class="d-row"><span class="d-n st-skipped">${cnt("skipped")+cnt("failed")}</span>skipped or failed</div></div>
+    <div class="res">${d.results.map(r=>`<div class="d-row"><div style="flex:1;min-width:0"><b>${esc(r.name)}</b> <span class="acct">#${r.id}</span><small>${r.template?esc(r.template)+" → "+esc(r.to)+(r.which?" ("+esc(r.which)+")":""):""}${r.reason?" "+esc(r.reason):""}</small></div><span class="st-${r.status.split(" ")[0]}" style="font-weight:700;font-size:11px;text-transform:uppercase">${esc(r.status)}</span></div>`).join("")}</div>`;
+    $("#mFoot").innerHTML='<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>';
+    if(mode==="live")load()
+  }catch(e){$("#mBody").innerHTML=`<div class="rule" style="color:var(--bad)">${esc(e.message)}</div>`;$("#mFoot").innerHTML='<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>'}}
+$("#dryBtn").onclick=()=>run("dry");
+$("#testBtn").onclick=()=>{let t="";try{t=localStorage.getItem("acColTest")||""}catch(e){}
+  modal("Test to my phone",`<div class="field"><label for="tNum">Your cell</label><input id="tNum" inputmode="tel" value="${esc(t)}" placeholder="513-555-1234"></div><div class="field"><label for="tCnt">How many messages</label><input id="tCnt" type="number" min="1" max="10" value="2"></div><div class="hint">Uses the first customers in the list, sends to your phone only, with $1 pay links.</div>`,
+  '<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button><button class="btn-red" type="button" id="tGo">Send test</button>');
+  $("#tGo").onclick=()=>{const n=$("#tNum").value;try{localStorage.setItem("acColTest",n)}catch(e){}run("test",{testNumber:n,testCount:$("#tCnt").value})}};
+$("#sendBtn").onclick=()=>{const L=sendList(),by=k=>L.filter(x=>x.p.group===k).length;
+  modal("Send to customers",`<div class="diff">${[["cur","Due today"],["miss","Missed payment"],["30","30–60 reminder"],["60","60–90+ reminder"]].map(([k,l])=>`<div class="d-row"><span class="d-n">${by(k)}</span>${l}</div>`).join("")}</div><div class="hint">WhatsApp messages go out now from 513-522-8600. Anyone already messaged today is held automatically. No sends on Sunday.</div>`,
+  `<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button><button class="btn-red" type="button" id="goLive">Send ${L.length} messages</button>`);
+  $("#goLive").onclick=()=>run("live")};
+$("#logBtn").onclick=async()=>{modal("Send history",'<div class="hint">Loading…</div>','<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>');
+  try{const log=await api("/api/log");$("#mBody").innerHTML=log.length?log.slice(0,15).map(l=>{const s=l.results.filter(r=>r.status==="sent").length;return `<div class="d-row"><div style="flex:1"><b>${new Date(l.at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</b> · ${l.mode}<small>${l.results.map(r=>esc(r.name)+" "+r.status).join(" · ")}</small></div><span class="d-n st-sent">${s}</span></div>`}).join(""):'<div class="hint">No sends yet.</div>'}catch(e){$("#mBody").innerHTML=esc(e.message)}};
+
+/* ---- Frazer upload ---- */
+function parseCSV(t){const out=[];let row=[],f="",q=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=ch}
+    else if(ch==='"')q=true;else if(ch===","){row.push(f);f=""}
+    else if(ch==="\n"||ch==="\r"){if(ch==="\r"&&t[i+1]==="\n")i++;row.push(f);out.push(row);row=[];f=""}else f+=ch}
+  if(f||row.length){row.push(f);out.push(row)}
+  const h=out.shift()||[];return out.filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,i)=>[k.trim(),(r[i]||"").trim()])))}
+const tc=s=>s.toLowerCase().replace(/\b\w/g,m=>m.toUpperCase());
+const vc=s=>s.split(" ").map(w=>w.length<=3&&/^[a-z]+$/i.test(w)?w.toUpperCase():w).join(" ");
+function fromRow(x){const co=!x["First Name"];return{id:x["Stock #"],first:co?"":tc(x["First Name"]),last:co?x["Last Name"]:tc(x["Last Name"]||""),
+  phones:Object.fromEntries([["cell","Cell Phone"],["home","Home Phone"],["work","Work Phone"],["co_other","Cobuyer Other Phone"],["co_home","Cobuyer Home Phone"],["co_work","Cobuyer Work Phone"]].map(([k,h])=>[k,x[h]||""]).filter(e=>e[1])),
+  pay:+x["Payment Amt"]||0,sched:tc((x["Pay Schedule"]||"").replace("BI-WEEKLY","Biweekly")),due:x["Current Date Due"]||"",days:Math.round(+x["Days past Due"]||0),past:+x["Current Due"]||0,lastpay:x["Last Pay Date"]||"",
+  vin6:(x["Last 6 VIN"]||"").replace(/^(\d{1,5})$/,m=>m.padStart(6,"0")),car:(x["Vehicle Year"]+" "+vc(tc(x["Vehicle Make"]||""))+" "+vc(tc(x["Vehicle Model"]||""))).trim()}}
+function openUpload(){modal("Upload Frazer export",`<label class="drop" for="fFile" id="drop"><b>Choose the Frazer BHPH export</b>CSV file</label><input type="file" id="fFile" accept=".csv,text/csv" hidden><div class="hint">Amounts, due dates and days late come from the new file. Language, status, ACH, numbers and catch-up amounts you set are kept.</div>`,'<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button>');
+  const read=file=>{const r=new FileReader();r.onload=()=>showDiff(r.result,file.name);r.readAsText(file)};
+  $("#fFile").onchange=e=>{if(e.target.files[0])read(e.target.files[0])};
+  const dz=$("#drop");dz.ondragover=e=>{e.preventDefault()};dz.ondrop=e=>{e.preventDefault();if(e.dataTransfer.files[0])read(e.dataTransfer.files[0])}}
+function showDiff(text,fname){const rs=parseCSV(text);
+  if(!rs.length||!("Stock #" in rs[0])||!("Days past Due" in rs[0])){$("#mBody").insertAdjacentHTML("beforeend",'<div class="rule" style="color:var(--bad)">That file doesn\'t look like the Frazer BHPH export (needs Stock #, Days past Due, Current Due).</div>');return}
+  const inc=rs.map(fromRow).filter(r=>r.id),old=new Map(C.map(c=>[c.id,c])),seen=new Set(inc.map(r=>r.id));
+  const added=inc.filter(r=>!old.has(r.id)),gone=C.filter(c=>!seen.has(c.id)),moved=inc.filter(r=>{const o=old.get(r.id);return o&&o.grp!=="ach"&&!o.manual&&autoGrp(r.days)!==autoGrp(o.days)});
+  const paid=inc.filter(r=>{const o=old.get(r.id);return o&&r.past<o.past});
+  const names=a=>a.slice(0,3).map(x=>esc(nm(x))).join(" · ")+(a.length>3?" · +"+(a.length-3)+" more":"");
+  const row=(n,col,t,sub)=>`<div class="d-row"><span class="d-n" style="color:${col}">${n}</span><div>${t}<small>${sub||"&nbsp;"}</small></div></div>`;
+  $("#mBody").innerHTML=`<div class="drop" style="padding:12px"><b>${esc(fname)}</b>${inc.length} accounts</div><div class="diff">
+    ${row(added.length,"var(--ok)","New customers",added.length?names(added):"None")}
+    ${row(paid.length,"var(--text)","Paid since last upload",paid.length?names(paid):"None")}
+    ${row(moved.length,"var(--warn)","Move to a different group",moved.length?names(moved):"None")}
+    ${row(gone.length,"var(--bad)","Not in this file",gone.length?names(gone)+" · dropped (paid off or removed)":"None")}</div>`;
+  $("#mFoot").innerHTML='<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button><button class="btn-red" type="button" id="mApply">Apply</button>';
+  $("#mApply").onclick=async()=>{try{await api("/api/upload",{rows:inc,file:fname});closeModal();await load();toast("Upload applied · "+inc.length+" accounts")}catch(e){toast("Upload failed: "+e.message)}}}
+$("#uploadBtn").onclick=()=>KEY?openUpload():gate();
+
+/* ---- key + load ---- */
+function gate(msg){$("#sendbar").hidden=true;$("#main").innerHTML=`<div class="gate"><b>Collections bot key</b><div class="hint">Enter the bot's admin key once on this device.</div><input id="kIn" type="password" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px" placeholder="Admin key">${msg?`<div class="hint" style="color:var(--bad)">${esc(msg)}</div>`:""}<button class="btn-red" id="kGo" type="button">Continue</button></div>`;
+  $("#kGo").onclick=()=>{KEY=$("#kIn").value.trim();try{localStorage.setItem("acColKey",KEY)}catch(e){}load()};$("#kIn").onkeydown=e=>{if(e.key==="Enter")$("#kGo").click()}}
+async function load(){if(!KEY)return gate();
+  try{S=await api("/api/state");build();render()}catch(e){if(e.status===401){KEY="";try{localStorage.removeItem("acColKey")}catch(x){}gate("Wrong key, try again.")}else $("#main").innerHTML=`<div class="gate"><b>Can't reach the bot</b><div class="hint">${esc(e.message)}</div><button class="btn-red" onclick="load()">Retry</button></div>`}}
+$("#scrim").onclick=closePanel;
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closePanel();closeModal()}});
+load();
+</script>
+</body></html>
