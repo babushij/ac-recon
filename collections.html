@@ -138,7 +138,19 @@ const api=(p,b)=>fetch(API+p,{method:b?"POST":"GET",headers:{"x-admin-key":KEY,"
 const GROUPS={cur:{label:"Current",cls:"g-cur",c:"var(--ok)",sub:"0–30 days"},"30":{label:"30–60",cls:"g-30",c:"var(--warn)",sub:"31–60 days"},"60":{label:"60–90+",cls:"g-60",c:"var(--bad)",sub:"61–180 days"},ach:{label:"ACH",cls:"g-ach",c:"var(--ach)",sub:"Autopay · no messages"}};
 const PH=[["cell","Signer cell"],["home","Signer home"],["work","Signer work"],["co_other","Cosigner cell"],["co_home","Cosigner home"],["co_work","Cosigner work"]];
 const autoGrp=d=>d<=30?"cur":d<=60?"30":"60";
-const mdy=s=>{const m=String(s||"").match(/^(\d+)\/(\d+)\/(\d+)$/);return m?new Date(+m[3],m[1]-1,+m[2]):null};
+const mdy=s=>{const m=String(s||"").match(/^(\d+)\/(\d+)\/(\d+)$/);return m?new Date(+m[3]<100?2000+(+m[3]):+m[3],m[1]-1,+m[2]):null};
+// Frazer writes 09/25/26 in newer exports; keep one format everywhere: 9/25/2026
+const normDate=s=>{const m=String(s||"").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);return m?(+m[1])+"/"+(+m[2])+"/"+(m[3].length===2?"20"+m[3]:m[3]):String(s||"").trim()};
+const toYMD=s=>{const d=mdy(normDate(s));return d?d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"):""};
+// Special Message: first lines are insurance/keys info; lines starting with a date ("10/1 ptp 400 on saturday") are notes, newest last
+function notesOf(c){const lines=String(c.note||"").split(/\r?\n/).map(l=>l.replace(/\s{2,}/g," ").trim()).filter(Boolean);
+  const dated=lines.filter(l=>/^\d{1,2}\/\d{1,2}\b/.test(l)),head=lines.filter(l=>!/^\d{1,2}\/\d{1,2}\b/.test(l));
+  const t0=todayD();
+  const fz=dated.map(t=>{const m=t.match(/^(\d{1,2})\/(\d{1,2})/);let d=new Date(t0.getFullYear(),m[1]-1,+m[2]);if(d>t0)d=new Date(t0.getFullYear()-1,m[1]-1,+m[2]);return {t,d,src:"Frazer"}});
+  const app=(c.k.notes||[]).map(n=>({t:n.text,d:new Date(n.at),src:"App"}));
+  const all=fz.concat(app).sort((a,b)=>b.d-a.d);
+  return {head,all,comments:[c.cm1,c.cm2].filter((v,i,a)=>v&&a.indexOf(v)===i)}}
+const latestNote=c=>notesOf(c).all[0]||null;
 const todayD=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const lateDays=c=>{const d=mdy(c.due);return d?Math.round((todayD()-d)/864e5):null};
 const d10=s=>String(s||"").replace(/\D/g,"").slice(-10);
@@ -163,11 +175,12 @@ const todayYMD=()=>ymd(todayD());
 const fmtYMD=s=>{const d=new Date(s+"T12:00:00");return d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
 const askAmt=c=>+c.k.extra&&c.days>30?c.pay+(+c.k.extra):(c.past>0?c.past:c.pay);
 const minAmt=c=>c.k.min!=null&&c.k.min!==""?+c.k.min:Math.ceil(askAmt(c)*90)/100;
-const openPromise=c=>{const p=c.k.promise;return p&&p.date>=todayYMD()?p:null};
+// The app's own promise wins; otherwise a future Promise Date from Frazer counts
+const openPromise=c=>{const p=c.k.promise;if(p&&p.date>=todayYMD())return p;return c.fpromise&&c.fpromise>=todayYMD()?{date:c.fpromise,amount:null,by:"frazer"}:null};
 function plan(c){
   if(inactive(c))return {no:"Inactive"};
   if(c.grp==="ach")return {no:"ACH autopay"};
-  const pr=openPromise(c);if(pr)return {no:"Promise "+fmtYMD(pr.date)+" · "+money(pr.amount),promise:true};
+  const pr=openPromise(c);if(pr)return {no:"Promise "+fmtYMD(pr.date)+(pr.amount?" · "+money(pr.amount):" (Frazer)"),promise:true};
   const nu=numbers(c);
   if(!nu.use)return {no:nu.all.some(p=>p.bad)?"No WhatsApp on any number":"No number switched on"};
   if(c.grp==="cur"){const L=lateDays(c);
@@ -213,7 +226,8 @@ function list(){const rs=rows();
   for(const c of rs){const p=plan(c),nu=numbers(c),g=GROUPS[c.grp];
     const amt=c.past>0?`<span class="${c.days>0?"late":""}">${money(c.past)}</span>${c.days>0?`<div class="acct">${c.days} days late</div>`:""}`:c.past<0?`<span class="okc">${money(-c.past)}</span><div class="acct">paid ahead</div>`:`<span style="color:var(--text3)">—</span>`;
     h+=`<div class="row ${c.id===selId?"sel":""} ${inactive(c)?"dim":""}" data-id="${c.id}" tabindex="0" role="button">
-      <div style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${nu.use?esc(nu.use.v)+(nu.use.k!=="cell"?" ("+nu.use.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'}</div></div>
+      <div style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${nu.use?esc(nu.use.v)+(nu.use.k!=="cell"?" ("+nu.use.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'}</div>
+      ${(()=>{const n=latestNote(c);return n?`<div class="acct" style="color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📝 ${esc(n.src==="App"?n.d.toLocaleDateString("en-US",{month:"numeric",day:"numeric"})+" "+n.t:n.t)}</div>`:""})()}</div>
       <div class="c-lang"><span class="ls">${["EN","ES"].map(l=>`<button type="button" data-l="${l}" class="${c.lang===l?"on":""}" aria-label="${l==="EN"?"English":"Spanish"}">${l}</button>`).join("")}</span></div>
       <div class="c-due num" style="font-size:12px">${esc(c.due||"No due date")}<div class="acct">${esc(c.sched||"")}</div></div>
       <div class="c-amt r num">${amt}</div>
@@ -236,11 +250,18 @@ function msgFor(c,p){if(!p.group)return null;const es=c.lang==="ES",n=c.first||c
   if(p.group==="miss")return head+(es?"No hemos recibido su pago de ":"We haven't received your payment of ")+b(money(p.amount))+(es?" que venció el ":" that was due ")+b(c.due)+"."+link;
   return head+(es?"Saldo vencido ":"Past due ")+b(money(c.past))+(es?" · pago acordado ":" · agreed payment ")+b(money(p.amount))+(p.group==="60"?" · "+b(c.days)+(es?" días de atraso":" days late"):"")+link}
 function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu=numbers(c),ag=autoGrp(c.days);
-  $("#panel").innerHTML=`<div class="p-head"><div style="min-width:0"><h2>${esc(nm(c))}</h2><div class="acct">#${c.id}${c.first?"":" · company account"}</div><div class="acct">${esc(c.car)}${c.vin6?" · VIN …"+esc(c.vin6):""} · last paid ${esc(c.lastpay||"—")}</div></div><button class="p-close" id="pClose" type="button" aria-label="Close">×</button></div>
+  $("#panel").innerHTML=`<div class="p-head"><div style="min-width:0"><h2>${esc(nm(c))}</h2><div class="acct">#${c.id}${c.first?"":" · company account"}</div><div class="acct">${esc(c.car)}${c.vin6?" · VIN …"+esc(c.vin6):""} · last paid ${esc(c.lastpay||"—")}${c.lastamt?" · "+money(c.lastamt):""}</div></div><button class="p-close" id="pClose" type="button" aria-label="Close">×</button></div>
   <div class="p-body">
     <div class="facts"><div class="fact"><b class="num">${money(c.pay)}</b><span>${esc(c.sched||"Payment")}</span></div>
       <div class="fact"><b class="num ${c.days>0?"late":c.past<0?"okc":""}">${money(Math.abs(c.past))}</b><span>${c.past<0?"Paid ahead":"Amount due"}</span></div>
       <div class="fact"><b class="num">${c.days}</b><span>Days late</span></div></div>
+    ${(()=>{const n=notesOf(c),f=x=>x.src==="App"?x.d.toLocaleDateString("en-US",{month:"numeric",day:"numeric"})+" "+esc(x.t)+' <span class="acct">· app</span>':esc(x.t);
+      return `<div class="field"><span class="lbl">Notes</span>
+      ${n.all.length?`<div class="msg" style="border-left:3px solid var(--warn)"><span class="lbl" style="color:var(--warn)">Latest</span><br>${f(n.all[0])}</div>`:'<div class="hint">No notes yet.</div>'}
+      ${n.all.length>1?`<details><summary class="hint" style="cursor:pointer">${n.all.length-1} older note${n.all.length>2?"s":""}</summary><div class="hint" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;color:var(--text2)">${n.all.slice(1).map(x=>"<div>"+f(x)+"</div>").join("")}</div></details>`:""}
+      ${n.head.length||n.comments.length?`<div class="hint">${n.head.concat(n.comments).map(esc).join(" · ")}</div>`:""}
+      ${c.fpromise&&!(c.k.promise&&c.k.promise.date>=todayYMD())?`<div class="hint" style="color:var(--warn)">Frazer promise date: ${fmtYMD(c.fpromise)}${c.fpromise<todayYMD()?" (passed)":""}</div>`:""}
+      <div style="display:flex;gap:8px"><input id="fNote" placeholder="Add a note (saved in the app)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px"><button class="btn-ghost" id="addNote" type="button">Add</button></div></div>`})()}
     <div class="field"><span class="lbl">Numbers the bot tries, in order</span>
       <div class="nums">${nu.all.map(x=>`<label class="num-row ${x.bad&&!x.dup?"dead":""}"><span style="min-width:0"><b>${x.l}</b><span class="acct">${esc(x.v)}</span></span>${x.dup?'<span class="badge" style="color:var(--text4)">Same number</span>':x.bad?'<span class="badge" style="color:var(--bad)">No WhatsApp</span>':nu.use&&x.k===nu.use.k?`<span class="badge" style="color:var(--ok)">${x.n===nu.good?"Works":"Next send"}</span>`:""}<input type="checkbox" class="sw" data-k="${x.k}" ${x.on?"checked":""} aria-label="Use ${x.l}"></label>`).join("")||'<div class="hint" style="padding:10px">No phone numbers in Frazer.</div>'}</div>
       <div class="hint">When WhatsApp says a number can't receive, the bot moves to the next one the following day and remembers the one that works. Switch a number off to skip it.</div></div>
@@ -262,6 +283,8 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
   $("#fLang").onchange=e=>save(c,null,{lang:e.target.value});
   $("#fStat").onchange=e=>setActive(c,e.target.value==="active");
   $("#fGrp").onchange=e=>{const v=e.target.value;save(c,v==="ach"?{ach:true,grp:null}:{ach:null,grp:v===ag?null:v})};
+  const an=()=>{const t=$("#fNote").value.trim();if(t)save(c,{notes:(c.k.notes||[]).concat([{at:new Date().toISOString(),text:t}]).slice(-50)})};
+  $("#addNote").onclick=an;$("#fNote").onkeydown=e=>{if(e.key==="Enter")an()};
   const sp=()=>{const d=$("#fPDate").value,a=+$("#fPAmt").value;if(d&&a>0)save(c,{promise:{date:d,amount:a,by:"staff",made:todayYMD()}})};
   $("#fPDate").onchange=sp;$("#fPAmt").onchange=sp;
   const pc=$("#pClear");if(pc)pc.onclick=e=>{e.preventDefault();save(c,{promise:null})};
@@ -316,7 +339,9 @@ const tc=s=>s.toLowerCase().replace(/\b\w/g,m=>m.toUpperCase());
 const vc=s=>s.split(" ").map(w=>w.length<=3&&/^[a-z]+$/i.test(w)?w.toUpperCase():w).join(" ");
 function fromRow(x){const co=!x["First Name"];return{id:x["Stock #"],first:co?"":tc(x["First Name"]),last:co?x["Last Name"]:tc(x["Last Name"]||""),
   phones:Object.fromEntries([["cell","Cell Phone"],["home","Home Phone"],["work","Work Phone"],["co_other","Cobuyer Other Phone"],["co_home","Cobuyer Home Phone"],["co_work","Cobuyer Work Phone"]].map(([k,h])=>[k,x[h]||""]).filter(e=>e[1])),
-  pay:+x["Payment Amt"]||0,sched:tc((x["Pay Schedule"]||"").replace("BI-WEEKLY","Biweekly")),due:x["Current Date Due"]||"",days:Math.round(+x["Days past Due"]||0),past:+x["Current Due"]||0,lastpay:x["Last Pay Date"]||"",
+  pay:+x["Payment Amt"]||0,sched:tc((x["Pay Schedule"]||"").replace("BI-WEEKLY","Biweekly")),due:normDate(x["Current Date Due"]),days:Math.round(+x["Days past Due"]||0),past:+x["Current Due"]||0,lastpay:normDate(x["Last Pay Date"]),lastamt:+x["Last Payment Amount"]||0,
+  fpromise:(x["Promise Date"]&&normDate(x["Promise Date"])!==normDate(x["Current Date Due"]))?toYMD(x["Promise Date"]):"",
+  note:(x["Special Message"]||"").trim(),cm1:(x["Customer Comment 1"]||x["Customer Comments 1"]||"").trim(),cm2:(x["Customer Comment 2"]||x["Customer Comments 2"]||"").trim(),
   vin6:(x["Last 6 VIN"]||"").replace(/^(\d{1,5})$/,m=>m.padStart(6,"0")),car:(x["Vehicle Year"]+" "+vc(tc(x["Vehicle Make"]||""))+" "+vc(tc(x["Vehicle Model"]||""))).trim()}}
 function openUpload(){modal("Upload Frazer export",`<label class="drop" for="fFile" id="drop"><b>Choose the Frazer BHPH export</b>CSV file</label><input type="file" id="fFile" accept=".csv,text/csv" hidden><div class="hint">Amounts, due dates and days late come from the new file. Language, status, ACH, numbers and catch-up amounts you set are kept.</div>`,'<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button>');
   const read=file=>{const r=new FileReader();r.onload=()=>showDiff(r.result,file.name);r.readAsText(file)};
