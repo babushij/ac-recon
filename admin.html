@@ -7677,7 +7677,7 @@ async function aucImport(){
       if(!AUC.noCfs[c.vin]&&!done.cfs&&!done.prior){
         r.step='cfs';r.msg='';render();
         try{
-          const res=await aucCall('cfs',{car:{vin:c.vin,miles:c.miles,extColor:c.extColor,intColor:c.intColor},stock},t=>{r.msg=t;render();});
+          const res=await aucCall('cfs',{car:{vin:c.vin,miles:c.miles,extColor:c.extColor,intColor:c.intColor,trim:c.trim||''},stock},t=>{r.msg=t;render();});
           if(res.published)done.cfs=true;else{r.warn=res.needsYou||'CarsForSale needs a look';r.warnStep='cfs';}
         }catch(e){r.warn='CarsForSale: '+e.message;r.warnStep='cfs';}
       }
