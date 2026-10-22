@@ -55,7 +55,7 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 .g-ach{color:var(--ach)}.g-cur{color:var(--ok)}.g-30{color:var(--warn)}.g-60{color:var(--bad)}.g-off{color:var(--text4)}
 .lang{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;background:var(--surface3);color:var(--text2)}
 .late{color:var(--bad);font-weight:700}.okc{color:var(--ok);font-weight:700}
-.sendnote{font-size:10px;color:var(--text3);margin-top:3px}.sendnote.yes{color:var(--ok)}.sendnote.no{color:var(--text4)}
+.sendnote{font-size:10px;color:var(--text3);margin-top:3px}.sendnote.yes{color:var(--ok)}.sendnote.prom{color:var(--warn);font-weight:700}.sendnote.no{color:var(--text4)}
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;opacity:0;pointer-events:none;transition:opacity .18s}
 .scrim.show{opacity:1;pointer-events:auto}
 .panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--surface);border-left:1px solid var(--border);z-index:41;transform:translateX(100%);transition:transform .22s;display:flex;flex-direction:column}
@@ -158,9 +158,16 @@ function numbers(c){const info=S.phones[c.id]||{},bad=new Set(info.bad||[]),seen
   const use=usable.find(p=>p.n===info.good)||usable[0]||null;
   return {all:out,use,good:info.good}}
 // What happens to this customer on today's send
+const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const todayYMD=()=>ymd(todayD());
+const fmtYMD=s=>{const d=new Date(s+"T12:00:00");return d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
+const askAmt=c=>+c.k.extra&&c.days>30?c.pay+(+c.k.extra):(c.past>0?c.past:c.pay);
+const minAmt=c=>c.k.min!=null&&c.k.min!==""?+c.k.min:Math.ceil(askAmt(c)*90)/100;
+const openPromise=c=>{const p=c.k.promise;return p&&p.date>=todayYMD()?p:null};
 function plan(c){
   if(inactive(c))return {no:"Inactive"};
   if(c.grp==="ach")return {no:"ACH autopay"};
+  const pr=openPromise(c);if(pr)return {no:"Promise "+fmtYMD(pr.date)+" · "+money(pr.amount),promise:true};
   const nu=numbers(c);
   if(!nu.use)return {no:nu.all.some(p=>p.bad)?"No WhatsApp on any number":"No number switched on"};
   if(c.grp==="cur"){const L=lateDays(c);
@@ -211,7 +218,7 @@ function list(){const rs=rows();
       <div class="c-due num" style="font-size:12px">${esc(c.due||"No due date")}<div class="acct">${esc(c.sched||"")}</div></div>
       <div class="c-amt r num">${amt}</div>
       <div class="c-send">${inactive(c)?'<span class="pill g-off">Inactive</span>':`<span class="pill ${g.cls}">${g.label}</span>${c.manual?'<span class="acct"> by hand</span>':""}`}
-        <div class="sendnote ${p.group?"yes":"no"}">${p.group?"✓ "+p.label+" · "+money(p.amount):esc(p.no)}</div></div>
+        <div class="sendnote ${p.group?"yes":p.promise?"prom":"no"}">${p.group?"✓ "+p.label+" · "+money(p.amount):esc(p.no)}</div></div>
       <div class="c-act"><input type="checkbox" class="sw act" ${inactive(c)?"":"checked"} aria-label="Active"></div></div>`}
   $("#list").innerHTML=h;$("#count").textContent=rs.length+" shown"}
 function sendList(){return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
@@ -243,7 +250,11 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
       <div class="hint">${c.grp==="ach"?"ACH autopay: no messages. Stays ACH on every upload.":c.manual?"Set by hand. Pick the (auto) group to go back to sorting by days late.":"Sorted by days late on each upload."}</div></div>
     ${c.grp==="30"||c.grp==="60"?`<div class="two"><div class="field"><label for="fExtra">Catch-up extra</label><div class="money"><input id="fExtra" inputmode="decimal" value="${esc(c.k.extra||"")}" placeholder="0"></div></div>
       <div class="field"><label for="fMin">Minimum to accept</label><div class="money"><input id="fMin" inputmode="decimal" value="${esc(c.k.min||"")}" placeholder="0"></div></div></div>
-      <div class="hint">${+c.k.extra?`Bot asks for ${money(c.pay)} + ${money(c.k.extra)} = <b>${money(c.pay+(+c.k.extra))}</b> instead of the full ${money(c.past)}.`:`No extra set: bot asks for the full amount due.`} Minimum is saved for automatic replies (not on yet).</div>`:""}
+      <div class="hint">${+c.k.extra?`Bot asks for ${money(c.pay)} + ${money(c.k.extra)} = <b>${money(c.pay+(+c.k.extra))}</b> instead of the full ${money(c.past)}.`:`No extra set: bot asks for the full amount due.`} Bot accepts <b>${money(minAmt(c))}</b> or more on its own${c.k.min!=null&&c.k.min!==""?" (your minimum)":" (90% of "+money(askAmt(c))+")"}; the rest goes on the next payment.</div>`:""}
+    <div class="field"><span class="lbl">Promise to pay</span>
+      <div class="two"><div class="field"><label for="fPDate">Date</label><input id="fPDate" type="date" value="${esc((c.k.promise&&c.k.promise.date)||"")}" min="${todayYMD()}"></div>
+      <div class="field"><label for="fPAmt">Amount</label><div class="money"><input id="fPAmt" inputmode="decimal" value="${esc((c.k.promise&&c.k.promise.amount)||"")}" placeholder="0"></div></div></div>
+      <div class="hint">${c.k.promise?(openPromise(c)?"Open":"Past")+" promise, made "+(c.k.promise.by==="bot"?"by the bot":"by staff")+" on "+fmtYMD(c.k.promise.made)+". "+(openPromise(c)?"Reminders pause until then; that morning the bot sends a pay link for this amount.":"Reminders have resumed.")+' <a href="#" id="pClear" style="color:var(--red)">Clear</a>':"The bot records promises up to 6 days out for 90% or more. Enter one here after a phone call."}</div></div>
     <div class="field"><span class="lbl">Today's send</span>${p.group?`<div class="msg">${msgFor(c,p)}</div><div class="hint">To ${esc(p.to.v)} (${p.to.l.toLowerCase()}) · ${p.label}</div>`:`<div class="rule">Nothing today: ${esc(p.no)}.</div>`}</div>
   </div>`;
   $("#pClose").onclick=closePanel;
@@ -251,6 +262,9 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
   $("#fLang").onchange=e=>save(c,null,{lang:e.target.value});
   $("#fStat").onchange=e=>setActive(c,e.target.value==="active");
   $("#fGrp").onchange=e=>{const v=e.target.value;save(c,v==="ach"?{ach:true,grp:null}:{ach:null,grp:v===ag?null:v})};
+  const sp=()=>{const d=$("#fPDate").value,a=+$("#fPAmt").value;if(d&&a>0)save(c,{promise:{date:d,amount:a,by:"staff",made:todayYMD()}})};
+  $("#fPDate").onchange=sp;$("#fPAmt").onchange=sp;
+  const pc=$("#pClear");if(pc)pc.onclick=e=>{e.preventDefault();save(c,{promise:null})};
   ["#fExtra","#fMin"].forEach(s=>{const e=$(s);if(e)e.onchange=()=>save(c,{[s==="#fExtra"?"extra":"min"]:e.value===""?null:+e.value})})}
 function setActive(c,on){if(on)save(c,{status:autoInactive(c)?"active":null},{off:false});else save(c,{status:null},{off:true})}
 async function save(c,patch,other={}){
