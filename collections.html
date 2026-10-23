@@ -317,7 +317,10 @@ function payload(){return sendList().map(({c,p})=>({force:picked.has(c.id),id:c.
   phone:p.to.v,phones:numbers(c).all.filter(x=>x.on).map(x=>({label:x.l.toLowerCase(),number:x.v}))}))}
 async function run(mode,extra={}){const list=payload();
   modal(mode==="dry"?"Dry run":mode==="test"?"Test send":"Sending",'<div class="hint">Working…</div>',"");
-  try{const d=await api("/api/send",{mode,customers:list,origin:API,...extra});
+  // Cloudflare's free plan allows 50 outside calls per request (one WhatsApp send each), so send in chunks of 20
+  try{const d={results:[]};const CH=mode==="test"?list.length:20;
+    for(let i=0;i<list.length;i+=CH){if(list.length>CH)$("#mBody").innerHTML='<div class="hint">Working… '+Math.min(i+CH,list.length)+' of '+list.length+'</div>';
+      const part=await api("/api/send",{mode,customers:list.slice(i,i+CH),origin:API,...extra});d.mode=part.mode;d.day=part.day;d.results=d.results.concat(part.results);if(mode==="test")break}
     const cnt=s=>d.results.filter(r=>r.status===s).length;
     $("#mBody").innerHTML=`<div class="hint">${mode==="dry"?"Nothing was sent. This is what would happen.":mode==="test"?"Sent to your phone only, with $1 pay links.":"Done. Check WATI Campaigns for delivery."}</div>
     <div class="diff"><div class="d-row"><span class="d-n st-sent">${cnt("sent")+cnt("would send")}</span>${mode==="dry"?"would send":"sent"}</div><div class="d-row"><span class="d-n st-held">${cnt("held")}</span>held (already messaged)</div><div class="d-row"><span class="d-n st-skipped">${cnt("skipped")+cnt("failed")}</span>skipped or failed</div></div>
