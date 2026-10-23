@@ -41,11 +41,12 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 .seg button{background:var(--surface2);border:none;color:var(--text3);font-size:10px;font-weight:700;letter-spacing:.8px;padding:8px 10px;text-transform:uppercase}
 .seg button.on{background:var(--red);color:#fff}
 .list{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
-.row{display:grid;grid-template-columns:minmax(0,1.6fr) 84px 96px 110px 150px 52px;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.row{display:grid;grid-template-columns:22px minmax(0,1.6fr) 84px 96px 110px 150px 52px;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer}
 .row:last-child{border-bottom:none}.row:hover{background:var(--surface2)}
 .row.sel{background:var(--red-dim);box-shadow:inset 2px 0 0 var(--red)}
 .row.head{cursor:default;background:var(--surface2);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text3);text-transform:uppercase;padding-block:8px}
-@media (max-width:700px){.row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}.row.head{display:none}.row .c-due{display:none}.row .c-amt{grid-column:2;grid-row:1}.row .c-send{grid-column:1/-1;grid-row:3}.row .c-lang{grid-column:1;grid-row:2}.row .c-act{grid-column:2;grid-row:2;text-align:right}}
+@media (max-width:700px){.row{grid-template-columns:22px minmax(0,1fr) auto;row-gap:4px}.row.head{display:none}.row .c-due{display:none}.row .c-pick{grid-column:1;grid-row:1}.row .c-cust{grid-column:2;grid-row:1}.row .c-amt{grid-column:3;grid-row:1}.row .c-send{grid-column:2/-1;grid-row:3}.row .c-lang{grid-column:2;grid-row:2}.row .c-act{grid-column:3;grid-row:2;text-align:right}}
+.pick{width:17px;height:17px;accent-color:var(--red);cursor:pointer;margin:0}.row.picked{background:var(--red-dim)}
 .ls{display:inline-flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden}.ls button{background:var(--surface2);border:none;color:var(--text3);font:700 10px var(--mono);padding:6px 8px}.ls button.on{background:var(--red);color:#fff}
 .row.dim>div:not(.c-act){opacity:.4}
 .name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -154,7 +155,7 @@ const latestNote=c=>notesOf(c).all[0]||null;
 const todayD=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const lateDays=c=>{const d=mdy(c.due);return d?Math.round((todayD()-d)/864e5):null};
 const d10=s=>String(s||"").replace(/\D/g,"").slice(-10);
-const keep=new Set();let S={customers:null,cust:{},langs:{},offs:{},phones:{}},C=[],filt={grp:"all",lang:"all",q:""},selId=null;
+const keep=new Set(),picked=new Set();let S={customers:null,cust:{},langs:{},offs:{},phones:{}},C=[],filt={grp:"all",lang:"all",q:""},selId=null;
 
 function build(){
   const rows=(S.customers&&S.customers.rows)||[];
@@ -203,7 +204,10 @@ function render(){
   $("#tiles").onclick=e=>{const t=e.target.closest(".tile");if(!t)return;filt.grp=t.dataset.g;keep.clear();render()};
   $("#list").onclick=e=>{const r=e.target.closest(".row[data-id]");if(!r)return;const c=C.find(x=>x.id===r.dataset.id);
     const lb=e.target.closest(".ls button");if(lb){if(lb.dataset.l!==c.lang){keep.add(c.id);save(c,null,{lang:lb.dataset.l})}return}
-    if(e.target.closest(".c-act"))return;openPanel(c.id)};
+    if(e.target.closest(".c-act"))return;
+    const pk=e.target.closest(".c-pick");if(pk){const x=pk.querySelector(".pick");if(e.target!==x&&!x.disabled)x.checked=!x.checked;if(!x.disabled){if(x.checked)picked.add(c.id);else picked.delete(c.id);keep.add(c.id);list();sendbar()}return}
+    openPanel(c.id)};
+  $("#list").addEventListener("click",e=>{const a=e.target.closest("#pickAll");if(!a)return;const ids=rows().filter(c=>plan(c).group).map(c=>c.id);if(a.checked)ids.forEach(i=>picked.add(i));else ids.forEach(i=>picked.delete(i));list();sendbar()});
   $("#list").onchange=e=>{const x=e.target.closest(".act");if(!x)return;const c=C.find(y=>y.id===x.closest(".row").dataset.id);keep.add(c.id);setActive(c,x.checked)}}
   const at=S.customers.at?new Date(S.customers.at):null;
   $("#note").innerHTML=`Frazer export${S.customers.file?" <b>"+esc(S.customers.file)+"</b>":""} uploaded ${at?at.toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):""} · ${C.length} accounts. Upload a fresh one each morning before sending.`;
@@ -221,12 +225,13 @@ function rows(){const q=filt.q.toLowerCase();
     return !q||(nm(c)+" "+c.id+" "+Object.values(c.phones).join(" ")+" "+c.car+" "+c.vin6).toLowerCase().includes(q)})
   .sort((a,b)=>b.days-a.days||nm(a).localeCompare(nm(b)))}
 function list(){const rs=rows();
-  let h=`<div class="row head"><div>Customer</div><div>Lang</div><div>Next due</div><div class="r">Amount due</div><div>Group · today</div><div>Active</div></div>`;
+  let h=`<div class="row head"><div><input type="checkbox" class="pick" id="pickAll" aria-label="Select all that can be sent" ${rs.length&&rs.filter(c=>plan(c).group).every(c=>picked.has(c.id))&&rs.some(c=>plan(c).group)?"checked":""}></div><div>Customer</div><div>Lang</div><div>Next due</div><div class="r">Amount due</div><div>Group · today</div><div>Active</div></div>`;
   if(!rs.length)h+=`<div class="row" style="cursor:default;color:var(--text3)">No customers match.</div>`;
   for(const c of rs){const p=plan(c),nu=numbers(c),g=GROUPS[c.grp];
     const amt=c.past>0?`<span class="${c.days>0?"late":""}">${money(c.past)}</span>${c.days>0?`<div class="acct">${c.days} days late</div>`:""}`:c.past<0?`<span class="okc">${money(-c.past)}</span><div class="acct">paid ahead</div>`:`<span style="color:var(--text3)">—</span>`;
-    h+=`<div class="row ${c.id===selId?"sel":""} ${inactive(c)?"dim":""}" data-id="${c.id}" tabindex="0" role="button">
-      <div style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${nu.use?esc(nu.use.v)+(nu.use.k!=="cell"?" ("+nu.use.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'}</div>
+    h+=`<div class="row ${c.id===selId?"sel":""} ${inactive(c)?"dim":""} ${picked.has(c.id)?"picked":""}" data-id="${c.id}" tabindex="0" role="button">
+      <div class="c-pick"><input type="checkbox" class="pick" ${picked.has(c.id)?"checked":""} ${p.group?"":"disabled"} aria-label="Select ${esc(nm(c))}" title="${p.group?"Select to send":esc(p.no)}"></div>
+      <div class="c-cust" style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${nu.use?esc(nu.use.v)+(nu.use.k!=="cell"?" ("+nu.use.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'}</div>
       ${(()=>{const n=latestNote(c);return n?`<div class="acct" style="color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📝 ${esc(n.src==="App"?n.d.toLocaleDateString("en-US",{month:"numeric",day:"numeric"})+" "+n.t:n.t)}</div>`:""})()}</div>
       <div class="c-lang"><span class="ls">${["EN","ES"].map(l=>`<button type="button" data-l="${l}" class="${c.lang===l?"on":""}" aria-label="${l==="EN"?"English":"Spanish"}">${l}</button>`).join("")}</span></div>
       <div class="c-due num" style="font-size:12px">${esc(c.due||"No due date")}<div class="acct">${esc(c.sched||"")}</div></div>
@@ -235,9 +240,14 @@ function list(){const rs=rows();
         <div class="sendnote ${p.group?"yes":p.promise?"prom":"no"}">${p.group?"✓ "+p.label+" · "+money(p.amount):esc(p.no)}</div></div>
       <div class="c-act"><input type="checkbox" class="sw act" ${inactive(c)?"":"checked"} aria-label="Active"></div></div>`}
   $("#list").innerHTML=h;$("#count").textContent=rs.length+" shown"}
-function sendList(){return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
+// With customers ticked, only those are sent (any group, any tile); otherwise everyone sendable in the open tile
+function sendList(){if(picked.size)return C.filter(c=>picked.has(c.id)).map(c=>({c,p:plan(c)})).filter(x=>x.p.group);
+  return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
 function sendbar(){const L=sendList(),sb=$("#sendbar");sb.hidden=false;
   const where=filt.grp==="all"?"All active":filt.grp==="off"?"Inactive":GROUPS[filt.grp].label;
+  if(picked.size){$("#what").innerHTML=`<b class="num">${L.length}</b> selected <a href="#" id="clrPick" style="color:var(--red);font-size:11px;margin-left:6px">Clear</a> <span class="acct">· only the ticked customers are sent</span>`;
+    ["#dryBtn","#testBtn","#sendBtn"].forEach(s=>$(s).disabled=!L.length);$("#sendBtn").textContent="Send "+L.length+" selected";
+    $("#clrPick").onclick=e=>{e.preventDefault();picked.clear();list();sendbar()};return}
   $("#what").innerHTML=L.length?`<b class="num">${L.length}</b> will get a message · ${where}${filt.lang!=="all"?" · "+filt.lang:""}${filt.q?" · search":""} <span class="acct">· each customer gets their own group's message</span>`:`Nothing to send in ${where}`;
   ["#dryBtn","#testBtn","#sendBtn"].forEach(s=>$(s).disabled=!L.length);
   $("#sendBtn").textContent=L.length?"Send "+L.length:"Send"}
@@ -303,7 +313,7 @@ function closePanel(){selId=null;$("#panel").classList.remove("show");$("#scrim"
 /* ---- sending ---- */
 function modal(title,body,foot){$("#mTitle").textContent=title;$("#mBody").innerHTML=body;$("#mFoot").innerHTML=foot;$("#modal").classList.add("show")}
 const closeModal=()=>$("#modal").classList.remove("show");
-function payload(){return sendList().map(({c,p})=>({id:c.id,first:c.first,last:c.last,car:c.car,vin6:c.vin6,due:c.due,days:p.days,pastDue:c.past,pay:c.pay,amount:p.amount,group:p.group,lang:c.lang,
+function payload(){return sendList().map(({c,p})=>({force:picked.has(c.id),id:c.id,first:c.first,last:c.last,car:c.car,vin6:c.vin6,due:c.due,days:p.days,pastDue:c.past,pay:c.pay,amount:p.amount,group:p.group,lang:c.lang,
   phone:p.to.v,phones:numbers(c).all.filter(x=>x.on).map(x=>({label:x.l.toLowerCase(),number:x.v}))}))}
 async function run(mode,extra={}){const list=payload();
   modal(mode==="dry"?"Dry run":mode==="test"?"Test send":"Sending",'<div class="hint">Working…</div>',"");
@@ -313,7 +323,7 @@ async function run(mode,extra={}){const list=payload();
     <div class="diff"><div class="d-row"><span class="d-n st-sent">${cnt("sent")+cnt("would send")}</span>${mode==="dry"?"would send":"sent"}</div><div class="d-row"><span class="d-n st-held">${cnt("held")}</span>held (already messaged)</div><div class="d-row"><span class="d-n st-skipped">${cnt("skipped")+cnt("failed")}</span>skipped or failed</div></div>
     <div class="res">${d.results.map(r=>`<div class="d-row"><div style="flex:1;min-width:0"><b>${esc(r.name)}</b> <span class="acct">#${r.id}</span><small>${r.template?esc(r.template)+" → "+esc(r.to)+(r.which?" ("+esc(r.which)+")":""):""}${r.reason?" "+esc(r.reason):""}</small></div><span class="st-${r.status.split(" ")[0]}" style="font-weight:700;font-size:11px;text-transform:uppercase">${esc(r.status)}</span></div>`).join("")}</div>`;
     $("#mFoot").innerHTML='<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>';
-    if(mode==="live")load()
+    if(mode==="live"){picked.clear();load()}
   }catch(e){$("#mBody").innerHTML=`<div class="rule" style="color:var(--bad)">${esc(e.message)}</div>`;$("#mFoot").innerHTML='<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>'}}
 $("#dryBtn").onclick=()=>run("dry");
 $("#testBtn").onclick=()=>{let t="";try{t=localStorage.getItem("acColTest")||""}catch(e){}
