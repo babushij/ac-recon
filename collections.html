@@ -76,6 +76,16 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 .money{position:relative}.money::before{content:"$";position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)}.money input{padding-left:24px!important}
 .msg{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-lg) var(--r-lg) var(--r-lg) 3px;padding:11px 13px;font-size:13px;line-height:1.55}
 .msg b{color:#ff6b81}
+.chat{display:flex;flex-direction:column;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;max-height:420px;overflow-y:auto}
+.bub{max-width:84%;padding:7px 10px;border-radius:10px;font-size:13px;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+.bub.in{align-self:flex-start;background:var(--surface3);border-bottom-left-radius:3px}
+.bub.out{align-self:flex-end;background:#1f4d3a;border-bottom-right-radius:3px}
+.bub.reminder{background:#2a3f6e}.bub.staff{background:#4a2f5e}
+.bub .meta{display:block;font-size:9px;letter-spacing:.5px;color:var(--text3);margin-top:3px;text-align:right;text-transform:uppercase}
+.bub .meta .rd{color:#60a5fa}.bub .meta .fl{color:var(--bad)}
+.daysep{align-self:center;font-size:10px;color:var(--text4);margin:4px 0}
+.numtabs{display:flex;gap:6px;flex-wrap:wrap}.numtabs button{background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;padding:5px 9px;border-radius:6px}.numtabs button.on{background:var(--red);border-color:var(--red);color:#fff}
+.reply{display:flex;gap:8px;align-items:flex-end}.reply textarea{flex:1;min-height:42px;max-height:140px;resize:vertical;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 11px;color:var(--text);font:13px var(--font)}
 .rule{font-size:11px;color:var(--text2);background:var(--surface3);border-radius:var(--r-md);padding:9px 11px;line-height:1.45}
 .nums{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
 .num-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);border-bottom:1px solid var(--border);cursor:pointer}
@@ -286,9 +296,15 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
       <div class="two"><div class="field"><label for="fPDate">Date</label><input id="fPDate" type="date" value="${esc((c.k.promise&&c.k.promise.date)||"")}" min="${todayYMD()}"></div>
       <div class="field"><label for="fPAmt">Amount</label><div class="money"><input id="fPAmt" inputmode="decimal" value="${esc((c.k.promise&&c.k.promise.amount)||"")}" placeholder="0"></div></div></div>
       <div class="hint">${c.k.promise?(openPromise(c)?"Open":"Past")+" promise, made "+(c.k.promise.by==="bot"?"by the bot":"by staff")+" on "+fmtYMD(c.k.promise.made)+". "+(openPromise(c)?"Reminders pause until then; that morning the bot sends a pay link for this amount.":"Reminders have resumed.")+' <a href="#" id="pClear" style="color:var(--red)">Clear</a>':"The bot records promises up to 6 days out for 90% or more. Enter one here after a phone call."}</div></div>
+    <div class="field"><span class="lbl">Conversation</span>
+      ${(()=>{const ns=numbers(c).all.filter(x=>!x.dup&&x.n.length===10);if(ns.length<2)return"";const cur=chatNum[c.id]||(numbers(c).use||ns[0]).n;return '<div class="numtabs" id="numTabs">'+ns.map(x=>'<button type="button" data-n="'+x.n+'" class="'+(x.n===cur?"on":"")+'">'+esc(x.l)+" "+esc(x.v)+(x.bad?" ✕":"")+"</button>").join("")+"</div>"})()}
+      <div class="chat" id="chat"><div class="hint">Loading conversation…</div></div>
+      <div id="replyBox"></div></div>
     <div class="field"><span class="lbl">Today's send</span>${p.group?`<div class="msg">${msgFor(c,p)}</div><div class="hint">To ${esc(p.to.v)} (${p.to.l.toLowerCase()}) · ${p.label}</div>`:`<div class="rule">Nothing today: ${esc(p.no)}.</div>`}</div>
   </div>`;
   $("#pClose").onclick=closePanel;
+  const nt=$("#numTabs");if(nt)nt.onclick=e=>{const b=e.target.closest("button");if(!b)return;chatNum[c.id]=b.dataset.n;nt.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));showChat(c)};
+  showChat(c);
   $("#panel").querySelectorAll(".sw").forEach(sw=>sw.onchange=()=>save(c,{on:PH.map(x=>x[0]).filter(k=>{const e=$("#panel .sw[data-k='"+k+"']");return e?e.checked:c.on.includes(k)})}));
   $("#fLang").onchange=e=>save(c,null,{lang:e.target.value});
   $("#fStat").onchange=e=>setActive(c,e.target.value==="active");
@@ -313,6 +329,33 @@ function closePanel(){selId=null;$("#panel").classList.remove("show");$("#scrim"
 /* ---- sending ---- */
 function modal(title,body,foot){$("#mTitle").textContent=title;$("#mBody").innerHTML=body;$("#mFoot").innerHTML=foot;$("#modal").classList.add("show")}
 const closeModal=()=>$("#modal").classList.remove("show");
+/* ---- conversation (read from WATI through the bot) ---- */
+const chatNum={},chatCache={};
+function chatTarget(c){const ns=numbers(c).all.filter(x=>!x.dup&&x.n.length===10);return chatNum[c.id]||(numbers(c).use||ns[0]||{}).n||""}
+async function showChat(c,force){const n=chatTarget(c),box=$("#chat");if(!box)return;
+  if(!n){box.innerHTML='<div class="hint">No phone number.</div>';$("#replyBox").innerHTML="";return}
+  let d=chatCache[n];
+  if(force||!d||Date.now()-d.t>60000){try{d=await api("/api/chat?wa="+n);d.t=Date.now();chatCache[n]=d}catch(e){box.innerHTML='<div class="hint">Couldn\'t load the conversation: '+esc(e.message)+"</div>";return}}
+  if(selId!==c.id||chatTarget(c)!==n)return;
+  renderChat(c,d)}
+function renderChat(c,d){const box=$("#chat");if(!box)return;
+  if(d.error)box.innerHTML='<div class="hint">'+esc(d.error)+"</div>";
+  else if(!d.messages.length)box.innerHTML='<div class="hint">No messages with this number yet.</div>';
+  else{let last="";box.innerHTML=d.messages.map(m=>{const t=new Date(m.at),day=isNaN(t)?"":t.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+    const sep=day&&day!==last?(last=day,'<div class="daysep">'+day+"</div>"):"";
+    const lbl={customer:"",bot:"Bot",staff:"Staff"+(m.by?" · "+esc(m.by):""),reminder:"Reminder"}[m.who];
+    const st=/read/i.test(m.status)?'<span class="rd">✓✓</span>':/deliver/i.test(m.status)?"✓✓":/fail/i.test(m.status)?'<span class="fl">✕ failed</span>':/sent/i.test(m.status)?"✓":"";
+    return sep+'<div class="bub '+(m.who==="customer"?"in":"out "+m.who)+'">'+esc(m.text)+'<span class="meta">'+(lbl?lbl+" · ":"")+(isNaN(t)?"":t.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}))+(m.who!=="customer"&&st?" "+st:"")+"</span></div>"}).join("");
+    box.scrollTop=box.scrollHeight}
+  const open=d.lastCustomerAt&&Date.now()-new Date(d.lastCustomerAt)<24*3600e3,rb=$("#replyBox"),p=plan(c);
+  if(open){const left=Math.max(0,Math.round((new Date(d.lastCustomerAt).getTime()+24*3600e3-Date.now())/3600e3));
+    rb.innerHTML='<div class="reply"><textarea id="rTxt" placeholder="Type a reply…"></textarea><button class="btn-red" id="rSend" type="button">Send</button></div><div class="hint">Chat window open about '+left+' more hour'+(left===1?"":"s")+'. '+(d.botPaused?"The bot is paused in this chat.":"Replying pauses the bot in this chat for 24 hours.")+"</div>";
+    $("#rSend").onclick=async()=>{const t=$("#rTxt").value.trim();if(!t)return;$("#rSend").disabled=true;
+      try{const r=await api("/api/reply",{wa:d.wa,text:t});if(!r.ok)throw new Error(r.error);toast("Sent");showChat(c,true)}catch(e){toast("Not sent: "+e.message);$("#rSend").disabled=false}}}
+  else rb.innerHTML='<div class="rule">WhatsApp only allows typed replies within 24 hours of the customer\'s last message. '+(p.group?'You can send their reminder template instead; when they reply, the chat opens again.</div><button class="btn-ghost" id="rTpl" type="button" style="margin-top:6px">Send reminder template ('+esc(p.label)+" · "+money(p.amount)+")</button>":"No reminder can go out today: "+esc(p.no)+".</div>");
+  const rt=$("#rTpl");if(rt)rt.onclick=async()=>{if(rt.dataset.armed!=="1"){rt.dataset.armed="1";rt.textContent="Tap again to send";return}rt.disabled=true;
+    try{const one=payloadFor(c,p);one.force=true;const r=await api("/api/send",{mode:"live",customers:[one],origin:API});const x=r.results[0];toast(x.status==="sent"?"Reminder sent":x.status+": "+(x.reason||""));showChat(c,true)}catch(e){toast("Not sent: "+e.message);rt.disabled=false}}}
+function payloadFor(c,p){return {id:c.id,first:c.first,last:c.last,car:c.car,vin6:c.vin6,due:c.due,days:p.days,pastDue:c.past,pay:c.pay,amount:p.amount,group:p.group,lang:c.lang,phone:p.to.v,phones:numbers(c).all.filter(x=>x.on).map(x=>({label:x.l.toLowerCase(),number:x.v}))}}
 function payload(){return sendList().map(({c,p})=>({force:picked.has(c.id),id:c.id,first:c.first,last:c.last,car:c.car,vin6:c.vin6,due:c.due,days:p.days,pastDue:c.past,pay:c.pay,amount:p.amount,group:p.group,lang:c.lang,
   phone:p.to.v,phones:numbers(c).all.filter(x=>x.on).map(x=>({label:x.l.toLowerCase(),number:x.v}))}))}
 async function run(mode,extra={}){const list=payload();
