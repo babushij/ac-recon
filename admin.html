@@ -7666,11 +7666,14 @@ async function aucImport(){
         ex.updatedAt=Date.now();
       }else{
         const now=Date.now();
-        ST.vehicles.push({id:vid,salesperson:'',vin:c.vin,stockNumber:stock,year:c.year,make:c.make,model:c.model,
+        // Built already in the visits shape: save() reshapes any car without visits and keeps only the basic
+        // fields, which was dropping the condition report and bill of sale from newly imported cars.
+        const visit={id:vid+'-v1',dateIn:now,dateOut:null,stockNumber:stock,statuses:['auction'],assignedTo:'',priority:'medium',apptDate:'',
+          parts:[],laborLines:[],repairs:[],receipts:[],photos:docs.photo?[docs.photo]:[],notes:'',concerns:[],comments:[],timeSessions:[],obdScans:[],statusChangedAt:now};
+        const nv={id:vid,salesperson:'',vin:c.vin,year:c.year,make:c.make,model:c.model,
           color:c.extColor?c.extColor.charAt(0).toUpperCase()+c.extColor.slice(1).toLowerCase():'',mileage:String(c.miles||''),
-          source:'auction',imported:true,statuses:['auction'],assignedTo:'',priority:'medium',notes:'',apptDate:'',
-          repairs:[],photos:docs.photo?[docs.photo]:[],receipts:[],comments:[],
-          conditionReport:docs.cr||null,auctionDocs,createdAt:now,updatedAt:now,statusChangedAt:now});
+          source:'auction',imported:true,conditionReport:docs.cr||null,auctionDocs,visits:[visit],createdAt:now,updatedAt:now};
+        applyVisitShim(nv);ST.vehicles.push(nv);
       }
       save();done.recon=true;
       // 3) CarsForSale
