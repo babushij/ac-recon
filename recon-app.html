@@ -7743,7 +7743,7 @@ window.aucPrintAll=async()=>{
 function renderCollections(c){
   setTopbar('Collections','<button class="btn-ghost" onclick="window.open(\'collections.html\',\'_blank\')">Open full screen</button>');
   if(ST.role!=='manager'){c.innerHTML='<div style="color:#9aa3b8;padding:20px">Managers only.</div>';return;}
-  c.innerHTML='<iframe src="collections.html" title="Collections" style="display:block;width:100%;height:calc(100vh - 120px);min-height:520px;border:0;border-radius:12px;background:#14213d"></iframe>';
+  c.innerHTML='<iframe src="collections.html?v='+Date.now()+'" title="Collections" style="display:block;width:100%;height:calc(100vh - 120px);min-height:520px;border:0;border-radius:12px;background:#14213d"></iframe>';
 }
 function renderAuction(c){
   setTopbar('Auction import','');
