@@ -193,13 +193,16 @@ function plan(c){
   if(c.grp==="ach")return {no:"ACH autopay"};
   const pr=openPromise(c);if(pr)return {no:"Promise "+fmtYMD(pr.date)+(pr.amount?" · "+money(pr.amount):" (Frazer)"),promise:true};
   const nu=numbers(c);
-  if(!nu.use)return {no:nu.all.some(p=>p.bad)?"No WhatsApp on any number":"No number switched on"};
+  // no working WhatsApp: text instead, only with a signed text consent form on file
+  const sms=!nu.use&&c.k.sms&&d10(c.k.sms.number).length===10?{k:"sms",l:"Text",v:c.k.sms.number,n:d10(c.k.sms.number),sms:true}:null;
+  if(!nu.use&&!sms)return {no:nu.all.some(p=>p.bad)?"No WhatsApp on any number · no text consent":"No number switched on"};
+  nu.use=nu.use||sms;
   if(c.grp==="cur"){const L=lateDays(c);
     if(!(c.past>0))return {no:c.past<0?"Paid ahead":"Nothing owed"};
     if(L===null||L<0)return {no:"Not due yet"};
-    return {group:L===0?"cur":"miss",amount:c.past,days:L,to:nu.use,label:L===0?"Due today":"Missed · every 2 days"}}
+    return {group:L===0?"cur":"miss",amount:c.past,days:L,to:nu.use,label:(L===0?"Due today":"Missed · every 2 days")+(sms?" · by text":"")}}
   const amount=+c.k.extra?c.pay+(+c.k.extra):(c.past>0?c.past:c.pay);
-  return {group:c.grp,amount,days:c.days,to:nu.use,label:GROUPS[c.grp].label+" reminder"}}
+  return {group:c.grp,amount,days:c.days,to:nu.use,label:GROUPS[c.grp].label+" reminder"+(sms?" · by text":"")}}
 
 /* ---- render ---- */
 function render(){
@@ -241,7 +244,7 @@ function list(){const rs=rows();
     const amt=c.past>0?`<span class="${c.days>0?"late":""}">${money(c.past)}</span>${c.days>0?`<div class="acct">${c.days} days late</div>`:""}`:c.past<0?`<span class="okc">${money(-c.past)}</span><div class="acct">paid ahead</div>`:`<span style="color:var(--text3)">—</span>`;
     h+=`<div class="row ${c.id===selId?"sel":""} ${inactive(c)?"dim":""} ${picked.has(c.id)?"picked":""}" data-id="${c.id}" tabindex="0" role="button">
       <div class="c-pick"><input type="checkbox" class="pick" ${picked.has(c.id)?"checked":""} ${p.group?"":"disabled"} aria-label="Select ${esc(nm(c))}" title="${p.group?"Select to send":esc(p.no)}"></div>
-      <div class="c-cust" style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${nu.use?esc(nu.use.v)+(nu.use.k!=="cell"?" ("+nu.use.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'}</div>
+      <div class="c-cust" style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${(()=>{const u=nu.use||(p.to&&p.to.sms?p.to:null);return u?esc(u.v)+(u.sms?" (text)":u.k!=="cell"?" ("+u.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'})()}</div>
       ${(()=>{const n=latestNote(c);return n?`<div class="acct" style="color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📝 ${esc(n.src==="App"?n.d.toLocaleDateString("en-US",{month:"numeric",day:"numeric"})+" "+n.t:n.t)}</div>`:""})()}</div>
       <div class="c-lang"><span class="ls">${["EN","ES"].map(l=>`<button type="button" data-l="${l}" class="${c.lang===l?"on":""}" aria-label="${l==="EN"?"English":"Spanish"}">${l}</button>`).join("")}</span></div>
       <div class="c-due num" style="font-size:12px">${esc(c.due||"No due date")}<div class="acct">${esc(c.sched||"")}</div></div>
@@ -285,6 +288,10 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
     <div class="field"><span class="lbl">Numbers the bot tries, in order</span>
       <div class="nums">${nu.all.map(x=>`<label class="num-row ${x.bad&&!x.dup?"dead":""}"><span style="min-width:0"><b>${x.l}</b><span class="acct">${esc(x.v)}</span></span>${x.dup?'<span class="badge" style="color:var(--text4)">Same number</span>':x.bad?'<span class="badge" style="color:var(--bad)">No WhatsApp</span>':nu.use&&x.k===nu.use.k?`<span class="badge" style="color:var(--ok)">${x.n===nu.good?"Works":"Next send"}</span>`:""}<input type="checkbox" class="sw" data-k="${x.k}" ${x.on?"checked":""} aria-label="Use ${x.l}"></label>`).join("")||'<div class="hint" style="padding:10px">No phone numbers in Frazer.</div>'}</div>
       <div class="hint">When WhatsApp says a number can't receive, the bot moves to the next one the following day and remembers the one that works. Switch a number off to skip it.</div></div>
+    <div class="field"><span class="lbl">Text messages (866-282-8860)</span>
+      <label class="num-row" style="border:1px solid var(--border);border-radius:8px"><span style="min-width:0"><b>Signed the text consent form</b><span class="acct">${c.k.sms?"On file since "+esc(fmtYMD(c.k.sms.date||todayYMD())):"Not on file"}</span></span><input type="checkbox" class="sw" id="fSms" ${c.k.sms?"checked":""} aria-label="Signed text consent"></label>
+      ${c.k.sms?`<select id="fSmsNum">${(()=>{const ns=numbers(c).all.filter(x=>!x.dup&&x.n.length===10);const cur=d10(c.k.sms.number);return ns.map(x=>'<option value="'+x.n+'" '+(x.n===cur?"selected":"")+">"+esc(x.l)+" "+esc(x.v)+"</option>").join("")})()}</select>`:""}
+      <div class="hint">${c.k.sms?"If none of the numbers above has WhatsApp, reminders go by text to this number. If they reply STOP, the bot turns this off on its own.":"Only tick this when the customer has signed the Message Consent form (text box ticked). Without it, customers with no WhatsApp get no reminders."}</div></div>
     <div class="two"><div class="field"><label for="fStat">Status</label><select id="fStat"><option value="active" ${!inactive(c)?"selected":""}>Active</option><option value="inactive" ${inactive(c)?"selected":""}>Inactive${autoInactive(c)?" (auto)":""}</option></select></div>
       <div class="field"><label for="fLang">Language</label><select id="fLang"><option value="EN" ${c.lang==="EN"?"selected":""}>English</option><option value="ES" ${c.lang==="ES"?"selected":""}>Español</option></select></div></div>
     <div class="field"><label for="fGrp">Group</label><select id="fGrp">${["cur","30","60","ach"].map(k=>`<option value="${k}" ${c.grp===k?"selected":""}>${GROUPS[k].label}${k===ag?" (auto)":""}</option>`).join("")}</select>
@@ -309,6 +316,8 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
   $("#fLang").onchange=e=>save(c,null,{lang:e.target.value});
   $("#fStat").onchange=e=>setActive(c,e.target.value==="active");
   $("#fGrp").onchange=e=>{const v=e.target.value;save(c,v==="ach"?{ach:true,grp:null}:{ach:null,grp:v===ag?null:v})};
+  const fs=$("#fSms");if(fs)fs.onchange=()=>{if(fs.checked){const ns=numbers(c).all.filter(x=>!x.dup&&x.n.length===10);const pick=ns.find(x=>x.k==="cell")||ns[0];if(!pick){fs.checked=false;toast("No phone number to text");return}save(c,{sms:{number:pick.n,date:todayYMD()}})}else save(c,{sms:null})};
+  const fsn=$("#fSmsNum");if(fsn)fsn.onchange=()=>save(c,{sms:{...c.k.sms,number:fsn.value}});
   const an=()=>{const t=$("#fNote").value.trim();if(t)save(c,{notes:(c.k.notes||[]).concat([{at:new Date().toISOString(),text:t}]).slice(-50)})};
   $("#addNote").onclick=an;$("#fNote").onkeydown=e=>{if(e.key==="Enter")an()};
   const sp=()=>{const d=$("#fPDate").value,a=+$("#fPAmt").value;if(d&&a>0)save(c,{promise:{date:d,amount:a,by:"staff",made:todayYMD()}})};
