@@ -76,6 +76,10 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 .money{position:relative}.money::before{content:"$";position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)}.money input{padding-left:24px!important}
 .msg{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-lg) var(--r-lg) var(--r-lg) 3px;padding:11px 13px;font-size:13px;line-height:1.55}
 .msg b{color:#ff6b81}
+.inbar{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#3a1420;border:1px solid var(--red);border-radius:var(--r-lg);padding:11px 14px;color:var(--text);font-size:13px}
+.inbar b{font-size:18px}.inbar .acct{color:var(--text2)}.inbar.on{background:var(--red)}
+.newmsg{display:inline-block;margin-top:4px;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#fff;background:var(--red);border-radius:3px;padding:2px 6px}
+.newmsg.bot{background:#2a3f6e}
 .chat{display:flex;flex-direction:column;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;max-height:420px;overflow-y:auto}
 .bub{max-width:84%;padding:7px 10px;border-radius:10px;font-size:13px;line-height:1.4;white-space:pre-wrap;word-break:break-word}
 .bub.in{align-self:flex-start;background:var(--surface3);border-bottom-left-radius:3px}
@@ -208,7 +212,7 @@ function plan(c){
 function render(){
   if(!KEY)return gate();
   if(!S.customers){$("#sendbar").hidden=true;$("#main").innerHTML=`<div class="gate"><b>No customers yet</b><div class="hint">Upload today's Frazer BHPH export to load customers. Your language, status, ACH and number settings are kept between uploads.</div><button class="btn-red" onclick="openUpload()">Upload Frazer export</button></div>`;return}
-  if(!$("#tiles")){$("#main").innerHTML=`<div class="note" id="note"></div><section class="tiles" id="tiles"></section>
+  if(!$("#tiles")){$("#main").innerHTML=`<div id="inboxBar"></div><div class="note" id="note"></div><section class="tiles" id="tiles"></section>
   <div class="toolbar"><input id="q" type="search" placeholder="Search name, account, phone, vehicle or VIN" aria-label="Search customers">
   <div class="seg" id="seg"><button type="button" data-lang="all" class="on">All</button><button type="button" data-lang="EN">EN</button><button type="button" data-lang="ES">ES</button></div><span class="acct" id="count"></span></div>
   <section class="list" id="list"></section>`;
@@ -224,7 +228,18 @@ function render(){
   $("#list").onchange=e=>{const x=e.target.closest(".act");if(!x)return;const c=C.find(y=>y.id===x.closest(".row").dataset.id);keep.add(c.id);setActive(c,x.checked)}}
   const at=S.customers.at?new Date(S.customers.at):null;
   $("#note").innerHTML=`Frazer export${S.customers.file?" <b>"+esc(S.customers.file)+"</b>":""} uploaded ${at?at.toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):""} · ${C.length} accounts. Upload a fresh one each morning before sending.`;
-  tiles();list();sendbar();if(selId)panel()}
+  inboxBar();tiles();list();sendbar();if(selId)panel()}
+/* ---- unread customer messages (WhatsApp + texts) ---- */
+function unreadOf(c){const nums=new Set(Object.values(c.phones).map(d10));if(c.k.sms)nums.add(d10(c.k.sms.number));
+  return Object.entries(S.inbox||{}).filter(([k])=>nums.has(d10(k))).map(([key,v])=>({key,...v}))}
+function inboxBar(){const el=$("#inboxBar");if(!el)return;const accts=C.filter(c=>unreadOf(c).length),all=Object.keys(S.inbox||{}).length;
+  const msgs=accts.reduce((a,c)=>a+unreadOf(c).reduce((b,u)=>b+(u.n||1),0),0),need=accts.filter(c=>unreadOf(c).some(u=>u.handoff)).length;
+  const known=new Set(accts.flatMap(c=>unreadOf(c).map(u=>u.key))),unknown=Object.keys(S.inbox||{}).filter(k=>!known.has(k)).length;
+  if(!all){el.innerHTML="";if(filt.grp==="msgs"){filt.grp="all";render()}return}
+  el.innerHTML=`<button type="button" class="inbar ${filt.grp==="msgs"?"on":""}" id="inbarBtn">🔔 <span><b class="num">${msgs}</b> new message${msgs===1?"":"s"} from ${accts.length} customer${accts.length===1?"":"s"}${need?` · <b>${need}</b> need${need===1?"s":""} a person`:""}${unknown?` <span class="acct">· ${unknown} from a number not on any account (see WATI)</span>`:""}</span><span class="acct" style="margin-left:auto">${filt.grp==="msgs"?"Show all":"Show them"}</span></button>`;
+  $("#inbarBtn").onclick=()=>{filt.grp=filt.grp==="msgs"?"all":"msgs";keep.clear();render()}}
+async function pollInbox(){if(!KEY||!S.customers)return;try{const x=await api("/api/inbox");if(JSON.stringify(x)!==JSON.stringify(S.inbox||{})){S.inbox=x;inboxBar();list();if(filt.grp==="msgs")sendbar()}}catch(e){}}
+setInterval(pollInbox,60000);
 function tiles(){
   const act=C.filter(c=>!inactive(c)),n=k=>act.filter(c=>c.grp===k).length,will=act.filter(c=>plan(c).group).length;
   let h=`<button class="tile ${filt.grp==="all"?"on":""}" data-g="all" type="button" style="--c:var(--red)"><div class="tile-val num">${act.length}</div><div class="tile-lbl">All active</div><div class="tile-sub">${will} get a message today</div></button>`;
@@ -233,7 +248,8 @@ function tiles(){
   $("#tiles").innerHTML=h}
 function rows(){const q=filt.q.toLowerCase();
   return C.filter(c=>{
-    if(!keep.has(c.id)){if(filt.grp==="off"){if(!inactive(c))return false}else{if(inactive(c))return false;if(filt.grp!=="all"&&c.grp!==filt.grp)return false}}
+    if(filt.grp==="msgs"){if(!unreadOf(c).length&&!keep.has(c.id))return false}
+    else if(!keep.has(c.id)){if(filt.grp==="off"){if(!inactive(c))return false}else{if(inactive(c))return false;if(filt.grp!=="all"&&c.grp!==filt.grp)return false}}
     if(filt.lang!=="all"&&c.lang!==filt.lang)return false;
     return !q||(nm(c)+" "+c.id+" "+Object.values(c.phones).join(" ")+" "+c.car+" "+c.vin6).toLowerCase().includes(q)})
   .sort((a,b)=>b.days-a.days||nm(a).localeCompare(nm(b)))}
@@ -245,6 +261,7 @@ function list(){const rs=rows();
     h+=`<div class="row ${c.id===selId?"sel":""} ${inactive(c)?"dim":""} ${picked.has(c.id)?"picked":""}" data-id="${c.id}" tabindex="0" role="button">
       <div class="c-pick"><input type="checkbox" class="pick" ${picked.has(c.id)?"checked":""} ${p.group?"":"disabled"} aria-label="Select ${esc(nm(c))}" title="${p.group?"Select to send":esc(p.no)}"></div>
       <div class="c-cust" style="min-width:0"><div class="name">${esc(nm(c))}</div><div class="acct">#${c.id} · ${esc(c.car)}${c.vin6?" · VIN "+esc(c.vin6):""} · ${(()=>{const u=nu.use||(p.to&&p.to.sms?p.to:null);return u?esc(u.v)+(u.sms?" (text)":u.k!=="cell"?" ("+u.l.toLowerCase()+")":""):'<span style="color:var(--bad)">no number</span>'})()}</div>
+      ${(()=>{const u=unreadOf(c);if(!u.length)return"";const h=u.some(x=>x.handoff),last=u.sort((a,b)=>b.at.localeCompare(a.at))[0];return `<div><span class="newmsg ${h?"":"bot"}">${h?"Needs a person":"New message · bot answered"}${last.via==="text"?" · text":""}</span> <span class="acct" style="color:var(--text)">“${esc(last.text.slice(0,70))}”</span></div>`})()}
       ${(()=>{const n=latestNote(c);return n?`<div class="acct" style="color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📝 ${esc(n.src==="App"?n.d.toLocaleDateString("en-US",{month:"numeric",day:"numeric"})+" "+n.t:n.t)}</div>`:""})()}</div>
       <div class="c-lang"><span class="ls">${["EN","ES"].map(l=>`<button type="button" data-l="${l}" class="${c.lang===l?"on":""}" aria-label="${l==="EN"?"English":"Spanish"}">${l}</button>`).join("")}</span></div>
       <div class="c-due num" style="font-size:12px">${esc(c.due||"No due date")}<div class="acct">${esc(c.sched||"")}</div></div>
@@ -255,9 +272,9 @@ function list(){const rs=rows();
   $("#list").innerHTML=h;$("#count").textContent=rs.length+" shown"}
 // With customers ticked, only those are sent (any group, any tile); otherwise everyone sendable in the open tile
 function sendList(){if(picked.size)return C.filter(c=>picked.has(c.id)).map(c=>({c,p:plan(c)})).filter(x=>x.p.group);
-  return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
+  return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach"&&filt.grp!=="msgs").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
 function sendbar(){const L=sendList(),sb=$("#sendbar");sb.hidden=false;
-  const where=filt.grp==="all"?"All active":filt.grp==="off"?"Inactive":GROUPS[filt.grp].label;
+  const where=filt.grp==="all"?"All active":filt.grp==="off"?"Inactive":filt.grp==="msgs"?"New messages (tick customers to send)":GROUPS[filt.grp].label;
   if(picked.size){$("#what").innerHTML=`<b class="num">${L.length}</b> selected <a href="#" id="clrPick" style="color:var(--red);font-size:11px;margin-left:6px">Clear</a> <span class="acct">· only the ticked customers are sent</span>`;
     ["#dryBtn","#testBtn","#sendBtn"].forEach(s=>$(s).disabled=!L.length);$("#sendBtn").textContent="Send "+L.length+" selected";
     $("#clrPick").onclick=e=>{e.preventDefault();picked.clear();list();sendbar()};return}
@@ -334,7 +351,10 @@ async function save(c,patch,other={}){
     if("off" in other){await api("/api/off",{id:c.id,off:other.off});if(other.off)S.offs[c.id]=1;else delete S.offs[c.id]}
     build();render();toast("Saved "+nm(c))
   }catch(e){toast("Couldn't save: "+e.message)}}
-function openPanel(id){selId=id;panel();list();$("#panel").classList.add("show");$("#scrim").classList.add("show")}
+function openPanel(id){const c=C.find(x=>x.id===id),u=c?unreadOf(c):[];
+  if(u.length){const last=u.slice().sort((a,b)=>b.at.localeCompare(a.at))[0];chatViaSel[id]=last.via==="text"?"sms":"wa";chatNum[id]=d10(last.key);keep.add(id);
+    u.forEach(x=>delete S.inbox[x.key]);api("/api/seen",{keys:u.map(x=>x.key)}).catch(()=>{});inboxBar()}
+  selId=id;panel();list();$("#panel").classList.add("show");$("#scrim").classList.add("show")}
 function closePanel(){selId=null;$("#panel").classList.remove("show");$("#scrim").classList.remove("show");if($("#list"))list()}
 
 /* ---- sending ---- */
