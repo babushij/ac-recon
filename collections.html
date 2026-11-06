@@ -130,6 +130,7 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 <main id="main"></main>
 <div class="sendbar" id="sendbar" hidden><div class="in">
   <div class="what" id="what"></div>
+  <label class="acct" for="viaSel" style="display:flex;align-items:center;gap:6px">Send by <select id="viaSel" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:7px 8px;font-size:12px"><option value="auto">WhatsApp, else text</option><option value="wa">WhatsApp only</option><option value="sms">Text only</option><option value="both">Both</option></select></label>
   <button class="btn-ghost" id="dryBtn" type="button">Dry run</button>
   <button class="btn-ghost" id="testBtn" type="button">Test to my phone</button>
   <button class="btn-red" id="sendBtn" type="button">Send</button>
@@ -169,7 +170,10 @@ const latestNote=c=>notesOf(c).all[0]||null;
 const todayD=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const lateDays=c=>{const d=mdy(c.due);return d?Math.round((todayD()-d)/864e5):null};
 const d10=s=>String(s||"").replace(/\D/g,"").slice(-10);
-const keep=new Set(),picked=new Set();let S={customers:null,cust:{},langs:{},offs:{},phones:{}},C=[],filt={grp:"all",lang:"all",q:""},selId=null;
+const keep=new Set(),picked=new Set();// which channels a customer can get: a WhatsApp number that works, and/or signed text consent
+const hasWA=c=>!!numbers(c).use,hasText=c=>!!(c.k.sms&&d10(c.k.sms.number).length===10);
+const viaOk=c=>{const v=$("#viaSel")?$("#viaSel").value:"auto";return v==="wa"?hasWA(c):v==="sms"?hasText(c):hasWA(c)||hasText(c)};
+let S={customers:null,cust:{},langs:{},offs:{},phones:{}},C=[],filt={grp:"all",lang:"all",ch:"all",q:""},selId=null;
 
 function build(){
   const rows=(S.customers&&S.customers.rows)||[];
@@ -214,9 +218,11 @@ function render(){
   if(!S.customers){$("#sendbar").hidden=true;$("#main").innerHTML=`<div class="gate"><b>No customers yet</b><div class="hint">Upload today's Frazer BHPH export to load customers. Your language, status, ACH and number settings are kept between uploads.</div><button class="btn-red" onclick="openUpload()">Upload Frazer export</button></div>`;return}
   if(!$("#tiles")){$("#main").innerHTML=`<div id="inboxBar"></div><div class="note" id="note"></div><section class="tiles" id="tiles"></section>
   <div class="toolbar"><input id="q" type="search" placeholder="Search name, account, phone, vehicle or VIN" aria-label="Search customers">
-  <div class="seg" id="seg"><button type="button" data-lang="all" class="on">All</button><button type="button" data-lang="EN">EN</button><button type="button" data-lang="ES">ES</button></div><span class="acct" id="count"></span></div>
+  <div class="seg" id="seg"><button type="button" data-lang="all" class="on">All</button><button type="button" data-lang="EN">EN</button><button type="button" data-lang="ES">ES</button></div>
+  <div class="seg" id="chseg"><button type="button" data-ch="all" class="on">All</button><button type="button" data-ch="wa">WhatsApp</button><button type="button" data-ch="sms">Text</button></div><span class="acct" id="count"></span></div>
   <section class="list" id="list"></section>`;
   $("#q").oninput=e=>{filt.q=e.target.value;list()};
+  $("#chseg").onclick=e=>{const b=e.target.closest("button");if(!b)return;document.querySelectorAll("#chseg button").forEach(x=>x.classList.toggle("on",x===b));filt.ch=b.dataset.ch;keep.clear();list();sendbar()};
   $("#seg").onclick=e=>{const b=e.target.closest("button");if(!b)return;document.querySelectorAll("#seg button").forEach(x=>x.classList.toggle("on",x===b));filt.lang=b.dataset.lang;keep.clear();list();sendbar()};
   $("#tiles").onclick=e=>{const t=e.target.closest(".tile");if(!t)return;filt.grp=t.dataset.g;keep.clear();render()};
   $("#list").onclick=e=>{const r=e.target.closest(".row[data-id]");if(!r)return;const c=C.find(x=>x.id===r.dataset.id);
@@ -251,6 +257,7 @@ function rows(){const q=filt.q.toLowerCase();
     if(filt.grp==="msgs"){if(!unreadOf(c).length&&!keep.has(c.id))return false}
     else if(!keep.has(c.id)){if(filt.grp==="off"){if(!inactive(c))return false}else{if(inactive(c))return false;if(filt.grp!=="all"&&c.grp!==filt.grp)return false}}
     if(filt.lang!=="all"&&c.lang!==filt.lang)return false;
+    if(filt.ch==="wa"&&!hasWA(c))return false;if(filt.ch==="sms"&&!hasText(c))return false;
     return !q||(nm(c)+" "+c.id+" "+Object.values(c.phones).join(" ")+" "+c.car+" "+c.vin6).toLowerCase().includes(q)})
   .sort((a,b)=>b.days-a.days||nm(a).localeCompare(nm(b)))}
 function list(){const rs=rows();
@@ -271,8 +278,8 @@ function list(){const rs=rows();
       <div class="c-act"><input type="checkbox" class="sw act" ${inactive(c)?"":"checked"} aria-label="Active"></div></div>`}
   $("#list").innerHTML=h;$("#count").textContent=rs.length+" shown"}
 // With customers ticked, only those are sent (any group, any tile); otherwise everyone sendable in the open tile
-function sendList(){if(picked.size)return C.filter(c=>picked.has(c.id)).map(c=>({c,p:plan(c)})).filter(x=>x.p.group);
-  return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach"&&filt.grp!=="msgs").map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
+function sendList(){if(picked.size)return C.filter(c=>picked.has(c.id)&&viaOk(c)).map(c=>({c,p:plan(c)})).filter(x=>x.p.group);
+  return rows().filter(c=>filt.grp!=="off"&&filt.grp!=="ach"&&filt.grp!=="msgs"&&viaOk(c)).map(c=>({c,p:plan(c)})).filter(x=>x.p.group)}
 function sendbar(){const L=sendList(),sb=$("#sendbar");sb.hidden=false;
   const where=filt.grp==="all"?"All active":filt.grp==="off"?"Inactive":filt.grp==="msgs"?"New messages (tick customers to send)":GROUPS[filt.grp].label;
   if(picked.size){$("#what").innerHTML=`<b class="num">${L.length}</b> selected <a href="#" id="clrPick" style="color:var(--red);font-size:11px;margin-left:6px">Clear</a> <span class="acct">· only the ticked customers are sent</span>`;
@@ -409,9 +416,9 @@ function payload(){return sendList().map(({c,p})=>({force:picked.has(c.id),id:c.
 async function run(mode,extra={}){const list=payload();
   modal(mode==="dry"?"Dry run":mode==="test"?"Test send":"Sending",'<div class="hint">Working…</div>',"");
   // Cloudflare's free plan allows 50 outside calls per request (one WhatsApp send each), so send in chunks of 20
-  try{const d={results:[]};const CH=mode==="test"?list.length:20;
+  try{const d={results:[]};const via=$("#viaSel").value,CH=mode==="test"?list.length:via==="both"?12:20;   // "both" makes two sends per customer
     for(let i=0;i<list.length;i+=CH){if(list.length>CH)$("#mBody").innerHTML='<div class="hint">Working… '+Math.min(i+CH,list.length)+' of '+list.length+'</div>';
-      const part=await api("/api/send",{mode,customers:list.slice(i,i+CH),origin:API,...extra});d.mode=part.mode;d.day=part.day;d.results=d.results.concat(part.results);if(mode==="test")break}
+      const part=await api("/api/send",{mode,via,customers:list.slice(i,i+CH),origin:API,...extra});d.mode=part.mode;d.day=part.day;d.results=d.results.concat(part.results);if(mode==="test")break}
     const cnt=s=>d.results.filter(r=>r.status===s).length;
     $("#mBody").innerHTML=`<div class="hint">${mode==="dry"?"Nothing was sent. This is what would happen.":mode==="test"?"Sent to your phone only, with $1 pay links.":"Done. Check WATI Campaigns for delivery."}</div>
     <div class="diff"><div class="d-row"><span class="d-n st-sent">${cnt("sent")+cnt("would send")}</span>${mode==="dry"?"would send":"sent"}</div><div class="d-row"><span class="d-n st-held">${cnt("held")}</span>held (already messaged)</div><div class="d-row"><span class="d-n st-skipped">${cnt("skipped")+cnt("failed")}</span>skipped or failed</div></div>
@@ -419,13 +426,14 @@ async function run(mode,extra={}){const list=payload();
     $("#mFoot").innerHTML='<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>';
     if(mode==="live"){picked.clear();load()}
   }catch(e){$("#mBody").innerHTML=`<div class="rule" style="color:var(--bad)">${esc(e.message)}</div>`;$("#mFoot").innerHTML='<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>'}}
+$("#viaSel").onchange=()=>sendbar();
 $("#dryBtn").onclick=()=>run("dry");
 $("#testBtn").onclick=()=>{let t="";try{t=localStorage.getItem("acColTest")||""}catch(e){}
   modal("Test to my phone",`<div class="field"><label for="tNum">Your cell</label><input id="tNum" inputmode="tel" value="${esc(t)}" placeholder="513-555-1234"></div><div class="field"><label for="tCnt">How many messages</label><input id="tCnt" type="number" min="1" max="10" value="2"></div><div class="hint">Uses the first customers in the list, sends to your phone only, with $1 pay links.</div>`,
   '<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button><button class="btn-red" type="button" id="tGo">Send test</button>');
   $("#tGo").onclick=()=>{const n=$("#tNum").value;try{localStorage.setItem("acColTest",n)}catch(e){}run("test",{testNumber:n,testCount:$("#tCnt").value})}};
 $("#sendBtn").onclick=()=>{const L=sendList(),by=k=>L.filter(x=>x.p.group===k).length;
-  modal("Send to customers",`<div class="diff">${[["cur","Due today"],["miss","Missed payment"],["30","30–60 reminder"],["60","60–90+ reminder"]].map(([k,l])=>`<div class="d-row"><span class="d-n">${by(k)}</span>${l}</div>`).join("")}</div><div class="hint">WhatsApp messages go out now from 513-522-8600. Anyone already messaged today is held automatically. No sends on Sunday.</div>`,
+  modal("Send to customers",`<div class="diff">${[["cur","Due today"],["miss","Missed payment"],["30","30–60 reminder"],["60","60–90+ reminder"]].map(([k,l])=>`<div class="d-row"><span class="d-n">${by(k)}</span>${l}</div>`).join("")}</div><div class="hint">${{auto:'WhatsApp from 513-522-8600, or a text from 866-282-8860 for customers with no WhatsApp and text consent.',wa:'WhatsApp only, from 513-522-8600.',sms:'Texts only, from 866-282-8860, to customers with text consent.',both:'WhatsApp and a text to each customer who has both.'}[$("#viaSel").value]} Messages go out now. Anyone already messaged today is held automatically. No sends on Sunday.</div>`,
   `<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button><button class="btn-red" type="button" id="goLive">Send ${L.length} messages</button>`);
   $("#goLive").onclick=()=>run("live")};
 $("#logBtn").onclick=async()=>{modal("Send history",'<div class="hint">Loading…</div>','<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>');
