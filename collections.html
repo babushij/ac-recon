@@ -395,7 +395,7 @@ function renderChat(c,d){const box=$("#chat");if(!box)return;
     rb.innerHTML=ok?'<div class="reply"><textarea id="rTxt" placeholder="Type a text…"></textarea><button class="btn-red" id="rSend" type="button">Send text</button></div><div class="hint">Sends from 866-282-8860. '+(d.botPaused?"The bot is paused in this chat.":"Replying pauses the bot in this chat for 24 hours.")+(c.k.sms?"":" No text consent on file, so only answer what they texted you.")+"</div>"
       :'<div class="rule">No text consent on file and they haven\'t texted us, so we can\'t start a text conversation. Turn on "Signed the text consent form" once they sign it.</div>';
     const sb=$("#rSend");if(sb)sb.onclick=async()=>{const t=$("#rTxt").value.trim();if(!t)return;sb.disabled=true;
-      try{const r=await api("/api/reply",{wa:d.wa,text:t,via:"sms"});if(!r.ok)throw new Error(r.error);toast("Text sent");showChat(c,true)}catch(e){toast("Not sent: "+e.message);sb.disabled=false}};
+      try{const r=await api("/api/reply",{wa:d.wa,text:t,via:"sms"});if(!r.ok)throw new Error(r.error);toast("Text sent");sentNow(c,d,t)}catch(e){toast("Not sent: "+e.message);sb.disabled=false}};
     return}
   const open=d.lastCustomerAt&&Date.now()-new Date(d.lastCustomerAt)<24*3600e3;
   if(open){const left=Math.max(0,Math.round((new Date(d.lastCustomerAt).getTime()+24*3600e3-Date.now())/3600e3));
@@ -406,10 +406,13 @@ function renderChat(c,d){const box=$("#chat");if(!box)return;
       try{let r;if(file){const fd=new FormData();fd.append("wa",d.wa);fd.append("file",file,file.name);fd.append("caption",t);
           r=await fetch(API+"/api/attach",{method:"POST",headers:{"x-admin-key":KEY},body:fd}).then(x=>x.json())}
         else r=await api("/api/reply",{wa:d.wa,text:t});
-        if(!r.ok)throw new Error(r.error||"failed");toast(file?"File sent":"Sent");showChat(c,true)}catch(e){toast("Not sent: "+e.message);$("#rSend").disabled=false}}}
+        if(!r.ok)throw new Error(r.error||"failed");toast(file?"File sent":"Sent");sentNow(c,d,file?"📄 "+file.name+(t?" · "+t:""):t)}catch(e){toast("Not sent: "+e.message);$("#rSend").disabled=false}}}
   else rb.innerHTML='<div class="rule">WhatsApp only allows typed replies and files (like receipts) within 24 hours of the customer\'s last message. To send a receipt, ask them to send you a WhatsApp first. '+(p.group?'You can send their reminder template instead; when they reply, the chat opens again.</div><button class="btn-ghost" id="rTpl" type="button" style="margin-top:6px">Send reminder template ('+esc(p.label)+" · "+money(p.amount)+")</button>":"No reminder can go out today: "+esc(p.no)+".</div>");
   const rt=$("#rTpl");if(rt)rt.onclick=async()=>{if(rt.dataset.armed!=="1"){rt.dataset.armed="1";rt.textContent="Tap again to send";return}rt.disabled=true;
     try{const one=payloadFor(c,p);one.force=true;const r=await api("/api/send",{mode:"live",customers:[one],origin:API});const x=r.results[0];toast(x.status==="sent"?"Reminder sent":x.status+": "+(x.reason||""));showChat(c,true)}catch(e){toast("Not sent: "+e.message);rt.disabled=false}}}
+// Twilio/WATI take a few seconds to list a new message: show it right away, then reload the real thread
+function sentNow(c,d,text){d.messages.push({at:new Date().toISOString(),who:"staff",text,status:"sent",by:""});d.botPaused=true;renderChat(c,d);
+  setTimeout(()=>{if(selId===c.id)showChat(c,true)},8000)}
 function payloadFor(c,p){return {id:c.id,first:c.first,last:c.last,car:c.car,vin6:c.vin6,due:c.due,days:p.days,pastDue:c.past,pay:c.pay,amount:p.amount,group:p.group,lang:c.lang,phone:p.to.v,phones:numbers(c).all.filter(x=>x.on).map(x=>({label:x.l.toLowerCase(),number:x.v}))}}
 function payload(){return sendList().map(({c,p})=>({force:picked.has(c.id),id:c.id,first:c.first,last:c.last,car:c.car,vin6:c.vin6,due:c.due,days:p.days,pastDue:c.past,pay:c.pay,amount:p.amount,group:p.group,lang:c.lang,
   phone:p.to.v,phones:numbers(c).all.filter(x=>x.on).map(x=>({label:x.l.toLowerCase(),number:x.v}))}))}
