@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>function acTheme(){try{document.documentElement.setAttribute("data-theme",localStorage.getItem("ac_theme")==="light"?"light":"dark")}catch(e){}}acTheme();addEventListener("storage",e=>{if(e.key==="ac_theme")acTheme()});</script>
 <title>AC Collections</title>
 <style>
 :root{
@@ -80,6 +81,11 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 .inbar b{font-size:18px}.inbar .acct{color:var(--text2)}.inbar.on{background:var(--red)}
 .newmsg{display:inline-block;margin-top:4px;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#fff;background:var(--red);border-radius:3px;padding:2px 6px}
 .newmsg.bot{background:#2a3f6e}
+html[data-theme=light]{--bg:#e8eef9;--surface:#f7f9fd;--surface2:#dce5f5;--surface3:#cfdaf0;--border:#c0cde6;--border2:#b2c1de;--border3:#9fb0d6;--text:#14213d;--text2:#32456b;--text3:#52668f;--text4:#6c7fa8;--red-dim:#f6d6dc;color-scheme:light}
+html[data-theme=light] .bub.out{background:#d4efdd}html[data-theme=light] .bub.reminder{background:#d9e4fa}html[data-theme=light] .bub.staff{background:#eadff6}
+html[data-theme=light] .msg b{color:#c8102e}html[data-theme=light] .inbar{background:#fde8ec}html[data-theme=light] .inbar.on{background:var(--red);color:#fff}
+html[data-theme=light] .scrim,html[data-theme=light] .modal{background:rgba(20,33,61,.35)}
+.coach{background:none;border:none;color:var(--text3);font-size:10px;letter-spacing:.5px;text-transform:uppercase;padding:0 0 0 6px;cursor:pointer;text-decoration:underline}
 .chat{display:flex;flex-direction:column;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;max-height:420px;overflow-y:auto}
 .bub{max-width:84%;padding:7px 10px;border-radius:10px;font-size:13px;line-height:1.4;white-space:pre-wrap;word-break:break-word}
 .bub.in{align-self:flex-start;background:var(--surface3);border-bottom-left-radius:3px}
@@ -124,6 +130,7 @@ main{padding:16px 16px 110px;max-width:1100px;margin:0 auto;display:flex;flex-di
 <body>
 <header class="topbar">
   <div class="logo"><span class="logo-dot"></span><div><div class="logo-mark">AC Collections</div><div class="logo-sub" id="sub">WhatsApp payment bot</div></div></div>
+  <button class="btn-ghost" id="coachBtn" type="button">Bot coaching</button>
   <button class="btn-ghost" id="logBtn" type="button">Send history</button>
   <button class="btn-red" id="uploadBtn" type="button">Upload Frazer export</button>
 </header>
@@ -392,11 +399,12 @@ async function showChat(c,force){const n=chatTarget(c),via=chatVia(c),box=$("#ch
 function renderChat(c,d){const box=$("#chat");if(!box)return;
   if(d.error)box.innerHTML='<div class="hint">'+esc(d.error)+"</div>";
   else if(!d.messages.length)box.innerHTML='<div class="hint">No '+(d.via==="sms"?"texts":"WhatsApp messages")+' with this number yet.</div>';
-  else{let last="";box.innerHTML=d.messages.map(m=>{const t=new Date(m.at),day=isNaN(t)?"":t.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+  else{let last="";box.innerHTML=d.messages.map((m,i)=>{const t=new Date(m.at),day=isNaN(t)?"":t.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
     const sep=day&&day!==last?(last=day,'<div class="daysep">'+day+"</div>"):"";
     const lbl={customer:"",bot:"Bot",staff:"Staff"+(m.by?" · "+esc(m.by):""),reminder:"Reminder"}[m.who];
     const st=/read/i.test(m.status)?'<span class="rd">✓✓</span>':/deliver/i.test(m.status)?"✓✓":/fail/i.test(m.status)?'<span class="fl">✕ failed</span>':/sent/i.test(m.status)?"✓":"";
-    return sep+'<div class="bub '+(m.who==="customer"?"in":"out "+m.who)+'">'+esc(m.text)+'<span class="meta">'+(lbl?lbl+" · ":"")+(isNaN(t)?"":t.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}))+(m.who!=="customer"&&st?" "+st:"")+"</span></div>"}).join("");
+    return sep+'<div class="bub '+(m.who==="customer"?"in":"out "+m.who)+'">'+esc(m.text)+'<span class="meta">'+(lbl?lbl+" · ":"")+(isNaN(t)?"":t.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}))+(m.who!=="customer"&&st?" "+st:"")+(m.who==="bot"?'<button class="coach" type="button" data-i="'+i+'">Coach</button>':"")+"</span></div>"}).join("");
+    box.querySelectorAll(".coach").forEach(b=>b.onclick=()=>{const i=+b.dataset.i,reply=d.messages[i].text,before=d.messages.slice(0,i).reverse().find(x=>x.who==="customer");coachModal(before?before.text:"",reply)});
     box.scrollTop=box.scrollHeight}
   const rb=$("#replyBox"),p=plan(c);
   if(d.via==="sms"){   // texts: no 24-hour window, but only text people who agreed or who texted us first
@@ -448,6 +456,20 @@ $("#sendBtn").onclick=()=>{const L=sendList(),by=k=>L.filter(x=>x.p.group===k).l
   modal("Send to customers",`<div class="diff">${[["cur","Due today"],["miss","Missed payment"],["30","30–60 reminder"],["60","60–90+ reminder"]].map(([k,l])=>`<div class="d-row"><span class="d-n">${by(k)}</span>${l}</div>`).join("")}</div><div class="hint">${{auto:'WhatsApp from 513-522-8600, or a text from 866-282-8860 for customers with no WhatsApp and text consent.',wa:'WhatsApp only, from 513-522-8600.',sms:'Texts only, from 866-282-8860, to customers with text consent.',both:'WhatsApp and a text to each customer who has both.'}[$("#viaSel").value]} Messages go out now. Anyone already messaged today is held automatically. No sends on Sunday.</div>`,
   `<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button><button class="btn-red" type="button" id="goLive">Send ${L.length} messages</button>`);
   $("#goLive").onclick=()=>run("live")};
+/* ---- coaching the reply bot ---- */
+function coachModal(customer,reply){
+  modal("Coach the bot",`${customer?`<div class="lbl">Customer wrote</div><div class="msg">${esc(customer)}</div>`:""}<div class="lbl">Bot replied</div><div class="msg" style="border-left:3px solid var(--warn)">${esc(reply)}</div>
+    <div class="field"><label for="cNote">What should it do differently from now on?</label><textarea id="cNote" rows="3" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font:14px var(--font)" placeholder="e.g. Don't quote the full balance; offer the regular payment first. Keep replies to two sentences."></textarea></div>
+    <div class="hint">Saved notes apply to every future bot reply, on WhatsApp and text. The bot still can't go below your money rules.</div>`,
+    '<button class="btn-ghost" type="button" onclick="closeModal()">Cancel</button><button class="btn-red" type="button" id="cSave">Save note</button>');
+  $("#cSave").onclick=async()=>{const n=$("#cNote").value.trim();if(!n)return;try{await api("/api/coach",{note:n,example:{customer,reply}});closeModal();toast("Saved. The bot will follow this from now on.")}catch(e){toast("Couldn't save: "+e.message)}}}
+async function coachList(){modal("Bot coaching",'<div class="hint">Loading…</div>','<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>');
+  const show=list=>{$("#mBody").innerHTML=(list.length?'<div class="hint">The bot follows all of these on every reply. Add more with the <b>Coach</b> link under any bot message.</div><div class="diff">'+list.slice().reverse().map(n=>`<div class="d-row"><div style="flex:1;min-width:0"><b>${esc(n.note)}</b><small>${new Date(n.at).toLocaleDateString("en-US",{month:"short",day:"numeric"})}${n.example&&n.example.reply?" · about: “"+esc(n.example.reply.slice(0,80))+"…”":""}</small></div><button class="btn-ghost" type="button" data-rm="${n.id}">Remove</button></div>`).join("")+"</div>":'<div class="hint">No coaching notes yet. Open a conversation and tap <b>Coach</b> under a bot reply you didn\'t like.</div>')+
+    '<div class="field"><label for="cNew">Add a general note</label><textarea id="cNew" rows="2" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font:14px var(--font)" placeholder="e.g. Always sign off with: Automotive Connection, 513-858-6555"></textarea></div><button class="btn-red" id="cAdd" type="button">Add note</button>';
+    $("#mBody").querySelectorAll("[data-rm]").forEach(b=>b.onclick=async()=>show(await api("/api/coach",{remove:b.dataset.rm})));
+    $("#cAdd").onclick=async()=>{const n=$("#cNew").value.trim();if(n)show(await api("/api/coach",{note:n}))}};
+  try{show(await api("/api/coach"))}catch(e){$("#mBody").innerHTML=esc(e.message)}}
+$("#coachBtn").onclick=coachList;
 $("#logBtn").onclick=async()=>{modal("Send history",'<div class="hint">Loading…</div>','<button class="btn-ghost" type="button" onclick="closeModal()">Close</button>');
   try{const log=await api("/api/log");$("#mBody").innerHTML=log.length?log.slice(0,15).map(l=>{const s=l.results.filter(r=>r.status==="sent").length;return `<div class="d-row"><div style="flex:1"><b>${new Date(l.at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</b> · ${l.mode}<small>${l.results.map(r=>esc(r.name)+" "+r.status).join(" · ")}</small></div><span class="d-n st-sent">${s}</span></div>`}).join(""):'<div class="hint">No sends yet.</div>'}catch(e){$("#mBody").innerHTML=esc(e.message)}};
 
