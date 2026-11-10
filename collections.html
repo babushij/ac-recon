@@ -342,6 +342,7 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
     <div class="field"><span class="lbl">Send a pay link now</span>
       <div class="two"><div class="money"><input id="plAmt" inputmode="decimal" value="${(openPromise(c)&&openPromise(c).amount)||(p.amount?p.amount.toFixed(2):askAmt(c).toFixed(2))}"></div>
         <select id="plVia" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px">${hasWA(c)?'<option value="wa">WhatsApp</option>':""}${hasText(c)?'<option value="sms">Text</option>':""}</select></div>
+      <div class="hint" id="plTo" style="color:var(--text)"></div>
       ${hasWA(c)||hasText(c)?'<button class="btn-red" id="plSend" type="button">Send pay link</button>':'<div class="rule">No working WhatsApp and no text consent, so no link can be sent.</div>'}
       <div class="hint">For when they call or promised to pay today. Sends the "payment due today" message with a secure pay link for this amount, even if they have a promise or were messaged recently.</div></div>
     <div class="field"><span class="lbl">Today's send</span>${p.group?`<div class="msg">${msgFor(c,p)}</div><div class="hint">To ${esc(p.to.v)} (${p.to.l.toLowerCase()}) · ${p.label}</div>`:`<div class="rule">Nothing today: ${esc(p.no)}.</div>`}</div>
@@ -356,9 +357,11 @@ function panel(){const c=C.find(x=>x.id===selId);if(!c)return;const p=plan(c),nu
   $("#fGrp").onchange=e=>{const v=e.target.value;save(c,v==="ach"?{ach:true,grp:null}:{ach:null,grp:v===ag?null:v})};
   const fs=$("#fSms");if(fs)fs.onchange=()=>{if(fs.checked){const ns=numbers(c).all.filter(x=>!x.dup&&x.n.length===10);const pick=ns.find(x=>x.k==="cell")||ns[0];if(!pick){fs.checked=false;toast("No phone number to text");return}save(c,{sms:{number:pick.n,date:todayYMD()}})}else save(c,{sms:null})};
   const fsn=$("#fSmsNum");if(fsn)fsn.onchange=()=>save(c,{sms:{...c.k.sms,number:fsn.value}});
+  const plTo=()=>{const v=$("#plVia")&&$("#plVia").value,u=numbers(c).use;$("#plTo").textContent=v==="sms"&&c.k.sms?"Goes to "+c.k.sms.number+" (text)":v==="wa"&&u?"Goes to "+u.l.toLowerCase()+" "+u.v+" (WhatsApp). Change it with the switches under Numbers the bot tries.":""};
+  if($("#plVia")){plTo();$("#plVia").onchange=plTo}
   const pl=$("#plSend");if(pl)pl.onclick=async()=>{const amt=+$("#plAmt").value;if(!(amt>0)){toast("Enter an amount");return}
     if(pl.dataset.armed!=="1"){pl.dataset.armed="1";pl.textContent="Tap again to send "+money(amt);return}
-    pl.disabled=true;try{const r=await api("/api/paylink",{id:c.id,amount:amt,via:$("#plVia").value});if(!r.ok)throw new Error(r.error);toast("Pay link sent by "+(r.via==="text"?"text":"WhatsApp"));pl.textContent="Sent ✓";setTimeout(()=>{if(selId===c.id)showChat(c,true)},6000)}
+    pl.disabled=true;try{const r=await api("/api/paylink",{id:c.id,amount:amt,via:$("#plVia").value,phone:$("#plVia").value==="wa"&&numbers(c).use?numbers(c).use.v:undefined});if(!r.ok)throw new Error(r.error);toast("Pay link sent by "+(r.via==="text"?"text":"WhatsApp"));pl.textContent="Sent ✓";setTimeout(()=>{if(selId===c.id)showChat(c,true)},6000)}
     catch(e){toast("Not sent: "+e.message);pl.disabled=false;pl.dataset.armed="";pl.textContent="Send pay link"}};
   const an=()=>{const t=$("#fNote").value.trim();if(t)save(c,{notes:(c.k.notes||[]).concat([{at:new Date().toISOString(),text:t}]).slice(-50)})};
   $("#addNote").onclick=an;$("#fNote").onkeydown=e=>{if(e.key==="Enter")an()};
